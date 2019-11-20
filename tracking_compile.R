@@ -4,7 +4,7 @@
 
 # WTSH data from Congdon lab - set up master
 #congdon_wtsh<-read.csv('C:/seabirds/phd/analyses/tracking_data_pot/GPS_141516_clean_resamp_tripsplit_hmm.csv')
-#master<-data.frame(
+#master<-data.frame( 
 #dataID=rep('CONG1', nrow(congdon_wtsh)),
 #sp=rep('WTSH', nrow(congdon_wtsh)),
 #colony=congdon_wtsh$Colony,
@@ -35,7 +35,7 @@ master<-rbind(master, data.frame(dataID='CONG4',sp=congdon_mabo$SpeciesID, colon
               trackID=congdon_mabo$TrackID, date=congdon_mabo$Date,time=congdon_mabo$Time,
               latitude=congdon_mabo$Latitude,longitude=congdon_mabo$Longitude))
 
-# now pull some stranger formatted datasets
+# now pull the other datasets
 
 # Surman Lesser Noddy
 p1<-st_read('C:/seabirds/sourced_data/tracking_data/raw/Surman_WA_LSNO/all_tracks.shp')
@@ -76,7 +76,8 @@ birds<-list.files('C:/seabirds/sourced_data/tracking_data/raw/BrownBoobyGPS_Yoda
 birds2<-NULL
 for(i in 2:length(birds)) # skip logger 1 as different format
 {birds2<-rbind(birds2, read.csv(paste0('C:/seabirds/sourced_data/tracking_data/raw/BrownBoobyGPS_Yoda/', birds[i])))}
-  
+
+#sprintf handy formatting
 birds2<-data.frame(dataID='YODA1',sp='BRBO', colony='Nakanokamishima',
                    trackID=birds2$Logger.ID,date=paste(birds2$Year, sprintf("%02d", birds2$Month), sprintf("%02d", birds2$Day), sep='/'),
                    time=paste(sprintf("%02d",birds2$Hour), sprintf("%02d", birds2$Minute), sprintf("%02d", birds2$Second), sep=':'),
@@ -108,3 +109,27 @@ master<-rbind(master, data.frame(dataID='BUNC1',sp='BRBO', colony='Swains',
                                  trackID=b3$trackID,date=paste(substr(b3$DATE, 7,10), substr(b3$DATE, 4,5), substr(b3$DATE, 1,2), sep='/'),
                                  time=substr(b3$TIME, 12, 19),
                                  latitude=b3$Y,longitude=b3$X))
+
+# Machovsy-Capuska MABO
+birds<-list.files('C:/seabirds/sourced_data/tracking_data/raw/Capuska_MABO', recursive=T) # recursive NICE!
+birds2<-NULL
+for(i in 1:length(birds))
+{birds2<-rbind(birds2, read.csv(paste0('C:/seabirds/sourced_data/tracking_data/raw/Capuska_MABO/', birds[i]), h=F))}
+
+# Note there are some 0,0 lat longs in data
+master<-rbind(master, data.frame(dataID='CAPU1',sp='MABO', colony='LHI',
+                                 trackID=factor(birds2$V2),
+                                 date=paste('2013', unlist(lapply(strsplit(as.character(birds2$V3), '\\.'),
+                                                    function(x){sprintf("%02d",as.numeric(x[2]))})),
+                                                    unlist(lapply(strsplit(as.character(birds2$V3), '\\.'),
+                                                    function(x){sprintf("%02d",as.numeric(x[1]))})), sep='/'),
+                                 time=birds2$V16, latitude=birds2$V7,longitude=birds2$V6))
+
+# Ravache WTSH
+p1<-read.table('C:/seabirds/sourced_data/tracking_data/raw/Ravache_Newcal_Ardenna_Pacifica_Trips_Caledonia_171819.txt', sep='\t', h=T)
+
+master<-rbind(master, data.frame(dataID='RAVA1',sp='WTSH', colony=p1$Site,
+                                 trackID=p1$ID,date=paste(substr(p1$TIME_LOC, 7,10), substr(p1$TIME_LOC, 4,5), substr(p1$TIME_LOC, 1,2), sep='/'),
+                                 time=paste0(substr(p1$TIME_LOC, 12, 16),':00'),
+                                 latitude=p1$Latitude,longitude=p1$Longitude))
+
