@@ -71,3 +71,40 @@ master<-rbind(master, data.frame(dataID='SHEP1',sp=p1$sp, colony=p1$colony,
                                  trackID=factor(p1$ID),date=gsub('-', '/', substr(p1$DateTimeWST, 1,10)),time=substr(p1$DateTimeWST, 12, 19),
                                  latitude=p1$LatDD,longitude=p1$LongDD))
 
+# Yoda BRBO
+birds<-list.files('C:/seabirds/sourced_data/tracking_data/raw/BrownBoobyGPS_Yoda')
+birds2<-NULL
+for(i in 2:length(birds)) # skip logger 1 as different format
+{birds2<-rbind(birds2, read.csv(paste0('C:/seabirds/sourced_data/tracking_data/raw/BrownBoobyGPS_Yoda/', birds[i])))}
+  
+birds2<-data.frame(dataID='YODA1',sp='BRBO', colony='Nakanokamishima',
+                   trackID=birds2$Logger.ID,date=paste(birds2$Year, sprintf("%02d", birds2$Month), sprintf("%02d", birds2$Day), sep='/'),
+                   time=paste(sprintf("%02d",birds2$Hour), sprintf("%02d", birds2$Minute), sprintf("%02d", birds2$Second), sep=':'),
+                   latitude=birds2$Latitude,longitude=birds2$Longitude)
+
+bird1<-read.csv(paste0('C:/seabirds/sourced_data/tracking_data/raw/BrownBoobyGPS_Yoda/', birds[1]))
+birds2<-rbind(birds2, data.frame(dataID='YODA1',sp='BRBO', colony='Nakanokamishima',
+           trackID='GiPSy',date=substr(bird1$Date.Time, 1, 10),
+           time=substr(bird1$Date.Time, 12, 19),
+           latitude=bird1$Latitude,longitude=bird1$Longitude))
+master<-rbind(master, birds2)
+
+# Bunce BRBO
+b1<-read_xls('C:/seabirds/sourced_data/tracking_data/raw/Bunce_Swains_BRBO/G53_060125085537.xls', sheet='all data')
+b1$trackID='G53_060125085537'
+b2<-read_xls('C:/seabirds/sourced_data/tracking_data/raw/Bunce_Swains_BRBO/G54_060125090457.xls', sheet='all data')
+b2$trackID='G54_060125090457'
+b3<-read_xls('C:/seabirds/sourced_data/tracking_data/raw/Bunce_Swains_BRBO/G55_060125090823.xls', sheet='all data')
+b3$trackID='G55_060125090823'
+b4<-read_xls('C:/seabirds/sourced_data/tracking_data/raw/Bunce_Swains_BRBO/G102_060125085121B.xls', sheet='all data')
+b4$trackID='G102_060125085121B'
+b5<-read_xls('C:/seabirds/sourced_data/tracking_data/raw/Bunce_Swains_BRBO/G104_060125084110B.xls', sheet='all data')
+b5$trackID='G104_060125084110B'
+b1<-rbind(b1, b2, b3)
+b2<-rbind(b4, b5)
+b3<-rbind(b1[,c(13, 1, 2, 6, 10)], b2[,c(10, 1, 2, 4, 6)])
+
+master<-rbind(master, data.frame(dataID='BUNC1',sp='BRBO', colony='Swains',
+                                 trackID=b3$trackID,date=paste(substr(b3$DATE, 7,10), substr(b3$DATE, 4,5), substr(b3$DATE, 1,2), sep='/'),
+                                 time=substr(b3$TIME, 12, 19),
+                                 latitude=b3$Y,longitude=b3$X))
