@@ -132,4 +132,40 @@ master<-rbind(master, data.frame(dataID='RAVA1',sp='WTSH', colony=p1$Site,
                                  trackID=p1$ID,date=paste(substr(p1$TIME_LOC, 7,10), substr(p1$TIME_LOC, 4,5), substr(p1$TIME_LOC, 1,2), sep='/'),
                                  time=paste0(substr(p1$TIME_LOC, 12, 16),':00'),
                                  latitude=p1$Latitude,longitude=p1$Longitude))
+# Zamora BRBO & RBTB
+
+p1<-read.csv('C:/seabirds/sourced_data/tracking_data/raw/Zamora_Mexico_BRBO_RBTB.csv', h=T)
+p1$sp='BRBO'
+p1[which(p1$Species=='Phaethon athereus'),]$sp<-'RBTB'
+
+master<-rbind(master, data.frame(dataID='ZAMO1',sp=p1$sp, colony=p1$Colony,
+                                 trackID=p1$ID,date=paste(substr(p1$Date, 7,10), substr(p1$Date, 4,5), substr(p1$Date, 1,2), sep='/'),
+                                 time=p1$Time, latitude=p1$Latitude,longitude=p1$Longitude))
+
+# Nichol BRBO & RFBO
+
+p1<-read.csv('C:/seabirds/sourced_data/tracking_data/raw/Nicholl_Chagos_BRBO.csv', h=T)
+
+master<-rbind(master, data.frame(dataID='NICH1',sp='BRBO', colony='Danger',
+                                 trackID=factor(p1$birdID),date=gsub('-', '/', substr(p1$date, 1,10)),
+                                 time=substr(p1$date, 12, 19),
+                                 latitude=p1$latitude,longitude=p1$longitude))
+
+p1<-read.csv('C:/seabirds/sourced_data/tracking_data/raw/Nicholl_Chagos_RFBO.csv', h=T)
+
+master<-rbind(master, data.frame(dataID='NICH1',sp='RFBO', colony='Danger',
+                                 trackID=factor(p1$birdID),date=gsub('-', '/', substr(p1$date, 1,10)),
+                                 time=substr(p1$date, 12, 19),
+                                 latitude=p1$latitude,longitude=p1$longitude))
+
+# Maxwell BRNO
+
+p1<-read.csv('C:/seabirds/sourced_data/tracking_data/raw/Maxwell_Caribbean_BRNO.csv', h=T)
+
+master<-rbind(master, data.frame(dataID='MAXW1',sp='BRNO', colony='Dry Tortugas',
+                                 trackID=factor(p1$unique_id),
+                                 date=paste('2016', sprintf("%02d", p1$month), sprintf("%02d", p1$day), sep='/'),
+                                 time=paste(sprintf("%02d", p1$hour), sprintf("%02d", p1$min), sprintf("%02d", p1$sec), sep=':'),
+                                 latitude=p1$lat,longitude=p1$lon))
+
 
