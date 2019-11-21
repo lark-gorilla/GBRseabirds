@@ -119,7 +119,9 @@ birds2<-NULL
 for(i in 1:length(birds))
 {birds2<-rbind(birds2, read.csv(paste0('C:/seabirds/sourced_data/tracking_data/raw/Capuska_MABO/', birds[i]), h=F))}
 
-# Note there are some 0,0 lat longs in data
+# Note there are some 0,0 lat longs in data - remove
+birds2<-birds2[birds2$V16!=0,]
+
 master<-rbind(master, data.frame(dataID='CAPU1',sp='MABO', colony='LHI',
                                  trackID=factor(birds2$V2),
                                  date=paste('2013', unlist(lapply(strsplit(as.character(birds2$V3), '\\.'),
@@ -202,3 +204,55 @@ master<-rbind(master, data.frame(dataID='CLAR1',sp=p1$Species, colony=p1$colony,
                                  date=gsub('-', '/', p1$Date),
                                  time=p1$Time,
                                  latitude=p1$Latitude,longitude=p1$Longitude, breedstage=p1$breedstage))
+
+# Mendez RFBO
+
+
+setwd('C:/seabirds/sourced_data/tracking_data/raw/RFB-data-from-L.MENDEZ')
+
+birds<-list.files(recursive=T)
+
+counter=1
+out<-NULL
+for(i in 1:length(birds)){
+ p1 <-read.csv2(birds[i], h=T)
+ if(i>1){if(strsplit(birds[i], '/')[[1]][1] !=
+            strsplit(birds[i-1], '/')[[1]][1]){counter=counter+1}}
+ out<-rbind(out, 
+       if("date.GMT._logger"%in% names(p1))
+       {
+         data.frame(dataID=paste0('MEND', counter),sp='RFBO', colony=strsplit(strsplit(birds[i], '/')[[1]][1], ' ')[[1]][1],
+                    trackID=factor(p1$Fichier), date=p1$date.GMT._logger,time=p1$time.GMT._logger,
+                    latitude=as.numeric(as.character(p1$lat)),longitude=as.numeric(as.character(p1$long)),
+                    breedstage='chick')  
+       }else{
+          data.frame(dataID=paste0('MEND', counter),sp='RFBO', colony=strsplit(strsplit(birds[i], '/')[[1]][1], ' ')[[1]][1],
+          trackID=if(!'Fichier'%in% names(p1)){strsplit(birds[i], '_')[[1]][1]}else{factor(p1$Fichier)},
+          date=p1$Date,time=p1$Time,
+          latitude=as.numeric(as.character(p1$Latitude)),longitude=as.numeric(as.character(p1$Longitude)),
+          breedstage='chick')
+          })
+ print(i)
+}
+
+# sort space at the front of some times
+out$time<-ifelse(nchar(as.character(out$time))>8, 
+                  substr(as.character(out$time), 2, 9),
+                  as.character(out$time))
+# sort dates
+out$date<-gsub('\\.', '/', out$date)
+
+out$date<-paste(unlist(lapply(strsplit(out$date, '\\/'),
+                    function(x){sprintf("%04d",as.numeric(x[3]))})),
+      unlist(lapply(strsplit(out$date, '\\/'),
+                            function(x){sprintf("%02d",as.numeric(x[2]))})),
+      unlist(lapply(strsplit(out$date, '\\/'),
+                    function(x){sprintf("%02d",as.numeric(x[1]))})), sep='/')
+
+# 170 rows with blank lat long date time ID fields
+out<-na.omit(out)
+
+master<-rbind(master, out)
+
+plot(latitude~longitude, data=master,colour=factor(sp))
+library(maps);map('world', add=T, col=3)
