@@ -12,7 +12,8 @@
 #date=gsub('-', '/', substr(congdon_wtsh$DateTime, 1, 10)),
 #time=substr(congdon_wtsh$DateTime, 12, 19),
 #latitude=congdon_wtsh$Latitude,
-#longitude=congdon_wtsh$Longitude)
+#longitude=congdon_wtsh$Longitude,
+#breedstage='chick')
 #write.csv(master, 'C:/seabirds/sourced_data/tracking_data/tracking_master.csv', quote=F, row.names=F)
 
 library(sf)
@@ -23,17 +24,17 @@ master<-read.csv('C:/seabirds/sourced_data/tracking_data/tracking_master.csv')
 congdon_brbo<-read.csv('C:/seabirds/phd/analyses/BRBO_raine/BRBO_raine_hmm.csv')
 master<-rbind(master, data.frame(dataID='CONG2',sp='BRBO',colony='Raine',
   trackID=congdon_brbo$TrackID, date=congdon_brbo$Date,time=congdon_brbo$Time,
-  latitude=congdon_brbo$Latitude,longitude=congdon_brbo$Longitude))
+  latitude=congdon_brbo$Latitude,longitude=congdon_brbo$Longitude,breedstage='chick'))
 
 congdon_mabo<-read.csv('C:/coral_fish/teaching/supervision/Charlotte_Dean/data/Swains_2014_tracking_trips_clean.csv')
 master<-rbind(master, data.frame(dataID='CONG3',sp=congdon_mabo$SpeciesID, colony='Swains',
               trackID=congdon_mabo$TrackID,date=congdon_mabo$Date,time=congdon_mabo$Time,
-              latitude=congdon_mabo$Latitude,longitude=congdon_mabo$Longitude))
+              latitude=congdon_mabo$Latitude,longitude=congdon_mabo$Longitude,breedstage='chick'))
 
 congdon_mabo<-read.csv('C:/coral_fish/teaching/supervision/Charlotte_Dean/data/Swains_2015_tracking_trips_clean.csv')
 master<-rbind(master, data.frame(dataID='CONG4',sp=congdon_mabo$SpeciesID, colony='Swains',
               trackID=congdon_mabo$TrackID, date=congdon_mabo$Date,time=congdon_mabo$Time,
-              latitude=congdon_mabo$Latitude,longitude=congdon_mabo$Longitude))
+              latitude=congdon_mabo$Latitude,longitude=congdon_mabo$Longitude,breedstage='chick'))
 
 # now pull the other datasets
 
@@ -48,7 +49,7 @@ for(i in 1:length(p2))
 
 master<-rbind(master, data.frame(dataID='SURM1',sp='LENO', colony='Pelsaert',
                                  trackID=p1$layer, date=substr(p1$timestamp, 1,10),
-                                 time=substr(p1$timestamp, 12,19),p2_out))
+                                 time=substr(p1$timestamp, 12,19),p2_out, breedstage='chick'))
 
 # Neumann Sooty Terns
 p1<-NULL
@@ -57,7 +58,7 @@ for( i in 2:7)# exclude 1 as 6 lines
 
 master<-rbind(master, data.frame(dataID='NEUM1',sp='SOTE', colony='Seychelles',
                                  trackID=p1$Tag,date=gsub('-', '/', p1$Date),time=p1$Time_T,
-                                 latitude=p1$Y,longitude=p1$X))
+                                 latitude=p1$Y,longitude=p1$X, breedstage='incubation'))
 
 # Shephard Brown Noddy and Sooty Tern
 
@@ -67,9 +68,11 @@ p1$sp='BRNO'
 p1[which(p1$Species==2),]$sp<-'SOTE'
 p1$colony='Lancelin'
 p1[which(p1$Species==2),]$colony<-'Rat'
+p1$breedstage='incubation'
+p1[which(p1$Species==2),]$colony<-'chick'
 master<-rbind(master, data.frame(dataID='SHEP1',sp=p1$sp, colony=p1$colony,
                                  trackID=factor(p1$ID),date=gsub('-', '/', substr(p1$DateTimeWST, 1,10)),time=substr(p1$DateTimeWST, 12, 19),
-                                 latitude=p1$LatDD,longitude=p1$LongDD))
+                                 latitude=p1$LatDD,longitude=p1$LongDD, breedstage=p1$breedstage))
 
 # Yoda BRBO
 birds<-list.files('C:/seabirds/sourced_data/tracking_data/raw/BrownBoobyGPS_Yoda')
@@ -81,13 +84,13 @@ for(i in 2:length(birds)) # skip logger 1 as different format
 birds2<-data.frame(dataID='YODA1',sp='BRBO', colony='Nakanokamishima',
                    trackID=birds2$Logger.ID,date=paste(birds2$Year, sprintf("%02d", birds2$Month), sprintf("%02d", birds2$Day), sep='/'),
                    time=paste(sprintf("%02d",birds2$Hour), sprintf("%02d", birds2$Minute), sprintf("%02d", birds2$Second), sep=':'),
-                   latitude=birds2$Latitude,longitude=birds2$Longitude)
+                   latitude=birds2$Latitude,longitude=birds2$Longitude,  breedstage='chick')
 
 bird1<-read.csv(paste0('C:/seabirds/sourced_data/tracking_data/raw/BrownBoobyGPS_Yoda/', birds[1]))
 birds2<-rbind(birds2, data.frame(dataID='YODA1',sp='BRBO', colony='Nakanokamishima',
            trackID='GiPSy',date=substr(bird1$Date.Time, 1, 10),
            time=substr(bird1$Date.Time, 12, 19),
-           latitude=bird1$Latitude,longitude=bird1$Longitude))
+           latitude=bird1$Latitude,longitude=bird1$Longitude,  breedstage='chick'))
 master<-rbind(master, birds2)
 
 # Bunce BRBO
@@ -108,7 +111,7 @@ b3<-rbind(b1[,c(13, 1, 2, 6, 10)], b2[,c(10, 1, 2, 4, 6)])
 master<-rbind(master, data.frame(dataID='BUNC1',sp='BRBO', colony='Swains',
                                  trackID=b3$trackID,date=paste(substr(b3$DATE, 7,10), substr(b3$DATE, 4,5), substr(b3$DATE, 1,2), sep='/'),
                                  time=substr(b3$TIME, 12, 19),
-                                 latitude=b3$Y,longitude=b3$X))
+                                 latitude=b3$Y,longitude=b3$X,  breedstage='chick'))
 
 # Machovsy-Capuska MABO
 birds<-list.files('C:/seabirds/sourced_data/tracking_data/raw/Capuska_MABO', recursive=T) # recursive NICE!
@@ -123,7 +126,7 @@ master<-rbind(master, data.frame(dataID='CAPU1',sp='MABO', colony='LHI',
                                                     function(x){sprintf("%02d",as.numeric(x[2]))})),
                                                     unlist(lapply(strsplit(as.character(birds2$V3), '\\.'),
                                                     function(x){sprintf("%02d",as.numeric(x[1]))})), sep='/'),
-                                 time=birds2$V16, latitude=birds2$V7,longitude=birds2$V6))
+                                 time=birds2$V16, latitude=birds2$V7,longitude=birds2$V6,  breedstage='chick'))
 
 # Ravache WTSH
 p1<-read.table('C:/seabirds/sourced_data/tracking_data/raw/Ravache_Newcal_Ardenna_Pacifica_Trips_Caledonia_171819.txt', sep='\t', h=T)
@@ -131,16 +134,20 @@ p1<-read.table('C:/seabirds/sourced_data/tracking_data/raw/Ravache_Newcal_Ardenn
 master<-rbind(master, data.frame(dataID='RAVA1',sp='WTSH', colony=p1$Site,
                                  trackID=p1$ID,date=paste(substr(p1$TIME_LOC, 7,10), substr(p1$TIME_LOC, 4,5), substr(p1$TIME_LOC, 1,2), sep='/'),
                                  time=paste0(substr(p1$TIME_LOC, 12, 16),':00'),
-                                 latitude=p1$Latitude,longitude=p1$Longitude))
+                                 latitude=p1$Latitude,longitude=p1$Longitude,  breedstage='chick'))
 # Zamora BRBO & RBTB
 
 p1<-read.csv('C:/seabirds/sourced_data/tracking_data/raw/Zamora_Mexico_BRBO_RBTB.csv', h=T)
-p1$sp='BRBO'
+zam_meta<-read_xlsx('C:/seabirds/sourced_data/tracking_data/raw/META_Zamora_Mexico_BRBO_RBTB.xlsx', sheet=1)
+
+p1$sp<-'BRBO'
 p1[which(p1$Species=='Phaethon athereus'),]$sp<-'RBTB'
+p1$breedstage='incubation'
+p1[which(p1$ID %in% zam_meta[which(zam_meta$`Brood size`==1),]$ID),]$breedstage<-'chick'
 
 master<-rbind(master, data.frame(dataID='ZAMO1',sp=p1$sp, colony=p1$Colony,
                                  trackID=p1$ID,date=paste(substr(p1$Date, 7,10), substr(p1$Date, 4,5), substr(p1$Date, 1,2), sep='/'),
-                                 time=p1$Time, latitude=p1$Latitude,longitude=p1$Longitude))
+                                 time=p1$Time, latitude=p1$Latitude,longitude=p1$Longitude, breedstage=p1$breedstage))
 
 # Nichol BRBO & RFBO
 
@@ -149,14 +156,14 @@ p1<-read.csv('C:/seabirds/sourced_data/tracking_data/raw/Nicholl_Chagos_BRBO.csv
 master<-rbind(master, data.frame(dataID='NICH1',sp='BRBO', colony='Danger',
                                  trackID=factor(p1$birdID),date=gsub('-', '/', substr(p1$date, 1,10)),
                                  time=substr(p1$date, 12, 19),
-                                 latitude=p1$latitude,longitude=p1$longitude))
+                                 latitude=p1$latitude,longitude=p1$longitude, breedstage='chick'))
 
 p1<-read.csv('C:/seabirds/sourced_data/tracking_data/raw/Nicholl_Chagos_RFBO.csv', h=T)
 
 master<-rbind(master, data.frame(dataID='NICH1',sp='RFBO', colony='Danger',
                                  trackID=factor(p1$birdID),date=gsub('-', '/', substr(p1$date, 1,10)),
                                  time=substr(p1$date, 12, 19),
-                                 latitude=p1$latitude,longitude=p1$longitude))
+                                 latitude=p1$latitude,longitude=p1$longitude, breedstage='chick'))
 
 # Maxwell BRNO
 
@@ -166,6 +173,32 @@ master<-rbind(master, data.frame(dataID='MAXW1',sp='BRNO', colony='Dry Tortugas'
                                  trackID=factor(p1$unique_id),
                                  date=paste('2016', sprintf("%02d", p1$month), sprintf("%02d", p1$day), sep='/'),
                                  time=paste(sprintf("%02d", p1$hour), sprintf("%02d", p1$min), sprintf("%02d", p1$sec), sep=':'),
-                                 latitude=p1$lat,longitude=p1$lon))
+                                 latitude=p1$lat,longitude=p1$lon,breedstage='chick'))
 
+# Cecere WTSH
 
+p1<-read.csv('C:/seabirds/sourced_data/tracking_data/raw/Clarke_Ashmore_ALL.csv', h=T)
+
+master<-rbind(master, data.frame(dataID='CECE1',sp='WTSH', colony='Aride',
+                                 trackID=factor(p1$RING),
+                                 date=paste(substr(p1$DATA, 7,10),substr(p1$DATA, 4,5),substr(p1$DATA, 1,2), sep='/' ),
+                                 time=paste(sprintf("%02d", p1$HOUR), sprintf("%02d", p1$MINUTE), sprintf("%02d", p1$SECOND), sep=':'),
+                                 latitude=p1$N,longitude=p1$E, breedstage='chick'))
+
+# Clarke BRBO, MABO, RFBO, LEFR, GRFR, RTTB 
+
+p1<-read.csv('C:/seabirds/sourced_data/tracking_data/raw/Clarke_Ashmore_ALL.csv', h=T)
+p1$colony='Adele'
+p1[which(p1$CaptureSite=='Middle Island, Ashmore Reef'),]$colony<-'Mid Ashmore'
+p1[which(p1$CaptureSite=="West Island, Ashmore Reef"),]$colony<-'West Ashmore'
+p1$breedstage='Adele'
+p1[which(p1$CaptureSite=='Middle Island, Ashmore Reef'),]$colony<-'Mid Ashmore'
+p1$breedstage='chick'
+p1[which(p1$BreedingStatus=='Incubating'),]$breedstage<-'incubation'
+p1[which(p1$BreedingStatus=="EmptyNest"),]$breedstage<-'empty'
+
+master<-rbind(master, data.frame(dataID='CLAR1',sp=p1$Species, colony=p1$colony,
+                                 trackID=factor(p1$BandNo),
+                                 date=gsub('-', '/', p1$Date),
+                                 time=p1$Time,
+                                 latitude=p1$Latitude,longitude=p1$Longitude, breedstage=p1$breedstage))
