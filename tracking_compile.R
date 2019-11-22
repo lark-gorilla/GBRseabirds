@@ -162,7 +162,10 @@ master<-rbind(master, data.frame(dataID='NICH1',sp='BRBO', colony='Danger',
 
 p1<-read.csv('C:/seabirds/sourced_data/tracking_data/raw/Nicholl_Chagos_RFBO.csv', h=T)
 
-master<-rbind(master, data.frame(dataID='NICH1',sp='RFBO', colony='Danger',
+p1$date<-ifelse(nchar(as.character(p1$date))<19, 
+                paste0(as.character(p1$date), ':00'), as.character(p1$date))
+
+master<-rbind(master, data.frame(dataID='NICH2',sp='RFBO', colony='Danger',
                                  trackID=factor(p1$birdID),date=gsub('-', '/', substr(p1$date, 1,10)),
                                  time=substr(p1$date, 12, 19),
                                  latitude=p1$latitude,longitude=p1$longitude, breedstage='chick'))
