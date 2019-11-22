@@ -179,7 +179,7 @@ master<-rbind(master, data.frame(dataID='MAXW1',sp='BRNO', colony='Dry Tortugas'
 
 # Cecere WTSH
 
-p1<-read.csv('C:/seabirds/sourced_data/tracking_data/raw/Clarke_Ashmore_ALL.csv', h=T)
+p1<-read.csv2('C:/seabirds/sourced_data/tracking_data/raw/Cecere_Seychelles_WTSH.csv', h=T)
 
 master<-rbind(master, data.frame(dataID='CECE1',sp='WTSH', colony='Aride',
                                  trackID=factor(p1$RING),
@@ -206,7 +206,6 @@ master<-rbind(master, data.frame(dataID='CLAR1',sp=p1$Species, colony=p1$colony,
                                  latitude=p1$Latitude,longitude=p1$Longitude, breedstage=p1$breedstage))
 
 # Mendez RFBO
-
 
 setwd('C:/seabirds/sourced_data/tracking_data/raw/RFB-data-from-L.MENDEZ')
 
@@ -254,5 +253,108 @@ out<-na.omit(out)
 
 master<-rbind(master, out)
 
-plot(latitude~longitude, data=master,colour=factor(sp))
+# Soanes data BRBO, MABO,SOTE
+
+setwd('C:/seabirds/sourced_data/tracking_data/raw/Soanes')
+
+soanes_sooty<-read.csv('Soanes_Caribbean_SOTN.csv')
+
+master<-rbind(master, data.frame(dataID='SOAN1',sp='SOTE', colony='Dog',
+                                 trackID=factor(paste('SOAN1', soanes_sooty$ID, sep='_')),
+                                 date=paste(substr(soanes_sooty$Date,7,10), substr(soanes_sooty$Date,4,5), substr(soanes_sooty$Date,1,2), sep='/'),
+                                 time=soanes_sooty$Time,
+                                 latitude=soanes_sooty$y,longitude=soanes_sooty$x, breedstage='chick'))
+
+# MABO all bird format
+mabo1<-read_xlsx('Re__masked_booby_data_from_Anguilla/MB 2015.xlsx', sheet=1)
+mabo1<-data.frame(mabo1, dataID='SOAN2');mabo1$ID=paste(mabo1$ID, mabo1$dataID, sep='_')
+mabo2<-read.csv('Re__masked_booby_data_from_Anguilla/MB 2016 June .csv')
+mabo2<-data.frame(mabo2, dataID='SOAN3');mabo2$ID=paste(mabo2$ID, mabo2$dataID, sep='_')
+mabo3<-read.csv('Re__masked_booby_data_from_Anguilla/MB april 2016.csv')
+mabo3<-data.frame(mabo3, dataID='SOAN4');mabo3$ID=paste(mabo3$ID, mabo3$dataID, sep='_')
+mabo1<-rbind(mabo1[c(1:5, 7)], mabo2[,c(1:5, 7)], mabo3[,c(1:5, 7)])
+
+mabo1$Time<-ifelse(nchar(mabo1$Time)>8, substr(mabo1$Time, 2, 9), mabo1$Time)
+
+master<-rbind(master, data.frame(dataID=mabo1$dataID,sp='MABO', colony='Dog',
+                                 trackID=factor(mabo1$ID),
+                                 date=gsub('-', '/', mabo1$Date),
+                                 time=mabo1$Time,latitude=mabo1$Latitude,
+                                 longitude=mabo1$Longitude, breedstage='chick'))
+
+# All Soanes data file by bird format
+birds<-list.files(recursive=T)[-grep('zip',list.files(recursive=T))][1:276]
+
+counter=5
+soanes1<-NULL
+for(i in 1:length(birds)){
+  if(i>1){if(strsplit(birds[i], '/')[[1]][1] !=
+             strsplit(birds[i-1], '/')[[1]][1]){counter=counter+1}}
+  d1<-read.csv(birds[i])
+  d1<-data.frame(dataID=paste0('SOAN', counter), sp='BRBO',
+             colony='Dog',
+             trackID=factor(substr(strsplit(birds[i], '/')[[1]][2], 1, nchar(strsplit(birds[i], '/')[[1]][2])-4)),
+             date=p1$Date,time=p1$Time,latitude=p1$Latitude,longitude=p1$Longitude,
+             breedstage='chick') 
+  soanes1<-rbind(soanes1, d1)}
+
+soanes1$sp<-as.character(soanes1$sp)
+soanes1$colony<-as.character(soanes1$colony)
+
+soanes1[grep('MB', soanes1$trackID),]$sp<-'MABO'
+
+soanes1[grep('Somb', soanes1$trackID),]$colony<-'Sombrero'
+soanes1[grep('PPW', soanes1$trackID),]$colony<-'Prickly Pear'
+
+master<-rbind(master, soanes1)
+
+# Gilmour BRBO, MABO, RFBO, GRFR, MAFR
+setwd('C:/seabirds/sourced_data/tracking_data/raw/Gilmour')
+
+birds<-list.files(recursive=T)[-grep('zip',list.files(recursive=T))]
+birds<-birds[grep('csv',birds)]
+birds<-birds[63:length(birds)]#skip BFBO
+birds<-birds[-grep('PB',birds)]# remove pena blanca from Diego G
+birds<-birds[-grep('PJE',birds)]# remove pajereos from Diego G
+
+counter=1
+gilmour1<-NULL
+for(i in 1:length(birds)){
+  if(i>1){if(strsplit(birds[i], '/')[[1]][1] !=
+             strsplit(birds[i-1], '/')[[1]][1]){counter=counter+1}}
+  d1<-read.csv(birds[i])
+  d1<-data.frame(dataID=paste0('GILM', counter), sp=substr(birds[i], 1, 4),
+                 colony='Palmyra',
+                 trackID=factor(substr(strsplit(birds[i], '/')[[1]][2], 1, nchar(strsplit(birds[i], '/')[[1]][2])-4)),
+                 date=p1$Date,time=p1$Time,latitude=p1$Latitude,longitude=p1$Longitude,
+                 breedstage='unknown') 
+  gilmour1<-rbind(gilmour1, d1)}
+
+gilmour1$breedstage<-as.character(gilmour1$breedstage)
+gilmour1$colony<-as.character(gilmour1$colony)
+
+gilmour1[grep('_inc_', gilmour1$trackID),]$breedstage<-'incubation'
+gilmour1[grep('_brd_', gilmour1$trackID),]$breedstage<-'chick'
+
+gilmour1[grep('_SJ_', gilmour1$trackID),]$colony<-'San Jorge'
+gilmour1[grep('_CLR_', gilmour1$trackID),]$colony<-'Clarion'
+gilmour1[grep('_TE_', gilmour1$trackID),]$colony<-'Tern'
+gilmour1[grep('_AA_', gilmour1$trackID),]$colony<-'Alacranes'
+gilmour1[grep('_II_', gilmour1$trackID),]$colony<-'Isabel'
+gilmour1[grep('_IP_', gilmour1$trackID),]$colony<-'Pajaros'
+
+table(gilmour1$sp, gilmour1$colony)
+
+gilmour1$date<-paste(substr(gilmour1$date,7,10),
+      substr(gilmour1$date,4,5), substr(gilmour1$date,1,2), sep='/')
+
+master<-rbind(master, gilmour1)
+
+
+table(nchar(as.character(master$time)))
+
+
+nchar date time
+
+plot(latitude~longitude, data=master,col=factor(sp))
 library(maps);map('world', add=T, col=3)
