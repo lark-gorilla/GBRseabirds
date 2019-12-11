@@ -28,7 +28,7 @@ master<-rbind(master, data.frame(dataID='CONG2',sp='BRBO',colony='Raine',
 
 congdon_mabo<-read.csv('C:/coral_fish/teaching/supervision/Charlotte_Dean/data/Swains_2014_tracking_trips_clean.csv')
 master<-rbind(master, data.frame(dataID='CONG3',sp=congdon_mabo$SpeciesID, colony='Swains',
-              trackID=congdon_mabo$TrackID,date=congdon_mabo$Date,time=congdon_mabo$Time,
+              trackID=congdon_mabo$TrackID,date=congdon_mabo$Date,time=substr(congdon_mabo$Time, 2,9),
               latitude=congdon_mabo$Latitude,longitude=congdon_mabo$Longitude,breedstage='chick'))
 
 congdon_mabo<-read.csv('C:/coral_fish/teaching/supervision/Charlotte_Dean/data/Swains_2015_tracking_trips_clean.csv')
@@ -149,7 +149,7 @@ p1[which(p1$ID %in% zam_meta[which(zam_meta$`Brood size`==1),]$ID),]$breedstage<
 
 master<-rbind(master, data.frame(dataID='ZAMO1',sp=p1$sp, colony=p1$Colony,
                                  trackID=p1$ID,date=paste(substr(p1$Date, 7,10), substr(p1$Date, 4,5), substr(p1$Date, 1,2), sep='/'),
-                                 time=p1$Time, latitude=p1$Latitude,longitude=p1$Longitude, breedstage=p1$breedstage))
+                                 time=substr(p1$Time, 2, 9), latitude=p1$Latitude,longitude=p1$Longitude, breedstage=p1$breedstage))
 
 # Nichol BRBO & RFBO
 
@@ -273,8 +273,10 @@ mabo1<-read_xlsx('Re__masked_booby_data_from_Anguilla/MB 2015.xlsx', sheet=1)
 mabo1<-data.frame(mabo1, dataID='SOAN2');mabo1$ID=paste(mabo1$ID, mabo1$dataID, sep='_')
 mabo2<-read.csv('Re__masked_booby_data_from_Anguilla/MB 2016 June .csv')
 mabo2<-data.frame(mabo2, dataID='SOAN3');mabo2$ID=paste(mabo2$ID, mabo2$dataID, sep='_')
+mabo2$Date<-paste(substr(mabo2$Date, 7,10), substr(mabo2$Date, 4,5), substr(mabo2$Date,1,2), sep='-')
 mabo3<-read.csv('Re__masked_booby_data_from_Anguilla/MB april 2016.csv')
 mabo3<-data.frame(mabo3, dataID='SOAN4');mabo3$ID=paste(mabo3$ID, mabo3$dataID, sep='_')
+mabo3$Date<-paste(substr(mabo3$Date, 7,10), substr(mabo3$Date, 4,5), substr(mabo3$Date,1,2), sep='-')
 mabo1<-rbind(mabo1[c(1:5, 7)], mabo2[,c(1:5, 7)], mabo3[,c(1:5, 7)])
 
 mabo1$Time<-ifelse(nchar(mabo1$Time)>8, substr(mabo1$Time, 2, 9), mabo1$Time)
@@ -287,6 +289,8 @@ master<-rbind(master, data.frame(dataID=mabo1$dataID,sp='MABO', colony='Dog',
 
 # All Soanes data file by bird format
 birds<-list.files(recursive=T)[-grep('zip',list.files(recursive=T))][1:276]
+birds<-birds[-grep('gpx', birds)]
+
 
 counter=5
 soanes1<-NULL
@@ -297,7 +301,7 @@ for(i in 1:length(birds)){
   d1<-data.frame(dataID=paste0('SOAN', counter), sp='BRBO',
              colony='Dog',
              trackID=factor(substr(strsplit(birds[i], '/')[[1]][2], 1, nchar(strsplit(birds[i], '/')[[1]][2])-4)),
-             date=p1$Date,time=p1$Time,latitude=p1$Latitude,longitude=p1$Longitude,
+             date=d1$Date,time=substr(d1$Time,2,9),latitude=d1$Latitude,longitude=d1$Longitude,
              breedstage='chick') 
   soanes1<-rbind(soanes1, d1)}
 
@@ -326,10 +330,20 @@ for(i in 1:length(birds)){
   if(i>1){if(strsplit(birds[i], '/')[[1]][1] !=
              strsplit(birds[i-1], '/')[[1]][1]){counter=counter+1}}
   d1<-read.csv(birds[i])
+  d1$Time<-as.character(d1$Time);d1$Date<-as.character(d1$Date)
+  d1$Time<-ifelse(nchar(d1$Time)>8, substr(d1$Time, 2, 9), d1$Time)
+  d1$Date<-ifelse(nchar(d1$Date)>10, substr(d1$Date, 2, 11),d1$Date)
+  d1$Date<-ifelse(length(grep('-',d1$Date))>0, gsub('-', '/', d1$Date), d1$Date)
+  d1$Date<-ifelse(nchar(as.character(d1$Date))<10, paste(strsplit(d1$Date[1], '\\/')[[1]][3],
+                                sprintf("%02d", as.numeric(strsplit(d1$Date[1], '\\/')[[1]][1])),
+                                sprintf("%02d", as.numeric(strsplit(d1$Date[1], '\\/')[[1]][2])), sep='/'), d1$Date)
+  
+  
+  
   d1<-data.frame(dataID=paste0('GILM', counter), sp=substr(birds[i], 1, 4),
                  colony='Palmyra',
                  trackID=factor(substr(strsplit(birds[i], '/')[[1]][2], 1, nchar(strsplit(birds[i], '/')[[1]][2])-4)),
-                 date=p1$Date,time=p1$Time,latitude=p1$Latitude,longitude=p1$Longitude,
+                 date=d1$Date,time=substr(d1$Time,2,9),latitude=d1$Latitude,longitude=d1$Longitude,
                  breedstage='unknown') 
   gilmour1<-rbind(gilmour1, d1)}
 
@@ -353,11 +367,68 @@ gilmour1$date<-paste(substr(gilmour1$date,7,10),
 
 master<-rbind(master, gilmour1)
 
+# Mcleay Crested Tern
+
+p1<-NULL
+for( i in 1:22)
+{p1<-rbind(p1, data.frame(read_xlsx('C:/seabirds/sourced_data/tracking_data/raw/Mcleay_SouthAus_CRTE.xlsx', sheet=i,
+                                   col_types=c('date', 'guess', 'numeric', 'numeric', 'numeric', 'numeric', 'numeric')), 
+                          ID=i))}
+
+master<-rbind(master, data.frame(dataID='MCLE1',sp='CRTE', colony='Troubridge',
+                                 trackID=factor(p1$ID),date=gsub('-', '/', as.character(p1$FixDate)), time=substr(p1$FixTime,1,8),
+                                 latitude=p1$Lat,longitude=p1$Lon, breedstage='chick'))
+
+# Dossa Senegalese Tern datasets
+
+dos1<-read.csv('C:/seabirds/sourced_data/tracking_data/raw/Dossa_Senegal_CATE.csv')
+
+master<-rbind(master, data.frame(dataID='DOSA1',sp='CATE', colony='Senegal',
+                                 trackID=factor(dos1$track_id),date=gsub('-', '/', as.character(dos1$date_gmt)),
+                                 time=dos1$time_gmt,
+                                 latitude=dos1$latitude,longitude=dos1$longitude, breedstage='incubation'))
+dos1<-read.csv('C:/seabirds/sourced_data/tracking_data/raw/Dossa_Senegal_ROTE1.csv')
+
+master<-rbind(master, data.frame(dataID='DOSA2',sp='ROTE', colony='Senegal',
+                                 trackID=factor(dos1$track_id),date=gsub('-', '/', as.character(dos1$date_gmt)),
+                                 time=dos1$time_gmt,
+                                 latitude=dos1$latitude,longitude=dos1$longitude, breedstage='incubation'))
+dos1<-read.csv('C:/seabirds/sourced_data/tracking_data/raw/Dossa_Senegal_ROTE2.csv')
+
+master<-rbind(master, data.frame(dataID='DOSA3',sp='ROTE', colony='Senegal',
+                                 trackID=factor(dos1$track_id),date=gsub('-', '/', as.character(dos1$date_gmt)),
+                                 time=dos1$time_gmt,
+                                 latitude=dos1$latitude,longitude=dos1$longitude, breedstage='incubation'))
+
+# Caroline Poli MABO
+p1<-read.table('C:/seabirds/sourced_data/tracking_data/raw/Poli_Muertos_MABO.txt', sep='\t', h=T)
+
+master<-rbind(master, data.frame(dataID='POLI1',sp='MABO', colony='Muertos',
+                                 trackID=factor(p1$ID),date=gsub('-', '/', as.character(p1$DateGMT)),
+                                 time=p1$TimeGMT,
+                                 latitude=p1$Latitude,longitude=p1$Longitude, breedstage='chick'))
+# Julia Sommerfeld  MABO
+p1<-read.table('C:/seabirds/sourced_data/tracking_data/raw/Sommerfeld_Phillip_MABO.txt', sep='\t', h=T)
+
+master<-rbind(master, data.frame(dataID='SOMM1',sp='MABO', colony='Phillip',
+                                 trackID=factor(p1$ID),date=gsub('-', '/', as.character(p1$DateGMT)),
+                                 time=p1$TimeGMT,
+                                 latitude=p1$Latitude,longitude=p1$Longitude, breedstage='chick'))
+
+# temp write master, still some errors to fix
+write.csv(master, 'C:/seabirds/sourced_data/tracking_data/tracking_master.csv', quote=F, row.names=F)
+
 
 table(nchar(as.character(master$time)))
 
+master%>%group_by(dataID)%>%summarise_all(first)%>%print(n=60)
 
-nchar date time
+#Gilmour dates still wrong
+
+# make bbox for each dataset - note na.omit()
+master_sf<-st_as_sf(na.omit(master), coords=c('longitude', 'latitude'), crs=4326)  #make sure the CRS is the same as your other data!
+
+
 
 plot(latitude~longitude, data=master,col=factor(sp))
 library(maps);map('world', add=T, col=3)
