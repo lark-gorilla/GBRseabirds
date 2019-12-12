@@ -423,12 +423,15 @@ table(nchar(as.character(master$time)))
 
 master%>%group_by(dataID)%>%summarise_all(first)%>%print(n=60)
 
-#Gilmour dates still wrong
+#Gilmour dates still wrong and times + poli times
 
 # make bbox for each dataset - note na.omit()
 master_sf<-st_as_sf(na.omit(master), coords=c('longitude', 'latitude'), crs=4326)  #make sure the CRS is the same as your other data!
 
+library(maps)
+png('C:/seabirds/outputs/trackingmap.png', height=5, width=10, units='in', res=600 )
 
+plot(latitude~longitude, data=master)
+map('world', add=T, col=3)
 
-plot(latitude~longitude, data=master,col=factor(sp))
-library(maps);map('world', add=T, col=3)
+dev.off()
