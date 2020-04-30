@@ -28,7 +28,7 @@ master<-rbind(master, data.frame(dataID='CONG2',sp='BRBO',colony='Raine',
 
 congdon_mabo<-read.csv('C:/coral_fish/teaching/supervision/Charlotte_Dean/data/Swains_2014_tracking_trips_clean.csv')
 master<-rbind(master, data.frame(dataID='CONG3',sp=congdon_mabo$SpeciesID, colony='Swains',
-              trackID=congdon_mabo$TrackID,date=congdon_mabo$Date,time=substr(congdon_mabo$Time, 2,9),
+              trackID=congdon_mabo$TrackID,date=congdon_mabo$Date,time=trimws(congdon_mabo$Time),
               latitude=congdon_mabo$Latitude,longitude=congdon_mabo$Longitude,breedstage='chick'))
 
 congdon_mabo<-read.csv('C:/coral_fish/teaching/supervision/Charlotte_Dean/data/Swains_2015_tracking_trips_clean.csv')
@@ -238,9 +238,8 @@ for(i in 1:length(birds)){
 }
 
 # sort space at the front of some times
-out$time<-ifelse(nchar(as.character(out$time))>8, 
-                  substr(as.character(out$time), 2, 9),
-                  as.character(out$time))
+out$time<-trimws(out$time)
+
 # sort dates
 out$date<-gsub('\\.', '/', out$date)
 
@@ -250,6 +249,8 @@ out$date<-paste(unlist(lapply(strsplit(out$date, '\\/'),
                             function(x){sprintf("%02d",as.numeric(x[2]))})),
       unlist(lapply(strsplit(out$date, '\\/'),
                     function(x){sprintf("%02d",as.numeric(x[1]))})), sep='/')
+# fix to date '0014'
+out[out$dataID=='MEND9',]$date<-paste0('2014', substr(out[out$dataID=='MEND9',]$date, 5, 10))
 
 # 170 rows with blank lat long date time ID fields
 out<-na.omit(out)
@@ -279,7 +280,8 @@ mabo3<-data.frame(mabo3, dataID='SOAN4');mabo3$ID=paste(mabo3$ID, mabo3$dataID, 
 mabo3$Date<-paste(substr(mabo3$Date, 7,10), substr(mabo3$Date, 4,5), substr(mabo3$Date,1,2), sep='-')
 mabo1<-rbind(mabo1[c(1:5, 7)], mabo2[,c(1:5, 7)], mabo3[,c(1:5, 7)])
 
-mabo1$Time<-ifelse(nchar(mabo1$Time)>8, substr(mabo1$Time, 2, 9), mabo1$Time)
+mabo1$Time<-trimws(mabo1$Time)
+mabo1$Date<-substr(mabo1$Date, 1, 10)
 
 master<-rbind(master, data.frame(dataID=mabo1$dataID,sp='MABO', colony='Dog',
                                  trackID=factor(mabo1$ID),
@@ -331,8 +333,8 @@ for(i in 1:length(birds)){
              strsplit(birds[i-1], '/')[[1]][1]){counter=counter+1}}
   d1<-read.csv(birds[i])
   d1$Time<-as.character(d1$Time);d1$Date<-as.character(d1$Date)
-  d1$Time<-ifelse(nchar(d1$Time)>8, substr(d1$Time, 2, 9), d1$Time)
-  d1$Date<-ifelse(nchar(d1$Date)>10, substr(d1$Date, 2, 11),d1$Date)
+  d1$Time<-trimws(d1$Time)
+  d1$Date<-trimws(d1$Date)
   d1$Date<-ifelse(length(grep('-',d1$Date))>0, gsub('-', '/', d1$Date), d1$Date)
   d1$Date<-ifelse(nchar(as.character(d1$Date))<10, paste(strsplit(d1$Date[1], '\\/')[[1]][3],
                                 sprintf("%02d", as.numeric(strsplit(d1$Date[1], '\\/')[[1]][1])),
@@ -343,7 +345,7 @@ for(i in 1:length(birds)){
   d1<-data.frame(dataID=paste0('GILM', counter), sp=substr(birds[i], 1, 4),
                  colony='Palmyra',
                  trackID=factor(substr(strsplit(birds[i], '/')[[1]][2], 1, nchar(strsplit(birds[i], '/')[[1]][2])-4)),
-                 date=d1$Date,time=substr(d1$Time,2,9),latitude=d1$Latitude,longitude=d1$Longitude,
+                 date=d1$Date,time=d1$Time,latitude=d1$Latitude,longitude=d1$Longitude,
                  breedstage='unknown') 
   gilmour1<-rbind(gilmour1, d1)}
 
@@ -361,9 +363,6 @@ gilmour1[grep('_II_', gilmour1$trackID),]$colony<-'Isabel'
 gilmour1[grep('_IP_', gilmour1$trackID),]$colony<-'Pajaros'
 
 table(gilmour1$sp, gilmour1$colony)
-
-gilmour1$date<-paste(substr(gilmour1$date,7,10),
-      substr(gilmour1$date,4,5), substr(gilmour1$date,1,2), sep='/')
 
 master<-rbind(master, gilmour1)
 
@@ -411,7 +410,8 @@ master<-rbind(master, data.frame(dataID='POLI1',sp='MABO', colony='Muertos',
 p1<-read.table('C:/seabirds/sourced_data/tracking_data/raw/Sommerfeld_Phillip_MABO.txt', sep='\t', h=T)
 
 master<-rbind(master, data.frame(dataID='SOMM1',sp='MABO', colony='Phillip',
-                                 trackID=factor(p1$ID),date=gsub('-', '/', as.character(p1$DateGMT)),
+                                 trackID=factor(p1$ID),date=paste(substr(p1$DateGMT, 7, 10), substr(p1$DateGMT, 4, 5),
+                                                                  substr(p1$DateGMT, 1, 2), sep='/'),
                                  time=p1$TimeGMT,
                                  latitude=p1$Latitude,longitude=p1$Longitude, breedstage='chick'))
 
@@ -485,18 +485,74 @@ master<-rbind(master, data.frame(dataID=p1$id,sp=p1$individual.taxon.canonical.n
                                  date=gsub('-', '/',substr(p1$timestamp, 1, 10)),
                                  time=substr(p1$timestamp, 12, 19),
                                  latitude=p1$location.lat,longitude=p1$location.long, breedstage='chick'))
-
 # all breedstage as chick but need to update
 
+# Gonzalez-Solis RBTB, BRBO
+
+# RBTB Cabo verde multiple colonies
+p1<-read.csv('C:/seabirds/sourced_data/tracking_data/raw/GPS_PHAAET_J.Gonzalez-Solis_2017-2019_CaboVerde.csv')
+p1$id<-'GONZ1'
+p1[p1$Colony=='ICima',]$id<-'GONZ2'
+p1[p1$Colony=='MLeao',]$id<-'GONZ3'
+p1[p1$Colony=='PRoque',]$id<-'GONZ4'
+p1[p1$Colony=='PSol_and_PRincon',]$id<-'GONZ5'
+p1[p1$Colony=='Raso',]$id<-'GONZ6'
+p1[p1$Colony=='SNegra',]$id<-'GONZ7'
+
+p1$bs<-'chick'
+p1[p1$Breed.Stage=='breeding',]$bs<-'unknown'
+p1[p1$Breed.Stage=='incubation',]$bs<-'incubation'
+
+
+master<-rbind(master, data.frame(dataID=p1$id,sp='RBTB', colony=p1$Colony,
+                                 trackID=factor(p1$BirdId),
+                                 date=paste(substr(p1$DateGMT, 7, 10), substr(p1$DateGMT, 4, 5),
+                                            substr(p1$DateGMT, 1, 2), sep='/'),
+                                 time=p1$TimeGMT,
+                                 latitude=p1$Latitude,longitude=p1$Longitude, breedstage=p1$bs))
+# RBTB senegal
+
+p1<-read.csv('C:/seabirds/sourced_data/tracking_data/raw/GPS_PHAAET_J.Gonzalez-Solis_2015-2018_Senegal.csv')
+
+p1$bs<-'chick'
+p1[p1$Breed.Stage=='breeding',]$bs<-'unknown'
+p1[p1$Breed.Stage=='incubating',]$bs<-'incubation'
+
+master<-rbind(master, data.frame(dataID='GONZ8', sp='RBTB', colony=p1$Colony,
+                                 trackID=factor(p1$BirdId),
+                                 date=gsub('-', '/', p1$DateGMT),
+                                 time=p1$TimeGMT,
+                                 latitude=p1$Latitude,longitude=p1$Longitude, breedstage=p1$bs))
+# BRBO Cabo Verde
+
+p1<-read.csv('C:/seabirds/sourced_data/tracking_data/raw/GPS_SULLEU_J.Gonzalez-Solis_2007-2018_CaboVerde.csv')
+
+p1$bs<-'chick'
+p1[p1$Breed.Stage=='breeding',]$bs<-'unknown'
+p1[p1$Breed.Stage=='incubation',]$bs<-'incubation'
+
+master<-rbind(master, data.frame(dataID='GONZ9', sp='BRBO', colony=p1$Colony,
+                                 trackID=factor(p1$BirdId),
+                                 date=gsub('-', '/', p1$DateGMT),
+                                 time=p1$TimeGMT,
+                                 latitude=p1$Latitude,longitude=p1$Longitude, breedstage=p1$bs))
+
+
+
 # temp write master, still some errors to fix
+# remove all white from times
+master$time<-trimws(master$time)
+table(nchar(as.character(master$time)))
+
+table(nchar(as.character(master$date)))
+
 write.csv(master, 'C:/seabirds/sourced_data/tracking_data/tracking_master.csv', quote=F, row.names=F)
 
 
-table(nchar(as.character(master$time)))
+
 
 master%>%group_by(dataID)%>%summarise_all(first)%>%print(n=60)
 
-#Gilmour dates still wrong and times + poli times
 
 # make bbox for each dataset - note na.omit()
 master_sf<-st_as_sf(na.omit(master), coords=c('longitude', 'latitude'), crs=4326)  #make sure the CRS is the same as your other data!
