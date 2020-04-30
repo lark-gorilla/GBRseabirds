@@ -415,6 +415,79 @@ master<-rbind(master, data.frame(dataID='SOMM1',sp='MABO', colony='Phillip',
                                  time=p1$TimeGMT,
                                  latitude=p1$Latitude,longitude=p1$Longitude, breedstage='chick'))
 
+# McDuie Swains MABO
+lsf<-list.files('C:/seabirds/sourced_data/tracking_data/raw/Mcduie_Swins_MABO/SWAINS - 2013 deployments/SWAINS - 2013 deployments')
+lsf<-lsf[grep('csv', lsf)]
+
+p2<-NULL
+for(i in 1:length(lsf))
+{
+  p1<-read.csv(paste0('C:/seabirds/sourced_data/tracking_data/raw/Mcduie_Swins_MABO/SWAINS - 2013 deployments/SWAINS - 2013 deployments/', lsf[i]))
+  p1$trackID<-trimws(substr(lsf[i], 11,13))
+  p2<-rbind(p2, p1)
+}
+
+master<-rbind(master, data.frame(dataID='MCDU1',sp='MABO', colony='Swains',
+                                 trackID=factor(p2$trackID),date=p2$Date,
+                                 time=p2$Time,
+                                 latitude=p2$Latitude,longitude=p2$Longitude, breedstage='chick'))
+# edit to change last track to BRBO
+master[master$trackID=='y n' & !is.na(master$trackID),]$sp<-'BRBO'
+
+# Austin RFBO, BRBO, MAFR
+
+#brbo
+p1<-read.csv('C:/seabirds/sourced_data/tracking_data/raw/CaymanDataForMark/CaymanIslands_BrownBooby_GPSData_20162017(Austinetal).csv')
+master<-rbind(master, data.frame(dataID='AUST1',sp='BRBO', colony='Cayman Brac',
+                                 trackID=factor(p1$Bird_ID),date=paste(substr(p1$datetime_utc, 7, 10), substr(p1$datetime_utc, 4, 5),
+                                substr(p1$datetime_utc, 1, 2), sep='/'),
+                                 time=substr(p1$datetime_utc, 12, 19),
+                                 latitude=p1$Latitude,longitude=p1$Longitude, breedstage='chick'))
+#rfbo GPS
+p1<-read.csv('C:/seabirds/sourced_data/tracking_data/raw/CaymanDataForMark/CaymanIslands_RedfootedBooby_GPSData_20162017(Austinetal).csv')
+master<-rbind(master, data.frame(dataID='AUST2',sp='RFBO', colony='Little Cayman',
+                                 trackID=factor(p1$Bird_ID),date=paste(substr(p1$datetime_utc, 7, 10), substr(p1$datetime_utc, 4, 5),
+                                                                       substr(p1$datetime_utc, 1, 2), sep='/'),
+                                 time=substr(p1$datetime_utc, 12, 19),
+                                 latitude=p1$Latitude,longitude=p1$Longitude, breedstage='chick'))
+#rfbo gps-GSM
+p1<-read.csv('C:/seabirds/sourced_data/tracking_data/raw/CaymanDataForMark/CaymanIslands_RedfootedBooby_GSMData_20162017(Austinetal).csv')
+master<-rbind(master, data.frame(dataID='AUST3',sp='RFBO', colony='Little Cayman',
+                                 trackID=factor(p1$Bird_ID),date=paste(substr(p1$datetime_utc, 7, 10), substr(p1$datetime_utc, 4, 5),
+                                                                       substr(p1$datetime_utc, 1, 2), sep='/'),
+                                 time=substr(p1$datetime_utc, 12, 19),
+                                 latitude=p1$Latitude,longitude=p1$Longitude, breedstage='chick'))
+
+#mag frigatebird
+p1<-read.csv('C:/seabirds/sourced_data/tracking_data/raw/CaymanDataForMark/CaymanIslands_Magnificent_Frigatebird_GPSData_2017.csv')
+
+master<-rbind(master, data.frame(dataID='AUST4',sp='MAFR', colony='Little Cayman',
+                                 trackID=factor(p1$Bird_ID),date=paste(substr(p1$datetime_utc, 7, 10), substr(p1$datetime_utc, 4, 5),
+                                                                       substr(p1$datetime_utc, 1, 2), sep='/'),
+                                 time=substr(p1$datetime_utc, 12, 19),
+                                 latitude=p1$Latitude,longitude=p1$Longitude, breedstage='chick'))
+# St Helena tracking Oppel et al
+p1<-read.csv('C:/seabirds/sourced_data/tracking_data/raw/St Helena seabird tracking.csv')
+
+#remove storm petrel
+p1<-p1[p1$individual.taxon.canonical.name!='Oceanodroma castro',]
+p1$individual.taxon.canonical.name<-as.character(p1$individual.taxon.canonical.name)
+p1[p1$individual.taxon.canonical.name=='Phaethon aethereus',]$individual.taxon.canonical.name<-'RBTB'
+p1[p1$individual.taxon.canonical.name=='Sula dactylatra',]$individual.taxon.canonical.name<-'MABO'
+p1[p1$individual.taxon.canonical.name=='Anous stolidus',]$individual.taxon.canonical.name<-'BRNO'
+
+p1$id<-'OPPE1'
+p1[p1$individual.taxon.canonical.name=='BRNO',]$id<-'OPPE2'
+p1[p1$individual.taxon.canonical.name=='RBTB',]$id<-'OPPE3'
+
+master<-rbind(master, data.frame(dataID=p1$id,sp=p1$individual.taxon.canonical.name, colony='St Helena',
+                                 trackID=factor(p1$tag.local.identifier),
+                                 date=gsub('-', '/',substr(p1$timestamp, 1, 10)),
+                                 time=substr(p1$timestamp, 12, 19),
+                                 latitude=p1$location.lat,longitude=p1$location.long, breedstage='chick'))
+
+# all breedstage as chick but need to update
+
 # temp write master, still some errors to fix
 write.csv(master, 'C:/seabirds/sourced_data/tracking_data/tracking_master.csv', quote=F, row.names=F)
 
