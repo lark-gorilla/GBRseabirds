@@ -18,6 +18,7 @@
 
 library(sf)
 library(readxl)
+library(dplyr)
 master<-read.csv('C:/seabirds/sourced_data/tracking_data/tracking_master.csv')
 
 # Add Congdon MABO and BRBO data
@@ -147,9 +148,13 @@ p1[which(p1$Species=='Phaethon athereus'),]$sp<-'RBTB'
 p1$breedstage='incubation'
 p1[which(p1$ID %in% zam_meta[which(zam_meta$`Brood size`==1),]$ID),]$breedstage<-'chick'
 
+p1[which(p1$Species=='Phaethon athereus'),]$Date<-paste(substr(p1[which(p1$Species=='Phaethon athereus'),]$Date, 7,10), 
+                                                        substr(p1[which(p1$Species=='Phaethon athereus'),]$Date, 4,5), 
+                                                        substr(p1[which(p1$Species=='Phaethon athereus'),]$Date, 1,2), sep='/')
+
 master<-rbind(master, data.frame(dataID='ZAMO1',sp=p1$sp, colony=p1$Colony,
-                                 trackID=p1$ID,date=paste(substr(p1$Date, 7,10), substr(p1$Date, 4,5), substr(p1$Date, 1,2), sep='/'),
-                                 time=substr(p1$Time, 2, 9), latitude=p1$Latitude,longitude=p1$Longitude, breedstage=p1$breedstage))
+                                 trackID=p1$ID,date=trimws(p1$Date),
+                                 time=trimws(p1$Time), latitude=p1$Latitude,longitude=p1$Longitude, breedstage=p1$breedstage))
 
 # Nichol BRBO & RFBO
 
@@ -251,7 +256,9 @@ out$date<-paste(unlist(lapply(strsplit(out$date, '\\/'),
                     function(x){sprintf("%02d",as.numeric(x[1]))})), sep='/')
 # fix to date '0014'
 out[out$dataID=='MEND9',]$date<-paste0('2014', substr(out[out$dataID=='MEND9',]$date, 5, 10))
-
+# fix reverse day/month
+out[out$dataID=='MEND11',]$date<-paste(substr(out[out$dataID=='MEND11',]$date, 1, 4), substr(out[out$dataID=='MEND11',]$date, 9,10),
+                                       substr(out[out$dataID=='MEND11',]$date, 6, 7), sep='/')
 # 170 rows with blank lat long date time ID fields
 out<-na.omit(out)
 
@@ -545,13 +552,23 @@ master$time<-trimws(master$time)
 table(nchar(as.character(master$time)))
 
 table(nchar(as.character(master$date)))
+#master%>%group_by(dataID)%>%summarise_all(first)%>%print(n=60)
+
+master$datetime <- as.POSIXct(strptime(paste(master$date, master$time, sep=""), "%Y/%m/%d %H:%M:%S"), "GMT")
+master$tracktime <- as.double(master$datetime)
+
+# rm duplicates
+master<-master[!duplicated(paste0(master$trackID,master$tracktime)),]
+
+master$datetime<-NULL
 
 write.csv(master, 'C:/seabirds/sourced_data/tracking_data/tracking_master.csv', quote=F, row.names=F)
 
 
+# make summary table
 
-
-master%>%group_by(dataID)%>%summarise_all(first)%>%print(n=60)
+master%>%group_by(sp)%>%summarise(nCol=length(unique(colony)),nBird=length(unique(trackID)),
+                   nDset=length(un ique(dataID)), own=paste(unique(dataID), collapse=','))
 
 
 # make bbox for each dataset - note na.omit()
