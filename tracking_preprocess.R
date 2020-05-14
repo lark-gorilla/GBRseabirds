@@ -41,11 +41,11 @@ for(i in int_sum$ID)
   #select dataset
   d1<-master[master$ID==i,]
   # fix for dataID=='OPPE1'
-  if(i=='OPPE1_MABO_St Helena'){
-   d1[d1$dt<2300000,]$dt<-NA 
-   d1<-tidyr::fill(d1, dt, .direction='down')
-   d1$trackID<-paste(d1$trackID, as.character(d1$dt))
-  }
+  #if(i=='OPPE1_MABO_St Helena'){
+  # d1[d1$dt<2300000,]$dt<-NA 
+  # d1<-tidyr::fill(d1, dt, .direction='down')
+  # d1$trackID<-paste(d1$trackID, as.character(d1$dt))
+  #}
   
   # recalc tracktime just to make sure
   d1$datetime <- as.POSIXct(strptime(paste(d1$date, d1$time, sep=""), "%Y/%m/%d %H:%M:%S"), "GMT")
@@ -106,20 +106,70 @@ for(i in int_sum$ID)
   print(paste(which(i==int_sum$ID),'of', length(int_sum$ID)))
 }
 
+# LOOP to tripsplit first! - only ran for for OPPE1_MABO_St Helena
 
+# read in interval assigned data summary
+int_sum<-read.csv('C:/seabirds/data/tracking_interval_decisions.csv')
 
-library(adehabitatLT)
-dat$trackID<-as.character(dat$trackID) #for as.ltraj the -1 trip_id is still considered if trip_id is a factor
+for(i in int_sum$ID)
+{
+  #select dataset
+  d1<-master[master$ID==i,]
+  
+  # recalc tracktime just to make sure
+  d1$datetime <- as.POSIXct(strptime(paste(d1$date, d1$time, sep=""), "%Y/%m/%d %H:%M:%S"), "GMT")
+  d1$tracktime <- as.double(d1$datetime)
+  
+  # get approx colony loc
+  trk_start<-d1%>%group_by(trackID)%>%summarise_all(first)
+  
+  #colony
+  coly<-data.frame(Longitude=median(trk_start$longitude),Latitude= median(trk_start$latitude))
+  
+  d1$ID<-NULL # rm for formatFields()
+  d1<-formatFields(d1, field_ID   = "trackID", field_DateTime='datetime',
+                             field_Lon  = "longitude", field_Lat  = "latitude")
 
-trajectories <- as.ltraj(xy=data.frame(dat$longitude,
-                                       dat$latitude),
-                         date=as.POSIXct(dat$tracktime, origin="1970/01/01", tz="GMT"),
-                         id=dat$trackID, typeII = TRUE)   
-
-# back to data.frame with metrics
-t1<-ld(trajectories) # units as input
-
-# linear interpolation
-
-dat_int <- redisltraj(trajectories, int_sum[int_sum$ID==i,]$int_decision, type="time")
-t2<-ld(dat_int) 
+  #tripsplit
+  dat_int_trips<-tripSplit(tracks = d1, Colony= coly, 
+                           InnerBuff  = 3,ReturnBuff = 10, Duration   = 1,
+                           plotit     = F,  rmColLocs  = T, cleanDF = T)
+  
+  
+  dat_int_trips$trip_id<-as.character(dat_int_trips$trip_id) 
+  if("" %in% unique(dat_int_trips$trip_id)){dat_int_trips[dat_int_trips$trip_id=="",]$trip_id<-'noid'}
+  
+  trajectories <- as.ltraj(xy=data.frame(dat_int_trips@coords[,1],
+                                         dat_int_trips@coords[,2]),
+                           date=dat_int_trips$DateTime,
+                           id=dat_int_trips$trip_id, typeII = TRUE)   
+  
+ 
+  #to data.frame
+  t1<-ld(trajectories)
+  if(length(which((t1$dist/t1$dt)>25))>0){
+    print(paste('removed', length(which((t1$dist/t1$dt)>25)),
+                'over 90kmph of total', nrow(t1)))
+    t1<-t1[-which((t1$dist/t1$dt)>25),]} #~ 90 km/h Mendez
+  # back to ltraj
+  trajectories<-dl(t1)
+  #interpolate to lookup val
+  trajectories <- redisltraj(trajectories, int_sum[int_sum$ID==i,]$int_decision, type="time")
+  
+  # to data.frame
+  trajectories<-ld(trajectories)
+  #points back to latlong
+  sptz <- SpatialPoints(data.frame(trajectories$x, trajectories$y),
+                        proj4string=dat_int_trips@proj4string)
+  sptz <- spTransform(sptz, CRS=CRS("+proj=longlat + datum=wgs84"))
+  trajectories<-data.frame(trajectories, sptz@coords)
+  
+ 
+  #write out with interpolation
+  write.csv(trajectories, paste0('C:/seabirds/sourced_data/tracking_data/clean_alt/',
+                                       i, '.csv'), quote=F, row.names=F)
+  
+  rm(dat_int_trips)#save mem
+  print(i)
+  print(paste(which(i==int_sum$ID),'of', length(int_sum$ID)))
+}
