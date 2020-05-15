@@ -19,7 +19,7 @@
 library(sf)
 library(readxl)
 library(dplyr)
-master<-read.csv('C:/seabirds/sourced_data/tracking_data/tracking_master.csv')
+#master<-read.csv('C:/seabirds/sourced_data/tracking_data/tracking_master.csv')
 
 # Add Congdon MABO and BRBO data
 congdon_brbo<-read.csv('C:/seabirds/phd/analyses/BRBO_raine/BRBO_raine_hmm.csv')
@@ -121,13 +121,15 @@ for(i in 1:length(birds))
 {birds2<-rbind(birds2, read.csv(paste0('C:/seabirds/sourced_data/tracking_data/raw/Capuska_MABO/', birds[i]), h=F))}
 
 # Note there are some 0,0 lat longs in data - remove
-birds2<-birds2[birds2$V16!=0,]
+birds2<-birds2[birds2$V10=='A',]
+#remove junk trips
+birds2<-birds2[birds2$V17 %in% names(which(table(birds2$V17)>100)),]
 
 master<-rbind(master, data.frame(dataID='CAPU1',sp='MABO', colony='LHI',
-                                 trackID=factor(birds2$V2),
-                                 date=paste('2013', unlist(lapply(strsplit(as.character(birds2$V3), '\\.'),
+                                 trackID=factor(birds2$V17),
+                                 date=paste('2013', unlist(lapply(strsplit(as.character(birds2$V14), '\\.'),
                                                     function(x){sprintf("%02d",as.numeric(x[2]))})),
-                                                    unlist(lapply(strsplit(as.character(birds2$V3), '\\.'),
+                                                    unlist(lapply(strsplit(as.character(birds2$V14), '\\.'),
                                                     function(x){sprintf("%02d",as.numeric(x[1]))})), sep='/'),
                                  time=birds2$V16, latitude=birds2$V7,longitude=birds2$V6,  breedstage='chick'))
 
@@ -148,6 +150,7 @@ p1[which(p1$Species=='Phaethon athereus'),]$sp<-'RBTB'
 p1$breedstage='incubation'
 p1[which(p1$ID %in% zam_meta[which(zam_meta$`Brood size`==1),]$ID),]$breedstage<-'chick'
 
+p1$Date<-as.character(p1$Date)
 p1[which(p1$Species=='Phaethon athereus'),]$Date<-paste(substr(p1[which(p1$Species=='Phaethon athereus'),]$Date, 7,10), 
                                                         substr(p1[which(p1$Species=='Phaethon athereus'),]$Date, 4,5), 
                                                         substr(p1[which(p1$Species=='Phaethon athereus'),]$Date, 1,2), sep='/')
@@ -562,13 +565,20 @@ master<-master[!duplicated(paste0(master$trackID,master$tracktime)),]
 
 master$datetime<-NULL
 
+master<-master[-which(is.na(master$tracktime)),]
+
+# make sure all tracks are temporally ordered 
+master<-master[order(master$dataID, master$sp, master$colony,
+                     master$trackID, master$tracktime, decreasing = F),]
+
+
 write.csv(master, 'C:/seabirds/sourced_data/tracking_data/tracking_master.csv', quote=F, row.names=F)
 
 
 # make summary table
 
 master%>%group_by(sp)%>%summarise(nCol=length(unique(colony)),nBird=length(unique(trackID)),
-                   nDset=length(un ique(dataID)), own=paste(unique(dataID), collapse=','))
+                   nDset=length(unique(dataID)), own=paste(unique(dataID), collapse=','))
 
 
 # make bbox for each dataset - note na.omit()
