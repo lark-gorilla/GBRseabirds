@@ -126,7 +126,7 @@ birds2<-birds2[birds2$V10=='A',]
 birds2<-birds2[birds2$V17 %in% names(which(table(birds2$V17)>100)),]
 
 master<-rbind(master, data.frame(dataID='CAPU1',sp='MABO', colony='LHI',
-                                 trackID=factor(birds2$V17),
+                                 trackID=factor(paste(birds2$V17, birds2$V18)),
                                  date=paste('2013', unlist(lapply(strsplit(as.character(birds2$V14), '\\.'),
                                                     function(x){sprintf("%02d",as.numeric(x[2]))})),
                                                     unlist(lapply(strsplit(as.character(birds2$V14), '\\.'),
@@ -374,6 +374,49 @@ gilmour1[grep('_IP_', gilmour1$trackID),]$colony<-'Pajaros'
 
 table(gilmour1$sp, gilmour1$colony)
 
+# Fix the same day issue!
+
+gilmour1$date<-as.character(gilmour1$date)
+gilmour1[which(is.na(gilmour1$date)),]$date<-'2014/07/01'
+
+gilmour1$datetime <- as.POSIXct(strptime(paste(gilmour1$date, gilmour1$time, sep=""), "%Y/%m/%d %H:%M:%S"), "GMT")
+gilmour1$tracktime <- as.double(gilmour1$datetime)
+
+library(zoo)
+
+gilmour1<-gilmour1%>%group_by(trackID)%>%
+  mutate(dt=c(-999, diff(tracktime)))%>%as.data.frame()
+gilmour1[gilmour1$dt> -1,]$dt<-NA
+gilmour1$dt3<-na.locf(gilmour1$dt, na.rm = F)
+
+gilmour2<-gilmour1%>%group_by(trackID)%>%
+  mutate(dt4=seq(0, length(unique(dt3)), 1)[match(dt3, unique(dt3))])%>%
+  mutate(date2=paste0(substr(date, 1,8), 
+         sprintf("%02d", as.numeric(substr(date, 9,10))+dt4)))
+# fixing impossible dates
+gilmour2[substr(gilmour2$date2, 6,10) =='07/32',]$date2<-paste0(
+  substr(gilmour2[substr(gilmour2$date2, 6,10) =='07/32',]$date2, 1, 5), '08/01')
+gilmour2[substr(gilmour2$date2, 6,10) =='08/32',]$date2<-paste0(
+  substr(gilmour2[substr(gilmour2$date2, 6,10) =='08/32',]$date2, 1, 5), '09/01')
+gilmour2[substr(gilmour2$date2, 6,10) =='08/33',]$date2<-paste0(
+  substr(gilmour2[substr(gilmour2$date2, 6,10) =='08/33',]$date2, 1, 5), '09/02')
+gilmour2[substr(gilmour2$date2, 6,10) =='09/31',]$date2<-paste0(
+  substr(gilmour2[substr(gilmour2$date2, 6,10) =='09/31',]$date2, 1, 5), '10/01')
+
+gilmour2$datetime <- as.POSIXct(strptime(paste(gilmour2$date2, gilmour2$time, sep=""), "%Y/%m/%d %H:%M:%S"), "GMT")
+gilmour2$tracktime <- as.double(gilmour2$datetime)
+
+gilmour1$date<-gilmour2$date2
+gilmour1$datetime<-NULL
+gilmour1$tracktime<-NULL
+gilmour1$d1<-NULL
+gilmour1$dt3<-NULL
+gilmour1$dt<-NULL
+
+gilmour1<-gilmour1[gilmour1$trackID!='MABO_PAL_2017_inc_Female_1-1',] # rm crap trip
+
+## back in
+
 master<-rbind(master, gilmour1)
 
 # Mcleay Crested Tern
@@ -561,7 +604,7 @@ master$datetime <- as.POSIXct(strptime(paste(master$date, master$time, sep=""), 
 master$tracktime <- as.double(master$datetime)
 
 # rm duplicates
-master<-master[!duplicated(paste0(master$trackID,master$tracktime)),]
+master<-master[which(!duplicated(paste0(master$trackID,master$tracktime))),]
 
 master$datetime<-NULL
 
