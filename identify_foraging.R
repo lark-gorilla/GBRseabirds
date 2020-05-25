@@ -1,6 +1,6 @@
 # Identify foraging locations
 library(ggplot2)
-library(momentuHMM)
+#library(momentuHMM)
 library(EMbC)
 library(dplyr)
 library(sf)
@@ -57,7 +57,7 @@ for(i in l1)
   p1<-read.csv(paste0('C:/seabirds/sourced_data/tracking_data/foraging_embc/',
          i))
   p1$ID=i
-  p1<-select(p1, ID, trip_id, embc, Latitude, Longitude)
+  p1<-dplyr::select(p1, ID, trip_id, embc, Latitude, Longitude)
   p1<-p1%>%st_as_sf(coords=c('Longitude', 'Latitude'), crs=4326)
   if(which(i==l1)==1){p2<-p1}else{p2<-rbind(p2, p1)}
   print(i)
