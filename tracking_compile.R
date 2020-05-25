@@ -264,6 +264,10 @@ out[out$dataID=='MEND11',]$date<-paste(substr(out[out$dataID=='MEND11',]$date, 1
                                        substr(out[out$dataID=='MEND11',]$date, 6, 7), sep='/')
 # 170 rows with blank lat long date time ID fields
 out<-na.omit(out)
+# sort ID for MEND12
+
+out$trackID<-as.character(out$trackID)
+out[out$dataID=='MEND12',]$trackID<-substr(out[out$dataID=='MEND12',]$trackID, 1, 6)
 
 master<-rbind(master, out)
 
@@ -619,7 +623,7 @@ write.csv(master, 'C:/seabirds/sourced_data/tracking_data/tracking_master.csv', 
 
 
 # make summary table
-
+ 
 master%>%group_by(sp)%>%summarise(nCol=length(unique(colony)),nBird=length(unique(trackID)),
                    nDset=length(unique(dataID)), own=paste(unique(dataID), collapse=','))
 
