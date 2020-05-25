@@ -2,16 +2,17 @@
 library(dplyr)
 library(ggplot2)
 library(adehabitatLT)
+library(sf)
+library(maptools)
 # soure BL scripts
 source('C:/seabirds/sourced_data/code/new_mIBA/formatFields.R')
 source('C:/seabirds/sourced_data/code/new_mIBA/tripSplit.R')
+source('C:/seabirds/sourced_data/code/new_mIBA/tripSummary.R')
 
 
 # make summary table of tracking interval per dataset
 
 master<-read.csv('C:/seabirds/sourced_data/tracking_data/tracking_master.csv')
-# Capuska data 0 lat long  quick fix
-master<-master[-which(master$latitude==0 & master$longitude==0),]
 
 master$ID<-paste(master$dataID, master$sp, master$colony, sep='_')
 
@@ -27,38 +28,50 @@ master$ID<-paste(master$dataID, master$sp, master$colony, sep='_')
 #p1
 #dev.off()
 
+# get colony locs for each ID, file will be edited in QGIS
+#sf_col<-master%>%group_by(ID, trackID)%>%summarise_all(first)%>%ungroup()%>%
+#group_by(ID)%>%summarise(latitude=median(latitude), longitude=median(longitude))%>%
+#  st_as_sf(coords=c('longitude', 'latitude'), crs=4326)
+#st_write(sf_col, 'C:/seabirds/data/GIS/trackingID_colony_locs.shp')
+
+# to assist the first and last 5 points of each track
+#sf_trax<-master%>%group_by(ID, trackID)%>%slice(1:10)%>%
+#  dplyr::select(latitude, longitude)%>%
+#  st_as_sf(coords=c('longitude', 'latitude'), crs=4326)
+#st_write(sf_trax, 'C:/seabirds/data/GIS/tracking_ID_firstpoints.shp')
+
 # Data processing
 # loop to:
-# remove speeds > 75km/h
+# remove speeds > 90km/h
 # interpolate to set interval
 # perform tripsplit
  
 # read in interval assigned data summary
 int_sum<-read.csv('C:/seabirds/data/tracking_interval_decisions.csv')
+# read in col locs
+colz<-st_read('C:/seabirds/data/GIS/trackingID_colony_locs.shp')
 
 for(i in int_sum$ID)
 {
   #select dataset
   d1<-master[master$ID==i,]
-  # fix for dataID=='OPPE1'
-  #if(i=='OPPE1_MABO_St Helena'){
-  # d1[d1$dt<2300000,]$dt<-NA 
-  # d1<-tidyr::fill(d1, dt, .direction='down')
-  # d1$trackID<-paste(d1$trackID, as.character(d1$dt))
-  #}
-  
+
+  if(i=='OPPE1_MABO_St Helena'){next} # needs to be tripsplit first
+
   # recalc tracktime just to make sure
   d1$datetime <- as.POSIXct(strptime(paste(d1$date, d1$time, sep=""), "%Y/%m/%d %H:%M:%S"), "GMT")
   d1$tracktime <- as.double(d1$datetime)
   
-  # get approx colony loc
-  trk_start<-d1%>%group_by(trackID)%>%summarise_all(first)
+  #colony from lookup
+  coly<-data.frame(Longitude=as(colz[colz$ID==i,], 'Spatial')@coords[1],
+                   Latitude= as(colz[colz$ID==i,], 'Spatial')@coords[2])
+  
   # project data to lambert equal area centred on data
   ### CREATE PROJECTED DATAFRAME ###
   sptz <- SpatialPoints(data.frame(d1$longitude, d1$latitude),
                              proj4string=CRS("+proj=longlat + datum=wgs84"))
-  proj.UTM <- CRS(paste("+proj=laea +lon_0=", median(trk_start$longitude),
-                        " +lat_0=", median(trk_start$latitude), sep=""))
+  proj.UTM <- CRS(paste("+proj=laea +lon_0=", coly$Longitude,
+                        " +lat_0=", coly$Latitude, sep=""))
   sptz <- spTransform(sptz, CRS=proj.UTM)
   
   d1$trackID<-as.character(d1$trackID) 
@@ -72,8 +85,11 @@ for(i in int_sum$ID)
   rm(sptz)#save mem
   #to data.frame
   t1<-ld(trajectories)
+  print(paste('nrow pre speed filt', nrow(t1)))
   if(length(which((t1$dist/t1$dt)>25))>0){
   t1<-t1[-which((t1$dist/t1$dt)>25),]} #~ 90 km/h Mendez
+  if(i=='AUST4_MAFR_Little Cayman'){t1<-ld(trajectories)}# fix to not remove outlers from this dset
+  print(paste('nrow post speed filt', nrow(t1)))
   # back to ltraj
   trajectories<-dl(t1)
   #interpolate to lookup val
@@ -89,13 +105,21 @@ for(i in int_sum$ID)
   
   trajectories<-formatFields(trajectories, field_ID   = "id", field_DateTime='date',
                      field_Lon  = "trajectories.x", field_Lat  = "trajectories.y")
- #colony
-  coly<-data.frame(Longitude=median(trk_start$longitude),Latitude= median(trk_start$latitude))
-  
+
   #tripsplit
   dat_int_trips<-tripSplit(tracks = trajectories, Colony= coly, 
-                        InnerBuff  = 5,ReturnBuff = 20, Duration   = 1,
+                        InnerBuff  = 3,ReturnBuff = 10, Duration   = 1,
                         plotit     = F,  rmColLocs  = T, cleanDF = T)
+  # fix for multi colony per dataset
+  if(i=='AUST1_BRBO_Cayman Brac'){
+    dif_tripz<-c('B01', 'B02', 'B06', 'B12', 'B13', 'C05', 'C25','C28', 'P00', 'P03', 'P04', 'P07', 'P08')
+    dat_int_trips<-dat_int_trips[dat_int_trips$ID!= dif_tripz,]
+    tempy1<-tripSplit(tracks = trajectories[trajectories$ID %in% dif_tripz,],
+                      Colony= data.frame(Longitude=-79.7293, Latitude= 19.7549), 
+                      InnerBuff  = 3,ReturnBuff = 10, Duration   = 1,
+                      plotit     = F,  rmColLocs  = T, cleanDF = T)
+    tempy1@proj4string<-dat_int_trips@proj4string
+    dat_int_trips<-spRbind(dat_int_trips,tempy1)}
   
   #write out with interpolation
   write.csv(dat_int_trips@data, paste0('C:/seabirds/sourced_data/tracking_data/clean/',
@@ -105,6 +129,105 @@ for(i in int_sum$ID)
   print(i)
   print(paste(which(i==int_sum$ID),'of', length(int_sum$ID)))
 }
+
+## Loop to assist with the manual removal of crap trips
+## Loop to read raw and clean datasets produce per tripsplit figure
+
+# read in interval assigned data summary
+int_sum<-read.csv('C:/seabirds/data/tracking_interval_decisions.csv')
+# read in col locs
+colz<-st_read('C:/seabirds/data/GIS/trackingID_colony_locs.shp')
+
+trip_table<-NULL
+for(i in int_sum$ID)
+{
+  #select dataset
+  rawd<-master[master$ID==i,]
+  
+  #write out raw
+  write.csv(rawd, paste0('C:/seabirds/sourced_data/tracking_data/compiled/',
+                                       i, '.csv'), quote=F, row.names=F)
+  
+  if(i=='OPPE1_MABO_St Helena'){next} # different columns
+  
+  cleand<-read.csv(paste0('C:/seabirds/sourced_data/tracking_data/clean/',i, '.csv'))
+  
+  cleand <- SpatialPointsDataFrame(SpatialPoints(data.frame(cleand$Longitude, 
+            cleand$Latitude), proj4string=CRS("+proj=longlat + datum=wgs84")),
+            data = cleand, match.ID=F)
+  mid_point<-data.frame(geosphere::centroid(cbind(cleand$Longitude, cleand$Latitude)))
+  
+  proj.UTM <- CRS(paste("+proj=laea +lon_0=", mid_point$lon, " +lat_0=", mid_point$lat, sep=""))
+  cleand <- spTransform(cleand, CRS=proj.UTM)
+  cleand$DateTime <- as.POSIXct(strptime(cleand$DateTime, "%Y-%m-%d %H:%M:%S"), "GMT")
+  
+  coly<-data.frame(Longitude=as(colz[colz$ID==i,], 'Spatial')@coords[1],
+                   Latitude= as(colz[colz$ID==i,], 'Spatial')@coords[2])
+  
+  #tripSummary
+  sumTrips <- tripSummary(Trips = cleand, Colony = coly)
+  sumTrips<-rename(sumTrips, trackID=ID)
+  
+  # augment, rbind and writeout summary
+  sum_trips<-data.frame(ID=i, sumTrips)
+
+  trip_table<-rbind(trip_table, sum_trips)
+  write.csv(trip_table, 'C:/seabirds/data/tracking_trip_decisions.csv', quote=F, row.names=F)
+  
+   # output plots
+  
+  trackz<-unique(cleand$ID)
+  
+  if(length(trackz)<25){
+  
+  TRACKPLOT <- cleand@data %>%
+    arrange(.data$ID, .data$TrackTime) %>%
+    ggplot(aes(., x=Longitude, y=Latitude, colour=substr(trip_id,
+                  nchar(as.character(trip_id)), nchar(as.character(trip_id))))) +
+    geom_path(colour='grey') +
+    geom_point(size=0.2)+
+    geom_point(data=coly, aes(x=Longitude, y=Latitude), col='red', shape=16, size=2) +
+    facet_wrap(ggplot2::vars(ID), scales='free') +
+    theme(panel.background=element_rect(fill="white", colour="black"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          strip.background = element_rect(colour="black", fill="white"),
+          panel.border = element_blank(), legend.position = "none")
+  
+    png(paste0('C:/seabirds/sourced_data/tracking_data/fig_clean_tripsplit/',i,'.png'),width = 12, height =12 , units ="in", res =600)
+    print(TRACKPLOT)
+    dev.off()
+    }else{lapply(split(trackz, ceiling(seq_along(trackz)/25)),
+                      function(x){
+                                TRACKPLOT <- cleand@data %>% filter(ID %in% x)%>%
+                                  arrange(.data$ID, .data$TrackTime) %>%
+                                  ggplot(aes(., x=Longitude, y=Latitude, colour=substr(trip_id,
+                                                                                       nchar(as.character(trip_id)), nchar(as.character(trip_id))))) +
+                                  geom_path(colour='grey') +
+                                  geom_point(size=0.2)+
+                                  geom_point(data=coly, aes(x=Longitude, y=Latitude), col='red', shape=16, size=2) +
+                                  facet_wrap(ggplot2::vars(ID), scales='free') +
+                                  theme(panel.background=element_rect(fill="white", colour="black"),
+                                        panel.grid.major = element_blank(),
+                                        panel.grid.minor = element_blank(),
+                                        strip.background = element_rect(colour="black", fill="white"),
+                                        panel.border = element_blank(), legend.position = "none")
+                                
+                                png(paste0('C:/seabirds/sourced_data/tracking_data/fig_clean_tripsplit/',i,
+                                           '_', x[[1]][1], '.png'),width = 12, height =12 , units ="in", res =600)
+                                print(TRACKPLOT)
+                                dev.off()})
+                                } # end of else loop
+ 
+print(i)
+print(paste(which(i==int_sum$ID),'of', length(int_sum$ID)))      
+} # end of big loop
+  
+# add breedstage
+t2<-left_join(trip_table, master%>%group_by(trackID)%>%summarise_all(first)%>%dplyr::select(trackID,breedstage), by='trackID')
+write.csv(t2, 'C:/seabirds/data/tracking_trip_decisions.csv', quote=F, row.names=F)
+
+
 
 # LOOP to tripsplit first! - only ran for for OPPE1_MABO_St Helena
 
