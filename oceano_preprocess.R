@@ -32,24 +32,40 @@ writeRaster(chl_sd, 'C:/seabirds/sourced_data/oceano_modelready/chl_sd.tif')
 #fronts
 nc_open('C:/seabirds/sourced_data/pml_fronts/pml_CCI_SST_front-step3-sst_L3_tropics_1M_climatology_2006-2016.nc')
 
-pfront_month<-raster('C:/seabirds/sourced_data/pml_fronts/pml_CCI_SST_front-step3-sst_L3_tropics_1M_climatology_2006-2016.nc',
-               varname='pfront')
+# front strength
+mfront_month<-stack('C:/seabirds/sourced_data/pml_fronts/pml_CCI_SST_front-step3-sst_L3_tropics_1M_climatology_2006-2016.nc',
+               varname='fronts_mean')
+
+mfront_sd<-calc(mfront_month, sd)
+
+mfront_mn<-raster('C:/seabirds/sourced_data/pml_fronts/pml_CCI_SST_front-step3-sst_L3_tropics_1M_overall_monthly_2006-2016.nc',
+               varname='fronts_mean')
+
+writeRaster(mfront_mn, 'C:/seabirds/sourced_data/oceano_modelready/mfront_mn.tif')
+writeRaster(mfront_sd, 'C:/seabirds/sourced_data/oceano_modelready/mfront_sd.tif')
+
+# probability of front at pixel
+pfront_month<-stack('C:/seabirds/sourced_data/pml_fronts/pml_CCI_SST_front-step3-sst_L3_tropics_1M_climatology_2006-2016.nc',
+                    varname='pfront')
 
 pfront_sd<-calc(pfront_month, sd)
 
 pfront_mn<-raster('C:/seabirds/sourced_data/pml_fronts/pml_CCI_SST_front-step3-sst_L3_tropics_1M_overall_monthly_2006-2016.nc',
-               varname='pfront')
+                  varname='pfront')
+
+writeRaster(pfront_mn, 'C:/seabirds/sourced_data/oceano_modelready/pfront_mn.tif')
+writeRaster(pfront_sd, 'C:/seabirds/sourced_data/oceano_modelready/pfront_sd.tif')
+
+#bathy read and mosaic
+
+b1<-raster('C:/seabirds/sourced_data/gebco/gebco_2020_n4.0_s-37.0_w-18.0_e173.0.nc')
+b2<-raster('C:/seabirds/sourced_data/gebco/gebco_2020_n33.0_s-3.0_w-170.0_e-15.0.nc')
+b3<-raster('C:/seabirds/sourced_data/gebco/gebco_2020_n27.0_s21.0_w120.0_e126.0.nc')
+
+b4<-mosaic(b1, b2, b3, fun=min)
+writeRaster(b4, 'C:/seabirds/sourced_data/oceano_modelready/bathy.tif')
+
+# read in EMbC classed tracking and extract oceano data
 
 
-c_spring<-raster(chl_list[1],
-                 varname='chlor_a')
-c_summer<-raster('C:/seabirds/sourced_data/terra_chl_sst/T20001732019263.L3m_SCSU_CHL.x_chlor_a.nc',
-                 varname='chlor_a')
-c_summer<-raster('C:/seabirds/sourced_data/terra_chl_sst/T20002652019354.L3m_SCAU_CHL.x_chlor_a.nc',
-                 varname='chlor_a')
-c_summer<-raster('C:/seabirds/sourced_data/terra_chl_sst/T20003562019079.L3m_SCWI_CHL.x_chlor_a.nc',
-                 varname='chlor_a')
 
-st1<-stack(c_spring, c_summer, c_summer, c_summer)
-c1<-calc(st1, sd)
-c2<-calc(st1, mean)
