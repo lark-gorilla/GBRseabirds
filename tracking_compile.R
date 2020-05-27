@@ -16,6 +16,13 @@
 #breedstage='chick')
 #write.csv(master, 'C:/seabirds/sourced_data/tracking_data/tracking_master.csv', quote=F, row.names=F)
 
+# data req
+#wtsh<-filter(congdon_wtsh, Colony=='LHI')
+#d1<-data.frame(Common_name='Wedge-tailed Shearwater', Site_name='Lord Howe Island', Colony_name='Signal Point', Lat_colony=-31.52459, Long_colony=159.05991,
+#               Device='GPS', Bird_id=wtsh$TrackID, Track_id=wtsh$trip_id, Sex='unknown', Breed_stage='chick', Breed_status='Breeding',
+#               Date_AEST=wtsh$DateAEST, Time_AEST=wtsh$TimeAEST, Longitude=wtsh$Longitude, Latitude=wtsh$Latitude, Argos_quality=NA)
+#write.csv(d1, 'C:/seabirds/admin/Clay_wind_collab/wtsh_lhi.csv', quote=F, row.names=F )
+
 library(sf)
 library(readxl)
 library(dplyr)
