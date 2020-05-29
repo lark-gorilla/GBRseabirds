@@ -1,6 +1,7 @@
 # Modelling code
 
 library(dplyr)
+library(tidyr)
 library(ggplot2)
 library(GGally)
 library(randomForest)
@@ -16,6 +17,10 @@ hulls<-read.csv('C:/seabirds/data/BRBO_hulls_modelready.csv')
 
 # clean up data
 
+# Collapse ID to just remove owner and species, this combines all Soanes Dog and Swains cols
+brbo$ID<-do.call(c, lapply(strsplit(as.character(brbo$ID), '_'), function(x)x[3]))
+brbo$ID<-substr(brbo$ID, 1, (nchar(brbo$ID)-4)) # rm .csv
+
 # remove sitting behaviour and error pts
 
 brbo<-filter(brbo, embc %in% c('commuting', 'relocating', 'foraging') )
@@ -25,6 +30,16 @@ brbo[brbo$embc=='commuting',]$forbin<-0
 # remove NA pts (from chl, sst and front land mask mainly )
 brbo$trip_id<-NULL # temporary fix for NICH trip_ID==NA
 brbo<-na.omit(brbo)
+
+# niche overlap
+enviro_std<-decostand(brbo[,c(4:7, 9, 10, 12, 13)], method="standardize")
+enviro_rda<-rda(enviro_std, scale=T)
+screeplot(enviro_rda)
+enviro.sites.scores<-as.data.frame(scores(enviro_rda, choices=1:4, display='sites', scaling=1))
+enviro.sites.scores<-data.frame(enviro.sites.scores,brbo[,c(1,14)])
+ggplot(data=enviro.sites.scores, aes(x=PC1, y=PC2))+
+  geom_density_2d(aes(colour=factor(forbin)))+facet_wrap(~ID)
+
 
 # Remember nearshore front values which ==0 should be NA
 # Remember some bad tracks that should be filtered prior to modelling
@@ -49,22 +64,42 @@ rf1<-randomForest(factor(forbin)~sst_mn+sst_sd+chl_mn+chl_sd+mfront_sd+pfront_mn
 print(rf1)
 print(varImpPlot(rf1))
 brbo_norm$p1<-predict(rf1, newdata=brbo_norm, type='prob')[,2] # prob of foraging 0-1
-names(brbo_norm)[which(names(brbo_norm)=='p1')]<-substr(i, 1, (nchar(i)-4))
+names(brbo_norm)[which(names(brbo_norm)=='p1')]<-i
 print(i)
 print(Sys.time()) 
 }
 
+br1<-brbo_norm[,c(1, 14:36)]%>%gather(variable, value, -ID, -forbin)
+aucz<-br1%>%group_by(ID, variable)%>%summarise(auc=pROC::auc(forbin, value))
+m1<-matrix(ncol=22, nrow=22, data =aucz$auc, dimnames=list(unique(aucz$ID), unique(aucz$ID)))
+d1<-as.dist(1-m1)
+plot(hclust(d1, method='average'))
+
+ggplot(aucz, aes(x = ID, y = variable)) + 
+  geom_raster(aes(fill=auc)) + 
+  scale_fill_gradient(low="grey90", high="red") +
+  theme_bw() + theme(axis.text.x=element_text(size=9, angle=90, vjust=0.3),
+                     axis.text.y=element_text(size=9),
+                     plot.title=element_text(size=11))+xlab(NULL)+ylab(NULL)
+
+
 #caret approach
 
 test_dat<-as.data.frame(brbo_norm[brbo_norm$ID %in% unique(brbo_norm$ID)[c(2,4,5)],])
+
+# trial to rm transit points that have identical env signature to foraging PER trip
+td2<-test_dat%>%mutate(index=paste0(sst_mn,sst_sd,chl_mn,chl_sd,mfront_sd,pfront_mn,ex_bathy,ex_slope))%>%
+                    group_by(trip_id)%>%filter(!duplicated(index) | forbin==1) # doesnt work.. yet
+
 
 # make forbin a factor with labels attached rather than 0, 1
 test_dat$forbin<-as.factor(test_dat$forbin)
 levels(test_dat$forbin)<-c("transit", "forage")
 
 # do somne variable vis
-ggplot(data=test_dat, aes(x=sst_mn, colour=forbin))+
-  geom_density()
+td <- test_dat %>% select(-embc)%>%gather(variable, value, -ID, -forbin)
+ggplot(data=td, aes(x=value, colour=forbin))+
+  geom_density()+facet_grid(ID~variable, scales='free')
 
 # make forbin a factor with labels attached rather than 0, 1
 test_dat$forbin<-as.factor(test_dat$forbin)
