@@ -131,3 +131,24 @@ hp<-left_join(as.data.frame(hull_pts@data), as.data.frame(hulls@data), by=c("lay
 out2<-data.frame(ID=hp$ID, ex_sst, ex_chl, ex_front, ex_bathy, ex_slope)
 
 write.csv(out2, 'C:/seabirds/data/BRBO_hulls_modelready.csv', quote=F, row.names=F)
+
+# extract pred area
+pred_a<-read_sf('C:/seabirds/data/GIS/pred_area.shp')
+pred_a<-as(pred_a, 'Spatial')
+
+# give pred_a pixel size of finest raster (bathy)
+pred_ras<-rasterize(pred_a, bathy, field=1) # should attribute with hull rownumber if field in not specified
+pred_pts<-rasterToPoints(pred_ras, spatial=T)
+
+ex_sst<-extract(sst, pred_pts)
+ex_chl<-extract(chl, pred_pts)
+ex_front<-extract(fronts, pred_pts)
+ex_bathy<-extract(bathy, pred_pts)
+ex_slope<-extract(slope, pred_pts)
+
+out3<-data.frame(pred_pts@coords, ex_sst, ex_chl, ex_front, ex_bathy, ex_slope)
+
+out4<-na.omit(out3) # cut out land
+write.csv(out4, 'C:/seabirds/data/pred_area_modelready.csv', quote=F, row.names=F)
+
+
