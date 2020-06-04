@@ -3,9 +3,12 @@
 library(dplyr)
 library(tidyr)
 library(ggplot2)
-library(GGally)
+#library(GGally)
 library(randomForest)
 library(caret)
+library(pROC)
+library(vegan)
+library(raster)
 
 #set.seed(7) really important to set.seed with RF??
 
@@ -14,10 +17,13 @@ brbo<-read.csv('C:/seabirds/data/tracking_modelready.csv')
 
 hulls<-read.csv('C:/seabirds/data/BRBO_hulls_modelready.csv')
 
+gbr<-read.csv('C:/seabirds/data/pred_area_modelready.csv')
+
 
 # clean up data
 
-# Collapse ID to just remove owner and species, this combines all Soanes Dog and Swains cols
+# Collapse ID to just remove owner and species, this combines all Soanes Dog
+# and Swains cols - check for differences in interval
 brbo$ID<-do.call(c, lapply(strsplit(as.character(brbo$ID), '_'), function(x)x[3]))
 brbo$ID<-substr(brbo$ID, 1, (nchar(brbo$ID)-4)) # rm .csv
 
@@ -28,17 +34,42 @@ brbo$forbin<-1
 brbo[brbo$embc=='commuting',]$forbin<-0
 
 # remove NA pts (from chl, sst and front land mask mainly )
-brbo$trip_id<-NULL # temporary fix for NICH trip_ID==NA
+brbo$trip<-as.character(brbo$trip_id)
+brbo[brbo$ID=='Danger',]$trip_id<-'t1' # temporary fix for NICH trip_ID==NA
 brbo<-na.omit(brbo)
+# set bathy vals >0 to 0 then make positive
+brbo[brbo$ex_bathy>0,]$ex_bathy<-0
+brbo$ex_bathy<-sqrt(brbo$ex_bathy^2)
+
+# clean pred area too
+gbr[gbr$ex_bathy>0,]$ex_bathy<-0
+gbr$ex_bathy<-sqrt(gbr$ex_bathy^2)
+# quick fix to set area above 3000 to 3000
+gbr[gbr$ex_bathy>3000,]$ex_bathy<-3000
+
+# hull abs
+# Collapse ID to just remove owner and species, this combines all Soanes Dog
+# and Swains cols - check for differences in interval
+#hulls$ID<-do.call(c, lapply(strsplit(as.character(hulls$ID), '_'), function(x)x[3]))
+#hulls$ID<-substr(hulls$ID, 1, (nchar(hulls$ID)-4)) # rm .csv
+#n_pres<-brbo%>%filter(forbin==1)%>%group_by(ID)%>%summarise(n())
+#hull_abs<-hulls%>%group_by(ID)%>%
+#  sample_n(size=filter(n_pres, ID==unique(hulls$ID))$`n()`, replace=F)
+
+
+# trial to rm transit points that have identical env signature to foraging PER trip
+brbo<-brbo%>%mutate(index=paste0(sst_mn,sst_sd,chl_mn,chl_sd,mfront_sd,pfront_mn,ex_bathy,ex_slope))%>%
+  group_by(ID)%>%filter(!duplicated(index) | forbin==1) # doesnt work.. yet
+# run with ID for now # loses 20k absences
 
 # niche overlap
-enviro_std<-decostand(brbo[,c(4:7, 9, 10, 12, 13)], method="standardize")
+enviro_std<-decostand(brbo[,c(3:6, 8, 9, 11, 12)], method="standardize")
 enviro_rda<-rda(enviro_std, scale=T)
 screeplot(enviro_rda)
 enviro.sites.scores<-as.data.frame(scores(enviro_rda, choices=1:4, display='sites', scaling=1))
-enviro.sites.scores<-data.frame(enviro.sites.scores,brbo[,c(1,14)])
+enviro.sites.scores<-data.frame(enviro.sites.scores,brbo[,c(1,13)])
 ggplot(data=enviro.sites.scores, aes(x=PC1, y=PC2))+
-  geom_density_2d(aes(colour=factor(forbin)))+facet_wrap(~ID)
+  geom_density_2d(aes(colour=factor(forbin)))+facet_wrap(~ID)+theme_bw()
 
 
 # Remember nearshore front values which ==0 should be NA
@@ -50,6 +81,13 @@ ggplot(data=enviro.sites.scores, aes(x=PC1, y=PC2))+
 normalized<-function(x){(x-min(x))/(max(x)-min(x))}
 brbo_norm<-brbo %>% group_by(ID) %>% mutate_if(is.numeric, normalized)
 brbo_norm$forbin<-brbo$forbin
+brbo$trip_id<-brbo$trip_id
+
+# normalize GBR prediction area too
+gbr_norm<-data.frame(gbr[,1:2], gbr[,3:12] %>% mutate_all(normalized))
+# do bathy with custom norm to exclude set new min
+#gbr_norm$ex_bathy<-(gbr$ex_bathy- -3000)/(max(x)-min(x))} not done but handy
+
 # check correlation
 #ggpairs(brbo_norm[,3:14]) # takes ages
 
@@ -63,15 +101,20 @@ rf1<-randomForest(factor(forbin)~sst_mn+sst_sd+chl_mn+chl_sd+mfront_sd+pfront_mn
                   data=brbo_norm[brbo_norm$ID==i,], ntree=500, mtry=4, importance=T)
 print(rf1)
 print(varImpPlot(rf1))
+# predict to other colonies
 brbo_norm$p1<-predict(rf1, newdata=brbo_norm, type='prob')[,2] # prob of foraging 0-1
 names(brbo_norm)[which(names(brbo_norm)=='p1')]<-i
+# predict to GBR
+gbr_norm$p1<-predict(rf1, newdata=gbr_norm, type='prob')[,2] # prob of foraging 0-1
+names(gbr_norm)[which(names(gbr_norm)=='p1')]<-i
 print(i)
 print(Sys.time()) 
 }
 
-br1<-brbo_norm[,c(1, 14:36)]%>%gather(variable, value, -ID, -forbin)
+# check cols selected and size of matrix before running
+br1<-as.data.frame(brbo_norm[,c(1, 13, 15:30)])%>%gather(variable, value, -ID, -forbin)
 aucz<-br1%>%group_by(ID, variable)%>%summarise(auc=pROC::auc(forbin, value))
-m1<-matrix(ncol=22, nrow=22, data =aucz$auc, dimnames=list(unique(aucz$ID), unique(aucz$ID)))
+m1<-matrix(ncol=16, nrow=16, data =aucz$auc, dimnames=list(unique(aucz$ID), unique(aucz$ID)))
 d1<-as.dist(1-m1)
 plot(hclust(d1, method='average'))
 
@@ -80,16 +123,31 @@ ggplot(aucz, aes(x = ID, y = variable)) +
   scale_fill_gradient(low="grey90", high="red") +
   theme_bw() + theme(axis.text.x=element_text(size=9, angle=90, vjust=0.3),
                      axis.text.y=element_text(size=9),
-                     plot.title=element_text(size=11))+xlab(NULL)+ylab(NULL)
+                     plot.title=element_text(size=11))+ylab('Model predictions')+xlab('Predicting to')
 
+
+# Visualise GBR raster preds
+
+templ<-raster('C:/seabirds/data/GIS/pred_area_ras_template.tif')
+
+spdf<-SpatialPointsDataFrame(SpatialPoints(gbr_norm[,1:2], proj4string = CRS(projection(templ))),
+                             data=gbr_norm[,13:length(gbr_norm)])
+
+for(i in 1:length(spdf@data))
+{
+p1<-rasterize(spdf, templ, field=names(spdf@data)[i])
+writeRaster(p1, paste0('C:/seabirds/data/modelling/GBR_preds/BRBO/',gsub(' ', '_', names(spdf@data)[i]), '.tif'), overwrite=T)
+#if(i==1){ps<-p1}else{ps<-stack(ps, p1)}
+}
 
 #caret approach
 
-test_dat<-as.data.frame(brbo_norm[brbo_norm$ID %in% unique(brbo_norm$ID)[c(2,4,5)],])
+#test_dat<-as.data.frame(brbo_norm[brbo_norm$ID %in% unique(brbo_norm$ID)[c(2,4,5)],])
 
-# trial to rm transit points that have identical env signature to foraging PER trip
-td2<-test_dat%>%mutate(index=paste0(sst_mn,sst_sd,chl_mn,chl_sd,mfront_sd,pfront_mn,ex_bathy,ex_slope))%>%
-                    group_by(trip_id)%>%filter(!duplicated(index) | forbin==1) # doesnt work.. yet
+#try subsample data to something that will actually run
+brbo_norm%>%group_by(ID)%>%summarise(n())
+test_dat<-brbo_norm%>%group_by(ID)%>%
+  slice(1:4500)%>%as.data.frame()  # grab first 4500 rows
 
 
 # make forbin a factor with labels attached rather than 0, 1
@@ -97,13 +155,10 @@ test_dat$forbin<-as.factor(test_dat$forbin)
 levels(test_dat$forbin)<-c("transit", "forage")
 
 # do somne variable vis
-td <- test_dat %>% select(-embc)%>%gather(variable, value, -ID, -forbin)
+td <- test_dat %>% dplyr::select(-embc)%>%gather(variable, value, -ID, -forbin)
 ggplot(data=td, aes(x=value, colour=forbin))+
   geom_density()+facet_grid(ID~variable, scales='free')
 
-# make forbin a factor with labels attached rather than 0, 1
-test_dat$forbin<-as.factor(test_dat$forbin)
-levels(test_dat$forbin)<-c("transit", "forage")
 
 test_dat$ID<-factor(test_dat$ID)
 folds <- groupKFold(test_dat$ID)
@@ -113,11 +168,11 @@ train_control <- trainControl( method="LGOCV",
                                classProbs = TRUE,
                                savePredictions = TRUE,
                                summaryFunction = twoClassSummary)
-mtry <- 1:4
+mtry <- 2
 tunegrid <- expand.grid(.mtry=mtry)
 rf_default <- caret::train(forbin~sst_mn+sst_sd+chl_mn+chl_sd+mfront_sd+pfront_mn+ex_bathy+ex_slope,
                     data=test_dat, method="rf", metric='ROC', 
-                    tuneGrid=tunegrid, trControl=train_control)
+                    tuneGrid=tunegrid, trControl=train_control, ntree=50)
 print(rf_default)
 
 rf_default$resample
