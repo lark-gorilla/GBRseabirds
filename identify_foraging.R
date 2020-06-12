@@ -9,13 +9,20 @@ library(sf)
 t_qual<-read.csv('C:/seabirds/data/tracking_trip_decisions.csv')
 t_qual$auto_keep<-'Y'
 
+# make dset summary table
+
+dat_sumr<-t_qual%>%filter(manual_keep=='Y')%>%group_by(ID)%>%
+                        summarise(mean_dur=mean(duration, na.rm=T),
+                        p_2dur=length(which(duration<2))/n(), n_20loc=length(which(n_locs<21)),
+                        mean_cold=mean(max_dist, na.rm=T),
+                        p_10col=length(which(max_dist<10))/n())
+#write.csv(dat_sumr, 'C:/seabirds/data/dataID_mintrip_decisions.csv', quote=F, row.names=F)
 # Booby trial
-t_qual<-t_qual[grep('BRBO', t_qual$ID),]
-qplot(data=t_qual, x=duration, geom='histogram')+facet_wrap(~ID, scales='free')
+#t_qual<-t_qual[grep('BRBO', t_qual$ID),]
+#qplot(data=t_qual, x=duration, geom='histogram')+facet_wrap(~ID, scales='free')
 # BRBO intervals between 1 and 5 min
-# check CLARKE dates to make sure still in correct breedstage
-t_qual[which(t_qual$duration>72),]$auto_keep<-'N'
-hist(t_qual[which(is.na(t_qual$duration)),]$max_dist) #NAs look ok
+#t_qual[which(t_qual$duration>72),]$auto_keep<-'N'
+#hist(t_qual[which(is.na(t_qual$duration)),]$max_dist) #NAs look ok
 
 
 for(i in unique(t_qual$ID))
@@ -23,18 +30,21 @@ for(i in unique(t_qual$ID))
 {
   cleand<-read.csv(paste0('C:/seabirds/sourced_data/tracking_data/clean/',i, '.csv'))
   
-  if(i!="NICH1_BRBO_Danger"){
+ 
   # filter out bad trips
   cleand<-cleand[cleand$trip_id%in% t_qual[t_qual$ID==i & t_qual$auto_keep=='Y',]$trip_id,]
-  }
+  
+  # rm troublesome trip
+  if(i == 'GILM4_MABO_Clarion') {cleand<-cleand[cleand$trip_id!='MABO_CLR_SDC05_inc_Female_1-11',]}
   
   # classic EMbC 
   cleand$DateTime <- as.POSIXct(strptime(as.character(cleand$DateTime),format="%Y-%m-%d %H:%M:%S",tz="GMT")) # time has to be POSIXct
   forembc <- cleand[,c('DateTime', 'Longitude', 'Latitude', 'trip_id')] #time, longitude, latitude, ID ( ! order is important !)
+ 
   BC <- stbc(forembc)
   smoothedBC <- smth(BC, dlta=1)
   #view(smoothedBC)
-  
+
   cleand$embc <- smoothedBC@A
   cleand$embc <- gsub("2","foraging",cleand$embc)
   cleand$embc <- gsub("1","resting",cleand$embc)
