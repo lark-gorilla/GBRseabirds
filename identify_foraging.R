@@ -7,7 +7,7 @@ library(sf)
 
 # Pull in trip quality table
 t_qual<-read.csv('C:/seabirds/data/tracking_trip_decisions.csv')
-t_qual$auto_keep<-'Y'
+
 
 # make dset summary table
 
@@ -32,7 +32,7 @@ for(i in unique(t_qual$ID))
   
  
   # filter out bad trips
-  cleand<-cleand[cleand$trip_id%in% t_qual[t_qual$ID==i & t_qual$auto_keep=='Y',]$trip_id,]
+  cleand<-cleand[cleand$trip_id%in% t_qual[t_qual$ID==i & t_qual$manual_keep=='Y',]$trip_id,]
   
   # rm troublesome trip
   if(i == 'GILM4_MABO_Clarion') {cleand<-cleand[cleand$trip_id!='MABO_CLR_SDC05_inc_Female_1-11',]}
@@ -66,13 +66,35 @@ for(i in l1)
 {
   p1<-read.csv(paste0('C:/seabirds/sourced_data/tracking_data/foraging_embc/',
          i))
+ 
   p1$ID=i
-  p1<-dplyr::select(p1, ID, trip_id, embc, Latitude, Longitude)
-  p1<-p1%>%st_as_sf(coords=c('Longitude', 'Latitude'), crs=4326)
+  p1$ID<-substr(p1$ID, 1, (nchar(p1$ID)-4))
+  p1$sp<-do.call(c, lapply(strsplit(as.character(p1$ID), '_'), function(x)x[2]))
+  p1<-dplyr::select(p1, ID, sp, trip_id, Latitude, Longitude, DateTime, ColDist, embc)
+  p1$trip_id<-as.character(p1$trip_id)
+  p1$embc<-as.character(p1$embc)
+  p1$DateTime<-as.character(p1$DateTime)
+  #p1<-p1%>%st_as_sf(coords=c('Longitude', 'Latitude'), crs=4326)
   if(which(i==l1)==1){p2<-p1}else{p2<-rbind(p2, p1)}
   print(i)
 }
-st_write(p2, 'C:/seabirds/data/GIS/BRBO_foraging_25May.shp')
+
+#write.csv(p2, 'C:/seabirds/sourced_data/tracking_data/tracking_master_forage.csv', quote=F, row.names=F)
+
+st_write(p2, 'C:/seabirds/data/GIS/MASTER_for.shp')
+
+st_write(filter(p2, sp=='BRBO'), 'C:/seabirds/data/GIS/BRBO_for.shp')
+st_write(filter(p2, sp=='MABO'), 'C:/seabirds/data/GIS/MABO_for.shp')
+st_write(filter(p2, sp=='RFBO'), 'C:/seabirds/data/GIS/RFBO_for.shp')
+st_write(filter(p2, sp=='WTSH'), 'C:/seabirds/data/GIS/WTSH_for.shp')
+st_write(filter(p2, sp %in% c('GRFR', 'LEFR', 'MAFR')), 'C:/seabirds/data/GIS/FRBD_for.shp')
+st_write(filter(p2, sp %in% c('RBTB', 'RTTB')), 'C:/seabirds/data/GIS/TRBD_for.shp')
+st_write(filter(p2, sp=='SOTE'), 'C:/seabirds/data/GIS/SOTE_for.shp')
+st_write(filter(p2, sp%in% c('BRNO', 'LENO')), 'C:/seabirds/data/GIS/NODD_for.shp')
+st_write(filter(p2, sp%in% c('CRTE', 'ROTE', 'CATE')), 'C:/seabirds/data/GIS/TERN_for.shp')
+
+
+### OLD ####
 
 
 # classic EMbC 
