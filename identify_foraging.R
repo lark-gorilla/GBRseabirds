@@ -74,24 +74,26 @@ for(i in l1)
   p1$trip_id<-as.character(p1$trip_id)
   p1$embc<-as.character(p1$embc)
   p1$DateTime<-as.character(p1$DateTime)
-  #p1<-p1%>%st_as_sf(coords=c('Longitude', 'Latitude'), crs=4326)
+  p1<-p1%>%st_as_sf(coords=c('Longitude', 'Latitude'), crs=4326)
   if(which(i==l1)==1){p2<-p1}else{p2<-rbind(p2, p1)}
   print(i)
 }
 
-#write.csv(p2, 'C:/seabirds/sourced_data/tracking_data/tracking_master_forage.csv', quote=F, row.names=F)
 
-st_write(p2, 'C:/seabirds/data/GIS/MASTER_for.shp')
+#st_write(p2, 'C:/seabirds/data/GIS/MASTER_for.shp')
 
-st_write(filter(p2, sp=='BRBO'), 'C:/seabirds/data/GIS/BRBO_for.shp')
-st_write(filter(p2, sp=='MABO'), 'C:/seabirds/data/GIS/MABO_for.shp')
-st_write(filter(p2, sp=='RFBO'), 'C:/seabirds/data/GIS/RFBO_for.shp')
-st_write(filter(p2, sp=='WTSH'), 'C:/seabirds/data/GIS/WTSH_for.shp')
-st_write(filter(p2, sp %in% c('GRFR', 'LEFR', 'MAFR')), 'C:/seabirds/data/GIS/FRBD_for.shp')
-st_write(filter(p2, sp %in% c('RBTB', 'RTTB')), 'C:/seabirds/data/GIS/TRBD_for.shp')
-st_write(filter(p2, sp=='SOTE'), 'C:/seabirds/data/GIS/SOTE_for.shp')
-st_write(filter(p2, sp%in% c('BRNO', 'LENO')), 'C:/seabirds/data/GIS/NODD_for.shp')
-st_write(filter(p2, sp%in% c('CRTE', 'ROTE', 'CATE')), 'C:/seabirds/data/GIS/TERN_for.shp')
+st_write(filter(p2, sp=='BRBO')%>%select(ID, trip_id), 'C:/seabirds/data/GIS/BRBO_for.shp')
+st_write(filter(p2, sp=='MABO')%>%select(ID, trip_id), 'C:/seabirds/data/GIS/MABO_for.shp')
+st_write(filter(p2, sp=='RFBO')%>%select(ID, trip_id), 'C:/seabirds/data/GIS/RFBO_for.shp')
+st_write(filter(p2, sp=='WTSH')%>%select(ID, trip_id), 'C:/seabirds/data/GIS/WTSH_for.shp')
+st_write(filter(p2, sp %in% c('GRFR', 'LEFR', 'MAFR'))%>%select(ID, trip_id), 'C:/seabirds/data/GIS/FRBD_for.shp')
+st_write(filter(p2, sp %in% c('RBTB', 'RTTB'))%>%select(ID, trip_id), 'C:/seabirds/data/GIS/TRBD_for.shp')
+st_write(filter(p2, sp=='SOTE')%>%select(ID, trip_id), 'C:/seabirds/data/GIS/SOTE_for.shp')
+st_write(filter(p2, sp%in% c('BRNO', 'LENO'))%>%select(ID, trip_id), 'C:/seabirds/data/GIS/NODD_for.shp')
+st_write(filter(p2, sp%in% c('CRTE', 'ROTE', 'CATE'))%>%select(ID, trip_id), 'C:/seabirds/data/GIS/TERN_for.shp')
+
+st_geometry(p2)<-NULL
+write.csv(p2, 'C:/seabirds/sourced_data/tracking_data/tracking_master_forage.csv', quote=F, row.names=F)
 
 
 ### OLD ####
