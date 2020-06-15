@@ -92,6 +92,10 @@ st_write(filter(p2, sp=='SOTE')%>%select(ID, trip_id), 'C:/seabirds/data/GIS/SOT
 st_write(filter(p2, sp%in% c('BRNO', 'LENO'))%>%select(ID, trip_id), 'C:/seabirds/data/GIS/NODD_for.shp')
 st_write(filter(p2, sp%in% c('CRTE', 'ROTE', 'CATE'))%>%select(ID, trip_id), 'C:/seabirds/data/GIS/TERN_for.shp')
 
+# not sure if this works **
+p2$Longitude<-st_coordinates(p2)[,1]
+p2$Latitude<-st_coordinates(p2)[,2]
+# **
 st_geometry(p2)<-NULL
 write.csv(p2, 'C:/seabirds/sourced_data/tracking_data/tracking_master_forage.csv', quote=F, row.names=F)
 
