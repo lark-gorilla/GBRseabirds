@@ -4,7 +4,7 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 #library(GGally)
-library(randomForest)
+library(ranger)
 library(caret)
 library(pROC)
 library(vegan)
@@ -13,7 +13,8 @@ library(raster)
 #set.seed(7) really important to set.seed with RF??
 
 # read in data
-brbo<-read.csv('C:/seabirds/data/tracking_modelready.csv')
+brbo<-read.csv('C:/seabirds/sourced_data/tracking_data/tracking_master_forage_extract.csv')
+brbo<-brbo[brbo$sp=='BRBO',]
 
 hulls<-read.csv('C:/seabirds/data/BRBO_hulls_modelready.csv')
 
@@ -25,7 +26,6 @@ gbr<-read.csv('C:/seabirds/data/pred_area_modelready.csv')
 # Collapse ID to just remove owner and species, this combines all Soanes Dog
 # and Swains cols - check for differences in interval
 brbo$ID<-do.call(c, lapply(strsplit(as.character(brbo$ID), '_'), function(x)x[3]))
-brbo$ID<-substr(brbo$ID, 1, (nchar(brbo$ID)-4)) # rm .csv
 
 # remove sitting behaviour and error pts
 
@@ -34,12 +34,11 @@ brbo$forbin<-1
 brbo[brbo$embc=='commuting',]$forbin<-0
 
 # remove NA pts (from chl, sst and front land mask mainly )
-brbo$trip<-as.character(brbo$trip_id)
-brbo[brbo$ID=='Danger',]$trip_id<-'t1' # temporary fix for NICH trip_ID==NA
+brbo$trip_id<-as.character(brbo$trip_id)
+# set bathy vals >0 to NA then make positive
+brbo[brbo$bth>0,]$bth<-NA
+brbo$bth<-sqrt(brbo$bth^2)
 brbo<-na.omit(brbo)
-# set bathy vals >0 to 0 then make positive
-brbo[brbo$ex_bathy>0,]$ex_bathy<-0
-brbo$ex_bathy<-sqrt(brbo$ex_bathy^2)
 
 # clean pred area too
 gbr[gbr$ex_bathy>0,]$ex_bathy<-0
@@ -58,7 +57,7 @@ gbr[gbr$ex_bathy>3000,]$ex_bathy<-3000
 
 
 # trial to rm transit points that have identical env signature to foraging PER trip
-brbo<-brbo%>%mutate(index=paste0(sst_mn,sst_sd,chl_mn,chl_sd,mfront_sd,pfront_mn,ex_bathy,ex_slope))%>%
+brbo<-brbo%>%mutate(index=paste0(sst,sst_sd,chl,chl_sd,mfr_sd,pfr,bth, slp))%>%
   group_by(ID)%>%filter(!duplicated(index) | forbin==1) # doesnt work.. yet
 # run with ID for now # loses 20k absences
 
@@ -83,6 +82,38 @@ brbo_norm<-brbo %>% group_by(ID) %>% mutate_if(is.numeric, normalized)
 brbo_norm$forbin<-brbo$forbin
 brbo$trip_id<-brbo$trip_id
 
+
+for( i in unique(brbo_norm$ID))
+{
+rf1<-ranger(factor(forbin)~sst+sst_sd+chl+chl_sd+mfr_sd+pfr+bth+slp,
+data=brbo_norm[brbo_norm$ID==i,], num.trees=500, mtry=3, importance='impurity',
+probability =T)
+print(rf1)
+print(importance(rf1))
+# predict to other colonies
+brbo_norm$p1<-predict(rf1, data=brbo_norm)$predictions[,2] # prob of foraging 0-1
+names(brbo_norm)[which(names(brbo_norm)=='p1')]<-i
+# predict to GBR
+#gbr_norm$p1<-predict(rf1, newdata=gbr_norm, type='prob')[,2] # prob of foraging 0-1
+#names(gbr_norm)[which(names(gbr_norm)=='p1')]<-i
+print(i)
+print(Sys.time())
+}
+
+# check cols selected and size of matrix before running
+br1<-as.data.frame(brbo_norm[,c(1, 19, 21:36)])%>%gather(variable, value, -ID, -forbin)
+aucz<-br1%>%group_by(ID, variable)%>%summarise(auc=pROC::auc(forbin, value))
+m1<-matrix(ncol=16, nrow=16, data =aucz$auc, dimnames=list(unique(aucz$ID), unique(aucz$ID)))
+d1<-as.dist(1-m1)
+
+plot(hclust(d1, method='average'))
+ggplot(aucz, aes(x = ID, y = variable)) + 
+geom_raster(aes(fill=auc)) + 
+scale_fill_gradient(low="grey90", high="red") +
+theme_bw() + theme(axis.text.x=element_text(size=9, angle=90, vjust=0.3),
+               axis.text.y=element_text(size=9),
+                plot.title=element_text(size=11))+ylab('Model predictions')+xlab('Predicting to')
+
 # normalize GBR prediction area too
 gbr_norm<-data.frame(gbr[,1:2], gbr[,3:12] %>% mutate_all(normalized))
 # do bathy with custom norm to exclude set new min
@@ -95,36 +126,9 @@ cor(brbo_norm[,4:14])
 # chl and bathy cor = 0.54 but keep
 # fronts metrics cor. Keep pfront_mn and mfront_sd @ 0.47
 
-for( i in unique(brbo_norm$ID))
-{
-rf1<-randomForest(factor(forbin)~sst_mn+sst_sd+chl_mn+chl_sd+mfront_sd+pfront_mn+ex_bathy+ex_slope,
-                  data=brbo_norm[brbo_norm$ID==i,], ntree=500, mtry=4, importance=T)
-print(rf1)
-print(varImpPlot(rf1))
-# predict to other colonies
-brbo_norm$p1<-predict(rf1, newdata=brbo_norm, type='prob')[,2] # prob of foraging 0-1
-names(brbo_norm)[which(names(brbo_norm)=='p1')]<-i
-# predict to GBR
-gbr_norm$p1<-predict(rf1, newdata=gbr_norm, type='prob')[,2] # prob of foraging 0-1
-names(gbr_norm)[which(names(gbr_norm)=='p1')]<-i
-print(i)
-print(Sys.time()) 
-}
+### DONT USE FORMULA INTERFACE!
 
-# check cols selected and size of matrix before running
-br1<-as.data.frame(brbo_norm[,c(1, 13, 15:30)])%>%gather(variable, value, -ID, -forbin)
-aucz<-br1%>%group_by(ID, variable)%>%summarise(auc=pROC::auc(forbin, value))
-m1<-matrix(ncol=16, nrow=16, data =aucz$auc, dimnames=list(unique(aucz$ID), unique(aucz$ID)))
-d1<-as.dist(1-m1)
-plot(hclust(d1, method='average'))
-
-ggplot(aucz, aes(x = ID, y = variable)) + 
-  geom_raster(aes(fill=auc)) + 
-  scale_fill_gradient(low="grey90", high="red") +
-  theme_bw() + theme(axis.text.x=element_text(size=9, angle=90, vjust=0.3),
-                     axis.text.y=element_text(size=9),
-                     plot.title=element_text(size=11))+ylab('Model predictions')+xlab('Predicting to')
-
+ 
 
 # Visualise GBR raster preds
 
@@ -155,7 +159,7 @@ test_dat$forbin<-as.factor(test_dat$forbin)
 levels(test_dat$forbin)<-c("transit", "forage")
 
 # do somne variable vis
-td <- test_dat %>% dplyr::select(-embc)%>%gather(variable, value, -ID, -forbin)
+td <- test_dat %>% dplyr::select(-embc, -trip_id)%>%gather(variable, value, -ID, -forbin)
 ggplot(data=td, aes(x=value, colour=forbin))+
   geom_density()+facet_grid(ID~variable, scales='free')
 
@@ -168,16 +172,19 @@ train_control <- trainControl( method="LGOCV",
                                classProbs = TRUE,
                                savePredictions = TRUE,
                                summaryFunction = twoClassSummary)
-mtry <- 2
+mtry <- 3
 tunegrid <- expand.grid(.mtry=mtry)
+
+### DONT USE FORMULA INTERFACE!
+
 rf_default <- caret::train(forbin~sst_mn+sst_sd+chl_mn+chl_sd+mfront_sd+pfront_mn+ex_bathy+ex_slope,
                     data=test_dat, method="rf", metric='ROC', 
-                    tuneGrid=tunegrid, trControl=train_control, ntree=50)
+                    tuneGrid=tunegrid, trControl=train_control, ntree=100)
 print(rf_default)
 
 rf_default$resample
 
-head(rf_default$pred)
+ head(rf_default$pred)
 
 # Check why thereis huge difference between sensitivity and specificity, 
 # basically the model isn't predicting presences
