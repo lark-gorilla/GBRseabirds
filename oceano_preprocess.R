@@ -7,6 +7,7 @@ library(raster)
 library(ncdf4)
 library(dplyr)
 library(sf)
+library(adehabitatHR)
 
 # Making annual mean and seasonal SD products of dynamic varibs and
 # processing static varibs
@@ -84,7 +85,6 @@ sst_stack<-stack(sst_list, varname='sst4')
 # layer 13 is sd product
 sst_stack<-stack(sst_stack, 'C:/seabirds/sourced_data/oceano_modelready/sst_sd.tif')
 
-
 #chl
 chl_list<-list.files('C:/seabirds/sourced_data/terra_chl_month_clim', full.names=T)
 chl_stack<-stack(chl_list, varname='chl_ocx')
@@ -108,34 +108,87 @@ pfront_stack<-stack(pfront_stack, 'C:/seabirds/sourced_data/oceano_modelready/pf
 bathy<-raster('C:/seabirds/sourced_data/oceano_modelready/bathy.tif')
 slope<-raster('C:/seabirds/sourced_data/oceano_modelready/slope.tif')
 
-# month to extract
+# read in embc attributed master
+
+master_embc<-read.csv('C:/seabirds/sourced_data/tracking_data/tracking_master_forage.csv')
+
+# and trip quality control
 
 t_qual<-read.csv('C:/seabirds/data/tracking_trip_decisions.csv')
-t_qual<-t_qual[t_qual$manual_keep=='Y' & t_qual$complete=='complete trip',]
+t_qual<-t_qual[t_qual$manual_keep=='Y',]
+# Fix yoda dates
+t_qual$departure<-as.character(t_qual$departure)
+t_qual[t_qual$ID=='YODA1_BRBO_Nakanokamishima',]$departure<-as.character(format(as.Date(as.POSIXlt(as.numeric(
+  t_qual[t_qual$ID=='YODA1_BRBO_Nakanokamishima',]$departure),
+  origin="1970-01-01", "GMT")),"%d/%m/%Y" ))
 
-mnth_lookup<-t_qual%>%group_by(ID)%>%summarise(n1=length(which(substr(departure, 4,5)=='01')),
-                                  n2=length(which(substr(departure, 4,5)=='02')),
-                                  n3=length(which(substr(departure, 4,5)=='03')),
-                                  n4=length(which(substr(departure, 4,5)=='04')),
-                                  n5=length(which(substr(departure, 4,5)=='05')),
-                                  n6=length(which(substr(departure, 4,5)=='06')),
-                                  n7=length(which(substr(departure, 4,5)=='07')),
-                                  n8=length(which(substr(departure, 4,5)=='08')),
-                                  n9=length(which(substr(departure, 4,5)=='09')),
-                                  n10=length(which(substr(departure, 4,5)=='10')),
-                                  n11=length(which(substr(departure, 4,5)=='11')),
-                                  n12=length(which(substr(departure, 4,5)=='12')))
+# attrib master
 
-write.csv(mnth_lookup, 'C:/seabirds/data/dataID_month_lookup.csv')                                  
+master_embc$sst<-NA
+master_embc$sst_sd<-NA
+master_embc$chl<-NA
+master_embc$chl_sd<-NA
+master_embc$mfr<-NA
+master_embc$mfr_sd<-NA
+master_embc$pfr<-NA
+master_embc$pfr_sd<-NA
+master_embc$bth<-NA
+master_embc$slp<-NA
 
+# we'll use the trip start month to extract data for that month for the
+# whole trip, even if the trip spans multiple months.
 
-# compile tracking
-l1<-list.files('C:/seabirds/sourced_data/tracking_data/foraging_embc')
-for(i in l1)
+# for dynamic vars
+for (i in c('01','02','03','04','05','06', 
+            '07','08','09','10', '11', '12'))
 {
-  p1<-read.csv(paste0('C:/seabirds/sourced_data/tracking_data/foraging_embc/',
-                      i))
+  # SST
+  master_embc[master_embc$ID %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$ID &
+                master_embc$trip_id %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$trip_id, 9:10]<-
+    
+    extract(subset(sst_stack, c(as.numeric(i), 13)),
+    master_embc[master_embc$ID %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$ID &
+                master_embc$trip_id %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$trip_id , 5:4])
   
+  # CHL
+  master_embc[master_embc$ID %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$ID &
+            master_embc$trip_id %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$trip_id, 11:12]<-
+    
+    extract(subset(chl_stack, c(as.numeric(i), 13)),
+    master_embc[master_embc$ID %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$ID &
+                master_embc$trip_id %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$trip_id , 5:4])
+  
+  # mfront
+  master_embc[master_embc$ID %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$ID &
+                master_embc$trip_id %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$trip_id, 13:14]<-
+    
+    extract(subset(mfront_stack, c(as.numeric(i), 13)),
+    master_embc[master_embc$ID %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$ID &
+                master_embc$trip_id %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$trip_id , 5:4])
+  
+  # pfront
+  master_embc[master_embc$ID %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$ID &
+                master_embc$trip_id %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$trip_id, 15:16]<-
+    
+    extract(subset(pfront_stack, c(as.numeric(i), 13)),
+            master_embc[master_embc$ID %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$ID &
+                          master_embc$trip_id %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$trip_id , 5:4])
+    
+write.csv(master_embc, 'C:/seabirds/sourced_data/tracking_data/tracking_master_forage_extract.csv', 
+          quote=F, row.names = F) 
+print(i)
+}
+
+# for static vars
+
+master_embc[,17]<-extract(bathy, master_embc[,5:4])
+master_embc[,18]<-extract(slope, master_embc[,5:4])
+
+write.csv(master_embc, 'C:/seabirds/sourced_data/tracking_data/tracking_master_forage_extract.csv', 
+          quote=F, row.names = F)
+
+
+# create and extract hulls
 
 #create hulls around each dataID
 
@@ -154,18 +207,6 @@ hulls$ID2<-1:length(hulls)
 hull_ras<-rasterize(hulls, bathy) # should attribute with hull rownumber if field in not specified
 hull_pts<-rasterToPoints(hull_ras, spatial=T)
 
-# extract tracking
-ex_sst<-extract(sst, tracking)
-ex_chl<-extract(chl, tracking)
-ex_front<-extract(fronts, tracking)
-ex_bathy<-extract(bathy, tracking)
-ex_slope<-extract(slope, tracking)
-
-out<-data.frame(tracking@data, ex_sst, ex_chl, ex_front, ex_bathy, ex_slope)
-
-write.csv(out, 'C:/seabirds/data/tracking_modelready.csv', quote=F, row.names=F)
-
-# extract hulls
 ex_sst<-extract(sst, hull_pts)
 ex_chl<-extract(chl, hull_pts)
 ex_front<-extract(fronts, hull_pts)
@@ -177,6 +218,42 @@ hp<-left_join(as.data.frame(hull_pts@data), as.data.frame(hulls@data), by=c("lay
 out2<-data.frame(ID=hp$ID, ex_sst, ex_chl, ex_front, ex_bathy, ex_slope)
 
 write.csv(out2, 'C:/seabirds/data/BRBO_hulls_modelready.csv', quote=F, row.names=F)
+
+# trial using core foraging area rather than foaging points
+
+brbo<-master_embc[master_embc$sp=='BRBO' & master_embc$trip_id %in% t_qual$trip_id,]
+brbo$ID<-do.call(c, lapply(strsplit(as.character(brbo$ID), '_'), function(x)x[3]))
+bfor<-brbo[brbo$embc=='foraging',]
+
+spdf<-SpatialPointsDataFrame(coords=bfor[,c(5,4)],  data=data.frame(ID=bfor$ID), proj4string = )
+
+spdf$ID<-factor(spdf$ID)
+
+KDE.Surface <- kernelUD(spdf,same4all = F, h=0.03, grid=100)
+KDE.50 <- getverticeshr(KDE.Surface, percent = 50)
+KDE.50<-st_as_sf(KDE.50)
+
+#write_sf(KDE.50, 'C:/seabirds/temp/brbo_for_50UD.shp')
+
+KDE.50<-as(KDE.50, 'Spatial')
+KDE.50$ID2<-1:length(KDE.50)
+
+# give hulls pixels size of finest raster (bathy)
+KDE.50_ras<-rasterize(KDE.50, bathy) # should attribute with hull rownumber if field in not specified
+KDE.50_pts<-rasterToPoints(KDE.50_ras, spatial=T)
+
+ex_sst<-extract(sst, KDE.50_pts)
+ex_chl<-extract(chl, KDE.50_pts)
+ex_front<-extract(fronts, KDE.50_pts)
+ex_bathy<-extract(bathy, KDE.50_pts)
+ex_slope<-extract(slope, KDE.50_pts)
+
+hp<-left_join(as.data.frame(KDE.50_pts@data), as.data.frame(KDE.50@data), by=c("layer"="ID2"))
+
+out2<-data.frame(ID=hp$id, ex_sst, ex_chl, ex_front, ex_bathy, ex_slope)
+
+write.csv(out2, 'C:/seabirds/data/BRBO_forKern_modelready.csv', quote=F, row.names=F)
+
 
 # Create colony max range buffers and extract
 # Pull in trip quality table
