@@ -58,8 +58,8 @@ gbr[gbr$ex_bathy>3000,]$ex_bathy<-3000
 
 # trial to rm transit points that have identical env signature to foraging PER trip
 brbo<-brbo%>%mutate(index=paste0(sst,sst_sd,chl,chl_sd,mfr_sd,pfr,bth, slp))%>%
-  group_by(ID)%>%filter(!duplicated(index) | forbin==1) # doesnt work.. yet
-# run with ID for now # loses 20k absences
+  group_by(ID)%>%filter(!duplicated(index) | forbin==1)%>%as.data.frame()
+# run with ID for now # loses 8k absences
 
 # niche overlap
 enviro_std<-decostand(brbo[,c(3:6, 8, 9, 11, 12)], method="standardize")
@@ -78,7 +78,7 @@ ggplot(data=enviro.sites.scores, aes(x=PC1, y=PC2))+
 # scale: normalise (0-1) each covariate per dataID
 # Remember to check for outliers prior to normaliziation
 normalized<-function(x){(x-min(x))/(max(x)-min(x))}
-brbo_norm<-brbo %>% group_by(ID) %>% mutate_if(is.numeric, normalized)
+brbo_norm<-brbo %>% group_by(ID) %>% mutate_if(is.numeric, normalized)%>%as.data.frame()
 brbo_norm$forbin<-brbo$forbin
 brbo$trip_id<-brbo$trip_id
 
@@ -86,7 +86,8 @@ brbo$trip_id<-brbo$trip_id
 for( i in unique(brbo_norm$ID))
 {
 rf1<-ranger(factor(forbin)~sst+sst_sd+chl+chl_sd+mfr_sd+pfr+bth+slp,
-data=brbo_norm[brbo_norm$ID==i,], num.trees=500, mtry=3, importance='impurity',
+data=brbo_norm[brbo_norm$ID==i,], num.trees=500, mtry=3, 
+min.node.size = round(nrow(brbo_norm[brbo_norm$ID==i,])/100), importance='impurity',
 probability =T)
 print(rf1)
 print(importance(rf1))
@@ -101,15 +102,17 @@ print(Sys.time())
 }
 
 # check cols selected and size of matrix before running
-br1<-as.data.frame(brbo_norm[,c(1, 19, 21:36)])%>%gather(variable, value, -ID, -forbin)
+br1<-as.data.frame(brbo_norm[,c(1, 19, 20:27)])%>%gather(variable, value, -ID, -forbin)
 aucz<-br1%>%group_by(ID, variable)%>%summarise(auc=pROC::auc(forbin, value))
-m1<-matrix(ncol=16, nrow=16, data =aucz$auc, dimnames=list(unique(aucz$ID), unique(aucz$ID)))
+m1<-matrix(ncol=8, nrow=8, data =aucz$auc, dimnames=list(unique(aucz$ID), unique(aucz$ID)))
 d1<-as.dist(1-m1)
 
-plot(hclust(d1, method='average'))
+# !!! confusionMatrix !!! ##
+
+#plot(hclust(d1, method='average'))
 ggplot(aucz, aes(x = ID, y = variable)) + 
 geom_raster(aes(fill=auc)) + 
-scale_fill_gradient(low="grey90", high="red") +
+scale_fill_gradient(low="grey",  high="red") +
 theme_bw() + theme(axis.text.x=element_text(size=9, angle=90, vjust=0.3),
                axis.text.y=element_text(size=9),
                 plot.title=element_text(size=11))+ylab('Model predictions')+xlab('Predicting to')
@@ -172,14 +175,17 @@ train_control <- trainControl( method="LGOCV",
                                classProbs = TRUE,
                                savePredictions = TRUE,
                                summaryFunction = twoClassSummary)
-mtry <- 3
-tunegrid <- expand.grid(.mtry=mtry)
+
+tunegrid <- expand.grid(mtry=3,  
+                        splitrule = "gini",
+                        min.node.size = 10)
 
 ### DONT USE FORMULA INTERFACE!
 
-rf_default <- caret::train(forbin~sst_mn+sst_sd+chl_mn+chl_sd+mfront_sd+pfront_mn+ex_bathy+ex_slope,
-                    data=test_dat, method="rf", metric='ROC', 
-                    tuneGrid=tunegrid, trControl=train_control, ntree=100)
+rf_default <- caret::train(x=test_dat[,c('ColDist','sst','sst_sd','chl', 'chl_sd',
+                                         'mfr_sd', 'pfr','bth','slp')],
+                           y=test_dat[,'forbin'], method="ranger", num.trees=100, metric='ROC', 
+                           tuneGrid=tunegrid, trControl=train_control)
 print(rf_default)
 
 rf_default$resample
