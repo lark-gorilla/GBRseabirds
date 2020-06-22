@@ -74,7 +74,10 @@ writeRaster(b4, 'C:/seabirds/sourced_data/oceano_modelready/bathy.tif')
 # calc slope
 terrain(b4, opt='slope', unit='degrees', neighbors=4, filename='C:/seabirds/sourced_data/oceano_modelready/slope.tif')
 
-
+### Make standardised extraction grid @ 0.01 ~ 1km degree
+r1<-raster('C:/seabirds/sourced_data/oceano_modelready/mfront_sd.tif')
+r2<-raster(extent(r1), resolution=0.01,crs=CRS("+proj=longlat +datum=WGS84"), vals=1)
+writeRaster(r2, 'C:/seabirds/sourced_data/oceano_modelready/extraction_template_1km.tif', overwrite=TRUE)
 # read in EMbC classed tracking and extract oceano data
 
 #read in monthly dynamic vars
@@ -107,6 +110,10 @@ pfront_stack<-stack(pfront_stack, 'C:/seabirds/sourced_data/oceano_modelready/pf
 
 bathy<-raster('C:/seabirds/sourced_data/oceano_modelready/bathy.tif')
 slope<-raster('C:/seabirds/sourced_data/oceano_modelready/slope.tif')
+
+
+# read in extraction template
+ex_templ<-raster('C:/seabirds/sourced_data/oceano_modelready/extraction_template_1km.tif')
 
 # read in embc attributed master
 
@@ -219,23 +226,62 @@ out2<-data.frame(ID=hp$ID, ex_sst, ex_chl, ex_front, ex_bathy, ex_slope)
 
 write.csv(out2, 'C:/seabirds/data/BRBO_hulls_modelready.csv', quote=F, row.names=F)
 
-# trial using core foraging area rather than foaging points
+# 50% core area vs 99% UD psuedo-abs approach
 
 brbo<-master_embc[master_embc$sp=='BRBO' & master_embc$trip_id %in% t_qual$trip_id,]
 brbo$ID<-do.call(c, lapply(strsplit(as.character(brbo$ID), '_'), function(x)x[3]))
-bfor<-brbo[brbo$embc=='foraging',]
 
-spdf<-SpatialPointsDataFrame(coords=bfor[,c(5,4)],  data=data.frame(ID=bfor$ID), proj4string = )
+## RM foraging points that are incorrectly identified as such e.g. sitting on island !
+
+# Psuedo-absence sampled over all behaviour density surface within 99%UD
+
+
+for_hval<-0.03
+all_hval<-0.06
+
+for(i in unique(brbo$ID))
+{
+
+b1<-brbo[brbo$ID==i,]
+spdf<-SpatialPointsDataFrame(coords=b1[,c(5,4)],  data=data.frame(ID=b1$ID),
+                             proj4string =CRS(projection(ex_templ)))
+r1<-crop(ex_templ, (extent(spdf)+0.3))
+r_pix<-as(r1,"SpatialPixels")
+
+spdf$ID<-factor(spdf$ID)
+KDE.Surface99 <- kernelUD(spdf,same4all = F, h=for_hval, grid=r_pix)
+rsuf <- raster(as(KDE.Surface99[[1]], "SpatialPixelsDataFrame"))
+rsuf<-calc(rsuf, function(x){(x-min(x))/(max(x)-min(x))}) #normalise
+KDE.99 <- getverticeshr(KDE.Surface99, percent = 99 )
+#write_sf(st_as_sf(KDE.99), 'C:/seabirds/temp/brbo_for_50UD.shp')
+KDE.99_ras<-rasterize(KDE.99, r1) 
+KDE.99_pts<-rasterToPoints(KDE.99_ras, spatial=T)
+KDE.99_pts$ID=i
+KDE.99_pts$layer=0
+KDE.99_pts$weight<-extract(rsuf, KDE.99_pts)
+# Foraging within 50% UD
+bfor<-b1[b1$embc=='foraging',]
+
+spdf<-SpatialPointsDataFrame(coords=bfor[,c(5,4)],  data=data.frame(ID=bfor$ID),
+                             proj4string =CRS(projection(ex_templ)))
 
 spdf$ID<-factor(spdf$ID)
 
-KDE.Surface <- kernelUD(spdf,same4all = F, h=0.03, grid=100)
+KDE.Surface <- kernelUD(spdf,same4all = F, h=for_hval, grid=r_pix)
 KDE.50 <- getverticeshr(KDE.Surface, percent = 50)
-KDE.50<-st_as_sf(KDE.50)
+#write_sf(st_as_sf(KDE.50), 'C:/seabirds/temp/brbo_for_50UD.shp')
+KDE.50_ras<-rasterize(KDE.50, r1) 
+KDE.50_pts<-rasterToPoints(KDE.50_ras, spatial=T)
+KDE.50_pts$ID=i
+KDE.50_pts$layer=1
+KDE.99_pts$weight=NA
 
-#write_sf(KDE.50, 'C:/seabirds/temp/brbo_for_50UD.shp')
+stout<-rbind(st_as_sf(KDE.99_pts),st_as_sf(KDE.50_pts))
+if(which(i==unique(brbo$ID))==1){all_pts<-stout}else{all_pts<-rbind(all_pts, stout)}
+print(i)
+}
 
-KDE.50<-as(KDE.50, 'Spatial')
+
 KDE.50$ID2<-1:length(KDE.50)
 
 # give hulls pixels size of finest raster (bathy)
