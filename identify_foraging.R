@@ -8,6 +8,9 @@ library(sf)
 # Pull in trip quality table
 t_qual<-read.csv('C:/seabirds/data/tracking_trip_decisions.csv')
 
+# REMOVE 3 unwanted datasets
+t_qual<-t_qual[-which(t_qual$ID%in%c('MEND2_RFBO_Christmas', 'MEND3_RFBO_Christmas',
+                                     'AUST3_RFBO_Little Cayman')),]
 
 # make dset summary table
 
@@ -82,15 +85,15 @@ for(i in l1)
 
 #st_write(p2, 'C:/seabirds/data/GIS/MASTER_for.shp')
 
-st_write(filter(p2, sp=='BRBO')%>%select(ID, trip_id), 'C:/seabirds/data/GIS/BRBO_for.shp')
-st_write(filter(p2, sp=='MABO')%>%select(ID, trip_id), 'C:/seabirds/data/GIS/MABO_for.shp')
-st_write(filter(p2, sp=='RFBO')%>%select(ID, trip_id), 'C:/seabirds/data/GIS/RFBO_for.shp')
-st_write(filter(p2, sp=='WTSH')%>%select(ID, trip_id), 'C:/seabirds/data/GIS/WTSH_for.shp')
-st_write(filter(p2, sp %in% c('GRFR', 'LEFR', 'MAFR'))%>%select(ID, trip_id), 'C:/seabirds/data/GIS/FRBD_for.shp')
-st_write(filter(p2, sp %in% c('RBTB', 'RTTB'))%>%select(ID, trip_id), 'C:/seabirds/data/GIS/TRBD_for.shp')
-st_write(filter(p2, sp=='SOTE')%>%select(ID, trip_id), 'C:/seabirds/data/GIS/SOTE_for.shp')
-st_write(filter(p2, sp%in% c('BRNO', 'LENO'))%>%select(ID, trip_id), 'C:/seabirds/data/GIS/NODD_for.shp')
-st_write(filter(p2, sp%in% c('CRTE', 'ROTE', 'CATE'))%>%select(ID, trip_id), 'C:/seabirds/data/GIS/TERN_for.shp')
+st_write(filter(p2, sp=='BRBO')%>%select(ID, trip_id, embc), 'C:/seabirds/data/GIS/BRBO_for.shp')
+st_write(filter(p2, sp=='MABO')%>%select(ID, trip_id, embc), 'C:/seabirds/data/GIS/MABO_for.shp')
+st_write(filter(p2, sp=='RFBO')%>%select(ID, trip_id, embc), 'C:/seabirds/data/GIS/RFBO_for.shp')
+st_write(filter(p2, sp=='WTSH')%>%select(ID, trip_id, embc), 'C:/seabirds/data/GIS/WTSH_for.shp')
+st_write(filter(p2, sp %in% c('GRFR', 'LEFR', 'MAFR'))%>%select(ID, trip_id, embc), 'C:/seabirds/data/GIS/FRBD_for.shp')
+st_write(filter(p2, sp %in% c('RBTB', 'RTTB'))%>%select(ID, trip_id, embc), 'C:/seabirds/data/GIS/TRBD_for.shp')
+st_write(filter(p2, sp=='SOTE')%>%select(ID, trip_id, embc), 'C:/seabirds/data/GIS/SOTE_for.shp')
+st_write(filter(p2, sp%in% c('BRNO', 'LENO'))%>%select(ID, trip_id, embc), 'C:/seabirds/data/GIS/NODD_for.shp')
+st_write(filter(p2, sp%in% c('CRTE', 'ROTE', 'CATE'))%>%select(ID, trip_id, embc), 'C:/seabirds/data/GIS/TERN_for.shp')
 
 # not sure if this works **
 p2$Longitude<-st_coordinates(p2)[,1]
