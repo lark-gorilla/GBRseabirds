@@ -601,6 +601,31 @@ master<-rbind(master, data.frame(dataID='GONZ9', sp='BRBO', colony=p1$Colony,
                                  time=p1$TimeGMT,
                                  latitude=p1$Latitude,longitude=p1$Longitude, breedstage=p1$bs))
 
+# BLNO Cumming
+a1<-st_read('C:/seabirds/sourced_data/tracking_data/raw/Cumming_BRNO/Noddy 063-68305 PP 2645 2019-12-13 10-38-34.kml')
+a1$id='Nod68305'
+a2<-st_read('C:/seabirds/sourced_data/tracking_data/raw/Cumming_BRNO/Noddy 063-68308 PP 2649 2019-12-13 21-22-39.kml')
+a2$id='Nod68308'
+a3<-st_read('C:/seabirds/sourced_data/tracking_data/raw/Cumming_BRNO/Noddy 063-68309 PP 2648 2019-12-14 23-15-31.kml')
+a3$id='Nod68309'
+a4<-st_read('C:/seabirds/sourced_data/tracking_data/raw/Cumming_BRNO/Noddy 063-68311 PP 2642 2019-12-13 10-42-01.kml')
+a4$id='Nod68311'
+
+p1<-rbind(a1,a2,a3,a4)
+
+p1<-as.data.frame(p1)
+p2<-strsplit(paste(p1$geometry), ',')
+p2_out<-NULL
+for(i in 1:length(p2))
+{p2_out<-rbind(p2_out, data.frame(latitude=as.numeric(p2[[i]][2]),
+                                  longitude=as.numeric(substr(p2[[i]][1], 3, nchar(p2[[i]][1])))))}
+
+t1<-do.call(c, lapply(strsplit(as.character(p1$Name), ' '), function(x)x[2]))
+t2<-do.call(c, lapply(strsplit(as.character(p1$Name), ' '), function(x)x[3]))
+
+master<-rbind(master, data.frame(dataID='CUMM1',sp='BLNO', colony='Heron',
+                                 trackID=p1$id, date=paste0('2019/12/',substr(t1, 1,2)),
+                                 time=t2, p2_out, breedstage='chick'))
 
 
 # temp write master, still some errors to fix
