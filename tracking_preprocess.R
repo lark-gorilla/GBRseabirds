@@ -94,7 +94,9 @@ for(i in int_sum$ID)
   # back to ltraj
   trajectories<-dl(t1)
   #interpolate to lookup val
-  trajectories <- redisltraj(trajectories, int_sum[int_sum$ID==i,]$int_decision, type="time")
+  # Don't interpolate this dataset, gives better embc results
+  if(i=='AUST4_MAFR_Little Cayman'){}else{
+  trajectories <- redisltraj(trajectories, int_sum[int_sum$ID==i,]$int_decision, type="time")}
   
   # to data.frame
   trajectories<-ld(trajectories)
