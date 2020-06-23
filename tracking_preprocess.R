@@ -230,6 +230,58 @@ t2<-left_join(trip_table, master%>%group_by(trackID)%>%summarise_all(first)%>%dp
 write.csv(t2, 'C:/seabirds/data/tracking_trip_decisions.csv', quote=F, row.names=F)
 
 
+# Section to resample some datasets to match others once we collapse by colony name
+
+for( i in c ('MCDU1_MABO_Swains', 'MCDU1_BRBO_Swains', 'CONG3_BRBO_Swains', 'SOAN6_BRBO_Dog'))
+{
+  # note original data stored in clean_alt folder
+  cleand<-read.csv(paste0('C:/seabirds/sourced_data/tracking_data/clean_alt/',i, '.csv'))
+  
+  #colony from lookup
+  coly<-data.frame(Longitude=as(colz[colz$ID==i,], 'Spatial')@coords[1],
+                   Latitude= as(colz[colz$ID==i,], 'Spatial')@coords[2])
+  
+  sptz <- SpatialPoints(data.frame(cleand$Longitude, cleand$Latitude),
+                        proj4string=CRS("+proj=longlat + datum=wgs84"))
+  proj.UTM <- CRS(paste("+proj=laea +lon_0=", coly$Longitude,
+                        " +lat_0=", coly$Latitude, sep=""))
+  sptz <- spTransform(sptz, CRS=proj.UTM)
+  
+  trajectories <- as.ltraj(xy=data.frame(sptz@coords[,1],
+                                         sptz@coords[,2]),
+                           date=as.POSIXct(cleand$TrackTime, origin="1970/01/01", tz="GMT"),
+                           id=cleand$trip_id, typeII = TRUE)   
+  
+  if(i=='MCDU1_MABO_Swains'){inty=60}
+  if(i=='MCDU1_BRBO_Swains'){inty=120}
+  if(i=='CONG3_BRBO_Swains'){inty=120}
+  if(i=='SOAN6_BRBO_Dog'){inty=120}
+  trajectories <- redisltraj(trajectories, inty, type="time")
+  
+  # to data.frame
+  trajectories<-ld(trajectories)
+  #points back to latlong
+  sptz <- SpatialPoints(data.frame(trajectories$x, trajectories$y),
+                        proj4string=proj.UTM)
+  sptz <- spTransform(sptz, CRS=CRS("+proj=longlat + datum=wgs84"))
+  trajectories<-data.frame(trajectories, sptz@coords)
+  
+  trajectories<-formatFields(trajectories, field_ID   = "id", field_DateTime='date',
+                             field_Lon  = "trajectories.x", field_Lat  = "trajectories.y")
+  
+  #tripsplit
+  dat_int_trips<-tripSplit(tracks = trajectories, Colony= coly, 
+                           InnerBuff  = 3,ReturnBuff = 10, Duration   = 1,
+                           plotit     = F,  rmColLocs  = T, cleanDF = T)
+  
+  dat_int_trips$ID<-substr(dat_int_trips$ID, 1, (nchar(as.character(dat_int_trips$ID))-1))
+  dat_int_trips$trip_id<-substr(dat_int_trips$trip_id, 1, (nchar(as.character(dat_int_trips$trip_id))-1))
+  
+  #write out with interpolation
+  write.csv(dat_int_trips@data, paste0('C:/seabirds/sourced_data/tracking_data/clean/',
+                                       i, '.csv'), quote=F, row.names=F)
+}
+
 
 # LOOP to tripsplit first! - only ran for for OPPE1_MABO_St Helena
 
