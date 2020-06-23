@@ -55,6 +55,10 @@ gbr[gbr$ex_bathy>3000,]$ex_bathy<-3000
 #hull_abs<-hulls%>%group_by(ID)%>%
 #  sample_n(size=filter(n_pres, ID==unique(hulls$ID))$`n()`, replace=F)
 
+# trial to rm any duplicate points within presences and absences points (that have identical env signature)
+brbo<-brbo%>%mutate(index=paste0(sst,sst_sd,chl,chl_sd,mfr_sd,pfr,bth, slp, forbin))%>%
+  group_by(ID)%>%filter(!duplicated(index))%>%as.data.frame()
+
 
 # trial to rm transit points that have identical env signature to foraging PER trip
 brbo<-brbo%>%mutate(index=paste0(sst,sst_sd,chl,chl_sd,mfr_sd,pfr,bth, slp))%>%
@@ -85,12 +89,15 @@ brbo$trip_id<-brbo$trip_id
 
 for( i in unique(brbo_norm$ID))
 {
+
+#pr1<-table(brbo_norm[brbo_norm$ID==i,]$forbin)[1]/table(brbo_norm[brbo_norm$ID==i,]$forbin)[2]
+#cw<-ifelse(brbo_norm[brbo_norm$ID==i,]$forbin==0, 1, pr1)  
+  
 rf1<-ranger(factor(forbin)~sst+sst_sd+chl+chl_sd+mfr_sd+pfr+bth+slp,
-data=brbo_norm[brbo_norm$ID==i,], num.trees=500, mtry=3, 
-min.node.size = round(nrow(brbo_norm[brbo_norm$ID==i,])/100), importance='impurity',
+data=brbo_norm[brbo_norm$ID==i,], num.trees=500, mtry=3, importance='impurity',
 probability =T)
 print(rf1)
-print(importance(rf1))
+print(ranger::importance(rf1))
 # predict to other colonies
 brbo_norm$p1<-predict(rf1, data=brbo_norm)$predictions[,2] # prob of foraging 0-1
 names(brbo_norm)[which(names(brbo_norm)=='p1')]<-i
@@ -101,21 +108,28 @@ print(i)
 print(Sys.time())
 }
 
-# check cols selected and size of matrix before running
-br1<-as.data.frame(brbo_norm[,c(1, 19, 20:27)])%>%gather(variable, value, -ID, -forbin)
-aucz<-br1%>%group_by(ID, variable)%>%summarise(auc=pROC::auc(forbin, value))
-m1<-matrix(ncol=8, nrow=8, data =aucz$auc, dimnames=list(unique(aucz$ID), unique(aucz$ID)))
+br1<-as.data.frame(brbo_norm[,c(1, 19, 21:36)])%>%gather(variable, value, -ID, -forbin)
+aucz<-br1%>%group_by(ID, variable)%>%
+  summarise(auc=pROC::roc(forbin, value,direction="<")$auc,
+            thresh=coords(pROC::roc(forbin, value,direction="<"),0.5, transpose=F)$threshold,
+            sens=coords(pROC::roc(forbin, value,direction="<"),0.5, transpose=F)$sensitivity,
+            spec=coords(pROC::roc(forbin, value,direction="<"),0.5, transpose=F)$specificity)
+# handy
+qplot(data=filter(br1, ID=='Prickly Pear'& variable=='Danger'), x=value, fill=factor(forbin), geom='histogram')
+
+
+m1<-matrix(ncol=16, nrow=16, data =aucz$auc, dimnames=list(unique(aucz$ID), unique(aucz$ID)))
 d1<-as.dist(1-m1)
 
-# !!! confusionMatrix !!! ##
+plot(hclust(d1, method='average'))
 
-#plot(hclust(d1, method='average'))
 ggplot(aucz, aes(x = ID, y = variable)) + 
-geom_raster(aes(fill=auc)) + 
-scale_fill_gradient(low="grey",  high="red") +
-theme_bw() + theme(axis.text.x=element_text(size=9, angle=90, vjust=0.3),
-               axis.text.y=element_text(size=9),
-                plot.title=element_text(size=11))+ylab('Model predictions')+xlab('Predicting to')
+  geom_raster(aes(fill=auc)) + 
+  geom_text(aes(label=round(auc, 2)))+
+  scale_fill_gradient(low="grey",  high="red") +
+  theme_bw() + theme(axis.text.x=element_text(size=9, angle=90, vjust=0.3),
+                     axis.text.y=element_text(size=9),
+                     plot.title=element_text(size=11))+ylab('Model predictions')+xlab('Predicting to')
 
 # normalize GBR prediction area too
 gbr_norm<-data.frame(gbr[,1:2], gbr[,3:12] %>% mutate_all(normalized))
@@ -184,13 +198,17 @@ tunegrid <- expand.grid(mtry=3,
 
 rf_default <- caret::train(x=test_dat[,c('ColDist','sst','sst_sd','chl', 'chl_sd',
                                          'mfr_sd', 'pfr','bth','slp')],
-                           y=test_dat[,'forbin'], method="ranger", num.trees=100, metric='ROC', 
+                           y=test_dat[,'forbin'], method="ranger", num.trees=500, metric='ROC', 
                            tuneGrid=tunegrid, trControl=train_control)
 print(rf_default)
 
 rf_default$resample
 
  head(rf_default$pred)
+ 
+ rf_default$pred%>%group_by(Resample)%>%summarise(auc=pROC::roc(obs, forage)$auc,
+                   sens=pROC::roc(obs, forage)$sensitivities[which(pROC::roc(obs, forage)$thresholds>0.5 & pROC::roc(obs, forage)$thresholds<0.51)[1]],
+                   spec=pROC::roc(obs, forage)$specificities[which(pROC::roc(obs, forage)$thresholds>0.5 & pROC::roc(obs, forage)$thresholds<0.51)[1]])
 
 # Check why thereis huge difference between sensitivity and specificity, 
 # basically the model isn't predicting presences
@@ -240,17 +258,3 @@ Sys.time()
 rf_norm <- caret::train(forbin~sst_mn+sst_sd+chl_mn+chl_sd+mfront_sd+pfront_mn+ex_bathy+ex_slope,
                        data=car_brbo_norm, method="rf", metric='ROC', 
                        tuneGrid=tunegrid, trControl=train_control)
-
-
- 
-
-
-# try caret approach
-control <- trainControl(method="repeatedcv", number=10, repeats=3, indicies=folds)
-seed <- 7
-metric <- "Accuracy"
-set.seed(seed)
-mtry <- sqrt(ncol(x))
-tunegrid <- expand.grid(.mtry=mtry)
-rf_default <- train(Class~., data=dataset, method="rf", metric=metric, tuneGrid=tunegrid, trControl=control)
-print(rf_default)
