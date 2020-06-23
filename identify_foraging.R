@@ -44,7 +44,10 @@ for(i in unique(t_qual$ID))
   cleand$DateTime <- as.POSIXct(strptime(as.character(cleand$DateTime),format="%Y-%m-%d %H:%M:%S",tz="GMT")) # time has to be POSIXct
   forembc <- cleand[,c('DateTime', 'Longitude', 'Latitude', 'trip_id')] #time, longitude, latitude, ID ( ! order is important !)
  
-  BC <- stbc(forembc)
+  if(i =='AUST4_MAFR_Little Cayman')
+     {BC <- stbc(forembc, spdLim = 1000)}else{
+      BC <- stbc(forembc)}
+  
   smoothedBC <- smth(BC, dlta=1)
   #view(smoothedBC)
 
@@ -92,7 +95,7 @@ st_write(filter(p2, sp=='WTSH')%>%select(ID, trip_id, embc), 'C:/seabirds/data/G
 st_write(filter(p2, sp %in% c('GRFR', 'LEFR', 'MAFR'))%>%select(ID, trip_id, embc), 'C:/seabirds/data/GIS/FRBD_for.shp')
 st_write(filter(p2, sp %in% c('RBTB', 'RTTB'))%>%select(ID, trip_id, embc), 'C:/seabirds/data/GIS/TRBD_for.shp')
 st_write(filter(p2, sp=='SOTE')%>%select(ID, trip_id, embc), 'C:/seabirds/data/GIS/SOTE_for.shp')
-st_write(filter(p2, sp%in% c('BRNO', 'LENO'))%>%select(ID, trip_id, embc), 'C:/seabirds/data/GIS/NODD_for.shp')
+st_write(filter(p2, sp%in% c('BRNO', 'LENO', 'BLNO'))%>%select(ID, trip_id, embc), 'C:/seabirds/data/GIS/NODD_for.shp')
 st_write(filter(p2, sp%in% c('CRTE', 'ROTE', 'CATE'))%>%select(ID, trip_id, embc), 'C:/seabirds/data/GIS/TERN_for.shp')
 
 # not sure if this works **
