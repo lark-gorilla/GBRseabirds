@@ -55,9 +55,7 @@ for(i in int_sum$ID)
 {
   #select dataset
   d1<-master[master$ID==i,]
-  
-  if(i=='AUST1_BRBO_Cayman Brac'){
-    d1<-read.csv('C:/seabirds/temp/AUST1_BRBO.csv')} # edited dataset with near colony loitering removed
+   # edited dataset with near colony loitering removed
 
   if(i=='OPPE1_MABO_St Helena'){next} # needs to be tripsplit first
 
@@ -114,11 +112,16 @@ for(i in int_sum$ID)
                         InnerBuff  = 3,ReturnBuff = 10, Duration   = 1,
                         plotit     = F,  rmColLocs  = T, cleanDF = T)
   
-  # fix for prior removed near col loitering
+  # fix for multi colony
   if(i=='AUST1_BRBO_Cayman Brac'){
-    dat_int_trips<-tripSplit(tracks = trajectories, Colony= data.frame(Longitude=-79.8122, Latitude= 19.7114), 
-                             InnerBuff  = 15,ReturnBuff = 15, Duration   = 1,
-                             plotit     = F,  rmColLocs  = F, cleanDF = T)}
+    dif_tripz<-c('B01', 'B02', 'B06', 'B12', 'B13', 'C05', 'C25','C28', 'P00', 'P03', 'P04', 'P07', 'P08')
+    dok<-dat_int_trips[-which(dat_int_trips$ID %in% dif_tripz),]
+    tempy1<-tripSplit(tracks = trajectories[trajectories$ID %in% dif_tripz,],
+                      Colony= data.frame(Longitude=-79.7293, Latitude= 19.7549), 
+                      InnerBuff  = 3,ReturnBuff = 10, Duration   = 1,
+                      plotit     = F,  rmColLocs  = T, cleanDF = T)
+     tempy1@proj4string<-dat_int_trips@proj4string
+       dat_int_trips<-spRbind(dok,tempy1)}
   
   #write out with interpolation
   write.csv(dat_int_trips@data, paste0('C:/seabirds/sourced_data/tracking_data/clean/',
