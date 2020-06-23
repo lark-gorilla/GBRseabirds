@@ -115,6 +115,9 @@ slope<-raster('C:/seabirds/sourced_data/oceano_modelready/slope.tif')
 # read in extraction template
 ex_templ<-raster('C:/seabirds/sourced_data/oceano_modelready/extraction_template_1km.tif')
 
+# read in col locs
+colz<-st_read('C:/seabirds/data/GIS/trackingID_colony_locs.shp')
+
 # read in embc attributed master
 
 master_embc<-read.csv('C:/seabirds/sourced_data/tracking_data/tracking_master_forage.csv')
@@ -230,36 +233,40 @@ write.csv(out2, 'C:/seabirds/data/BRBO_hulls_modelready.csv', quote=F, row.names
 
 brbo<-master_embc[master_embc$sp=='BRBO' & master_embc$trip_id %in% t_qual$trip_id,]
 brbo$ID<-do.call(c, lapply(strsplit(as.character(brbo$ID), '_'), function(x)x[3]))
+# same for colz
+colz<-colz[grep('BRBO', colz$ID),]
+colz$ID<-do.call(c, lapply(strsplit(as.character(colz$ID), '_'), function(x)x[3]))
 
 ## RM foraging points that are incorrectly identified as such e.g. sitting on island !
 
-# Psuedo-absence sampled over all behaviour density surface within 99%UD
+# Psuedo-absence sampled over all col dist accessibility within 99%UD
 
 
-for_hval<-0.03
-all_hval<-0.06
+hval<-0.03
 
 for(i in unique(brbo$ID))
 {
 
 b1<-brbo[brbo$ID==i,]
-b_trans<-b1[b1$embc %in% c('commuting', 'relocating'),] # exclude foraging and resting
-spdf<-SpatialPointsDataFrame(coords=b_trans[,c(5,4)],  data=data.frame(ID=b_trans$ID),
+spdf<-SpatialPointsDataFrame(coords=b1[,c(5,4)],  data=data.frame(ID=b1$ID),
                              proj4string =CRS(projection(ex_templ)))
 r1<-crop(ex_templ, (extent(spdf)+0.3))
 r_pix<-as(r1,"SpatialPixels")
+#make dist
+
+r2<-rasterize(SpatialPoints(as(colz[colz$ID==i,],"Spatial")), r1)
+r2<-(distance(r2))/1000
+r2<-abs(r2-(max(values(r2)))) # leave vals in km
 
 spdf$ID<-factor(spdf$ID)
-KDE.Surface99 <- kernelUD(spdf,same4all = F, h=for_hval, grid=r_pix)
-rsuf <- raster(as(KDE.Surface99[[1]], "SpatialPixelsDataFrame"))
-rsuf<-calc(rsuf, function(x){(x-min(x))/(max(x)-min(x))}) #normalise
+KDE.Surface99 <- kernelUD(spdf,same4all = F, h=hval, grid=r_pix)
 KDE.99 <- getverticeshr(KDE.Surface99, percent = 99 )
 #write_sf(st_as_sf(KDE.99), 'C:/seabirds/temp/brbo_for_50UD.shp')
 KDE.99_ras<-rasterize(KDE.99, r1) 
 KDE.99_pts<-rasterToPoints(KDE.99_ras, spatial=T)
 KDE.99_pts$ID=i
 KDE.99_pts$layer=0
-KDE.99_pts$weight<-extract(rsuf, KDE.99_pts)
+KDE.99_pts$weight<-extract(r2, KDE.99_pts)
 # Foraging within 50% UD
 bfor<-b1[b1$embc=='foraging',]
 
@@ -268,7 +275,7 @@ spdf<-SpatialPointsDataFrame(coords=bfor[,c(5,4)],  data=data.frame(ID=bfor$ID),
 
 spdf$ID<-factor(spdf$ID)
 
-KDE.Surface <- kernelUD(spdf,same4all = F, h=for_hval, grid=r_pix)
+KDE.Surface <- kernelUD(spdf,same4all = F, h=hval, grid=r_pix)
 KDE.50 <- getverticeshr(KDE.Surface, percent = 50)
 #write_sf(st_as_sf(KDE.50), 'C:/seabirds/temp/brbo_for_50UD.shp')
 KDE.50_ras<-rasterize(KDE.50, r1) 
