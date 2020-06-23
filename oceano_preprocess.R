@@ -74,9 +74,9 @@ writeRaster(b4, 'C:/seabirds/sourced_data/oceano_modelready/bathy.tif')
 # calc slope
 terrain(b4, opt='slope', unit='degrees', neighbors=4, filename='C:/seabirds/sourced_data/oceano_modelready/slope.tif')
 
-### Make standardised extraction grid @ 0.01 ~ 1km degree
+### Make standardised extraction grid @ 0.02 ~ 2km degree
 r1<-raster('C:/seabirds/sourced_data/oceano_modelready/mfront_sd.tif')
-r2<-raster(extent(r1), resolution=0.01,crs=CRS("+proj=longlat +datum=WGS84"), vals=1)
+r2<-raster(extent(r1), resolution=0.02,crs=CRS("+proj=longlat +datum=WGS84"), vals=1)
 writeRaster(r2, 'C:/seabirds/sourced_data/oceano_modelready/extraction_template_1km.tif', overwrite=TRUE)
 # read in EMbC classed tracking and extract oceano data
 
@@ -243,7 +243,8 @@ for(i in unique(brbo$ID))
 {
 
 b1<-brbo[brbo$ID==i,]
-spdf<-SpatialPointsDataFrame(coords=b1[,c(5,4)],  data=data.frame(ID=b1$ID),
+b_trans<-b1[b1$embc %in% c('commuting', 'relocating'),] # exclude foraging and resting
+spdf<-SpatialPointsDataFrame(coords=b_trans[,c(5,4)],  data=data.frame(ID=b_trans$ID),
                              proj4string =CRS(projection(ex_templ)))
 r1<-crop(ex_templ, (extent(spdf)+0.3))
 r_pix<-as(r1,"SpatialPixels")
@@ -274,25 +275,27 @@ KDE.50_ras<-rasterize(KDE.50, r1)
 KDE.50_pts<-rasterToPoints(KDE.50_ras, spatial=T)
 KDE.50_pts$ID=i
 KDE.50_pts$layer=1
-KDE.99_pts$weight=NA
+KDE.50_pts$weight=NA
 
 stout<-rbind(st_as_sf(KDE.99_pts),st_as_sf(KDE.50_pts))
 if(which(i==unique(brbo$ID))==1){all_pts<-stout}else{all_pts<-rbind(all_pts, stout)}
+
+stout2<-rbind(st_as_sf(KDE.99 ),st_as_sf(KDE.50 ))
+if(which(i==unique(brbo$ID))==1){all_kerns<-stout2}else{all_kerns<-rbind(all_kerns, stout2)}
 print(i)
 }
 
+# vis and export to QGIS
+plot(all_pts[all_pts$ID=='Swains' & all_pts$layer==0, 'weight'])
 
-KDE.50$ID2<-1:length(KDE.50)
+write_sf(all_kerns, 'C:/seabirds/temp/brbo_kerns_23Jun.shp')
 
-# give hulls pixels size of finest raster (bathy)
-KDE.50_ras<-rasterize(KDE.50, bathy) # should attribute with hull rownumber if field in not specified
-KDE.50_pts<-rasterToPoints(KDE.50_ras, spatial=T)
 
-ex_sst<-extract(sst, KDE.50_pts)
-ex_chl<-extract(chl, KDE.50_pts)
-ex_front<-extract(fronts, KDE.50_pts)
-ex_bathy<-extract(bathy, KDE.50_pts)
-ex_slope<-extract(slope, KDE.50_pts)
+ex_sst<-extract(sst, all_pts)
+ex_chl<-extract(chl, all_pts)
+ex_front<-extract(fronts, all_pts)
+ex_bathy<-extract(bathy, all_pts)
+ex_slope<-extract(slope, all_pts)
 
 hp<-left_join(as.data.frame(KDE.50_pts@data), as.data.frame(KDE.50@data), by=c("layer"="ID2"))
 
