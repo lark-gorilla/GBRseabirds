@@ -258,15 +258,14 @@ r2<-rasterize(SpatialPoints(as(colz[colz$ID==i,],"Spatial")), r1)
 r2<-(distance(r2))/1000
 r2<-abs(r2-(max(values(r2)))) # leave vals in km
 
-spdf$ID<-factor(spdf$ID)
-KDE.Surface99 <- kernelUD(spdf,same4all = F, h=hval, grid=r_pix)
-KDE.99 <- getverticeshr(KDE.Surface99, percent = 99 )
+hully<-st_as_sf(spdf)%>%summarise( geometry = st_combine( geometry ) ) %>%
+  st_convex_hull()
 #write_sf(st_as_sf(KDE.99), 'C:/seabirds/temp/brbo_for_50UD.shp')
-KDE.99_ras<-rasterize(KDE.99, r1) 
-KDE.99_pts<-rasterToPoints(KDE.99_ras, spatial=T)
-KDE.99_pts$ID=i
-KDE.99_pts$layer=0
-KDE.99_pts$weight<-extract(r2, KDE.99_pts)
+hully_ras<-rasterize(as(hully, 'Spatial'), r1) 
+hully_pts<-rasterToPoints(hully_ras, spatial=T)
+hully_pts$ID=i
+hully_pts$layer=0
+hully_pts$weight<-extract(r2, hully_pts)
 # Foraging within 50% UD
 bfor<-b1[b1$embc=='foraging',]
 
@@ -284,10 +283,14 @@ KDE.50_pts$ID=i
 KDE.50_pts$layer=1
 KDE.50_pts$weight=NA
 
-stout<-rbind(st_as_sf(KDE.99_pts),st_as_sf(KDE.50_pts))
+stout<-rbind(st_as_sf(hully_pts),st_as_sf(KDE.50_pts))
 if(which(i==unique(brbo$ID))==1){all_pts<-stout}else{all_pts<-rbind(all_pts, stout)}
 
-stout2<-rbind(st_as_sf(KDE.99 ),st_as_sf(KDE.50 ))
+hully$id<-i
+hully$PA=0
+KDE.50$area<-NULL
+KDE.50$PA=1
+stout2<-rbind(hully,st_as_sf(KDE.50 ))
 if(which(i==unique(brbo$ID))==1){all_kerns<-stout2}else{all_kerns<-rbind(all_kerns, stout2)}
 print(i)
 }
