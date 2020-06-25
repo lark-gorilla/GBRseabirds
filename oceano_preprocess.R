@@ -209,7 +209,7 @@ for(k in sp_groups)
   r2<-abs(r2-(max(values(r2)))) # leave vals in km
   
   hully<-st_as_sf(spdf)%>%summarise( geometry = st_combine( geometry ) ) %>%
-    st_convex_hull()
+    st_convex_hull()%>%st_buffer(dist=hval)
   #write_sf(st_as_sf(KDE.99), 'C:/seabirds/temp/brbo_for_50UD.shp')
   hully_ras<-rasterize(as(hully, 'Spatial'), r1) 
   hully_pts<-rasterToPoints(hully_ras, spatial=T)
@@ -283,7 +283,7 @@ for(k in sp_groups)
 # export polygons for gis
 write_sf(all_kerns, paste0('C:/seabirds/data/GIS/', names(k), 'kernhull.shp'), delete_dsn=T)
 
-write.csv(all_pts, paste0('C:/seabirds/data/modelling/kernhull_pts', names(k), 'kernhull.csv'), quote=F, row.names=F)
+write.csv(all_pts, paste0('C:/seabirds/data/modelling/kernhull_pts/', names(k), '_kernhull.csv'), quote=F, row.names=F)
 
 print(k)
 
