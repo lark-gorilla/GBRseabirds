@@ -78,6 +78,8 @@ terrain(b4, opt='slope', unit='degrees', neighbors=4, filename='C:/seabirds/sour
 r1<-raster('C:/seabirds/sourced_data/oceano_modelready/mfront_sd.tif')
 r2<-raster(extent(r1), resolution=0.02,crs=CRS("+proj=longlat +datum=WGS84"), vals=1)
 writeRaster(r2, 'C:/seabirds/sourced_data/oceano_modelready/extraction_template_1km.tif', overwrite=TRUE)
+
+
 # read in EMbC classed tracking and extract oceano data
 
 #read in monthly dynamic vars
@@ -117,10 +119,14 @@ ex_templ<-raster('C:/seabirds/sourced_data/oceano_modelready/extraction_template
 
 # read in col locs
 colz<-st_read('C:/seabirds/data/GIS/trackingID_colony_locs.shp')
+colz$sp<-do.call(c, lapply(strsplit(as.character(colz$ID), '_'), function(x)x[2]))
+colz$coly<-do.call(c, lapply(strsplit(as.character(colz$ID), '_'), function(x)x[3]))
 
 # read in embc attributed master
 
 master_embc<-read.csv('C:/seabirds/sourced_data/tracking_data/tracking_master_forage.csv')
+# add colony column
+master_embc$coly<-do.call(c, lapply(strsplit(as.character(master_embc$ID), '_'), function(x)x[3]))
 
 # and trip quality control
 
@@ -131,6 +137,14 @@ t_qual$departure<-as.character(t_qual$departure)
 t_qual[t_qual$ID=='YODA1_BRBO_Nakanokamishima',]$departure<-as.character(format(as.Date(as.POSIXlt(as.numeric(
   t_qual[t_qual$ID=='YODA1_BRBO_Nakanokamishima',]$departure),
   origin="1970-01-01", "GMT")),"%d/%m/%Y" ))
+
+# and oceanographic month lookup
+
+mo_look<-read.csv('C:/seabirds/data/dataID_month_lookup.csv')
+# collapse by sp and colony
+mo_look$coly<-do.call(c, lapply(strsplit(as.character(mo_look$ID), '_'), function(x)x[3]))
+mo_look<-mo_look%>%filter(what=='decision')%>%group_by(sp, coly)%>%
+summarise_at(vars(n1:n12), function(x){if('Y' %in% x){'Y'}else{''}})%>%as.data.frame()  
 
 # export trips per month to decide extract time window for each dataset
 mnth_lookup<-t_qual%>% filter(complete=='complete trip') %>%
@@ -257,76 +271,89 @@ out2<-data.frame(ID=hp$ID, ex_sst, ex_chl, ex_front, ex_bathy, ex_slope)
 
 write.csv(out2, 'C:/seabirds/data/BRBO_hulls_modelready.csv', quote=F, row.names=F)
 
-# 50% core area vs 99% UD psuedo-abs approach
+# 50% core area vs convex hull psuedo-abs approach
 
-brbo<-master_embc[master_embc$sp=='BRBO' & master_embc$trip_id %in% t_qual$trip_id,]
-brbo$ID<-do.call(c, lapply(strsplit(as.character(brbo$ID), '_'), function(x)x[3]))
-# same for colz
-colz<-colz[grep('BRBO', colz$ID),]
-colz$ID<-do.call(c, lapply(strsplit(as.character(colz$ID), '_'), function(x)x[3]))
+sp_groups<-
+  list('BRBO', 'MABO', 'RFBO', 'WTSH', 'SOTE', 
+       c('GRFR', 'LEFR', 'MAFR'), c('RBTB', 'RTTB'), 
+       c('BRNO', 'LENO', 'BLNO'),c('CRTE', 'ROTE', 'CATE'))
 
-## RM foraging points that are incorrectly identified as such e.g. sitting on island !
-
-# Psuedo-absence sampled over all col dist accessibility within 99%UD
-
+names(sp_groups) <- c('BRBO', 'MABO', 'RFBO', 'WTSH', 'SOTE',
+                      'FRBD', 'TRBD', 'NODD', 'TERN')
 
 hval<-0.03
-
-for(i in unique(brbo$ID))
+  
+for(k in sp_groups)
 {
+  dat<-master_embc[master_embc$sp %in% unlist(k),]
+  
+  # collapse colz within species
+  colz_sp<-colz[colz$sp %in% unlist(k),]
+  
+  # Psuedo-absence sampled over all col dist accessibility within convex hull
+  for(i in unique(dat$coly))
+  {
+  b1<-dat[dat$coly==i,]
+  spdf<-SpatialPointsDataFrame(coords=b1[,c(7,8)],  data=data.frame(coly=b1$coly),
+                               proj4string =CRS(projection(ex_templ)))
+  r1<-crop(ex_templ, (extent(spdf)+0.3))
+  r_pix<-as(r1,"SpatialPixels")
+  #make dist
+  
+  r2<-rasterize(SpatialPoints(as(colz_sp[colz_sp$coly==i,],"Spatial")), r1)
+  r2<-(distance(r2))/1000
+  r2<-abs(r2-(max(values(r2)))) # leave vals in km
+  
+  hully<-st_as_sf(spdf)%>%summarise( geometry = st_combine( geometry ) ) %>%
+    st_convex_hull()
+  #write_sf(st_as_sf(KDE.99), 'C:/seabirds/temp/brbo_for_50UD.shp')
+  hully_ras<-rasterize(as(hully, 'Spatial'), r1) 
+  hully_pts<-rasterToPoints(hully_ras, spatial=T)
+  hully_pts$coly=i
+  hully_pts$layer=0
+  hully_pts$weight<-extract(r2, hully_pts)
+  # Foraging within 50% UD
+  bfor<-b1[b1$embc=='foraging',]
+  
+  spdf<-SpatialPointsDataFrame(coords=bfor[,c(7,8)],  data=data.frame(coly=bfor$coly),
+                               proj4string =CRS(projection(ex_templ)))
+  
+  spdf$coly<-factor(spdf$coly)
+  
+  KDE.Surface <- kernelUD(spdf,same4all = F, h=hval, grid=r_pix)
+  KDE.50 <- getverticeshr(KDE.Surface, percent = 50)
+  #write_sf(st_as_sf(KDE.50), 'C:/seabirds/temp/brbo_for_50UD.shp')
+  KDE.50_ras<-rasterize(KDE.50, r1) 
+  KDE.50_pts<-rasterToPoints(KDE.50_ras, spatial=T)
+  KDE.50_pts$coly=i
+  KDE.50_pts$layer=1
+  KDE.50_pts$weight=NA
+  
+  stout<-rbind(st_as_sf(hully_pts),st_as_sf(KDE.50_pts))
+  if(which(i==unique(dat$coly))==1){all_pts<-stout}else{all_pts<-rbind(all_pts, stout)}
+  
+  names(KDE.50)[1]<-'coly'
+  hully$coly<-i
+  hully$PA=0
+  KDE.50$area<-NULL
+  KDE.50$PA=1
+  stout2<-rbind(hully,st_as_sf(KDE.50 ))
+  if(which(i==unique(dat$coly))==1){all_kerns<-stout2}else{all_kerns<-rbind(all_kerns, stout2)}
+  print(i)
+  }
 
-b1<-brbo[brbo$ID==i,]
-spdf<-SpatialPointsDataFrame(coords=b1[,c(5,4)],  data=data.frame(ID=b1$ID),
-                             proj4string =CRS(projection(ex_templ)))
-r1<-crop(ex_templ, (extent(spdf)+0.3))
-r_pix<-as(r1,"SpatialPixels")
-#make dist
+#plot(all_pts[all_pts$coly=='Swains' & all_pts$layer==0, 'weight'])
+# export polygons for gis
+write_sf(all_kerns, paste0('C:/seabirds/data/GIS/', names(k), 'kernhull.shp'))
 
-r2<-rasterize(SpatialPoints(as(colz[colz$ID==i,],"Spatial")), r1)
-r2<-(distance(r2))/1000
-r2<-abs(r2-(max(values(r2)))) # leave vals in km
+# export points to csv
+p2<-all_pts
+p2$Longitude<-st_coordinates(p2)[,1]
+p2$Latitude<-st_coordinates(p2)[,2]
+st_geometry(p2)<-NULL
 
-hully<-st_as_sf(spdf)%>%summarise( geometry = st_combine( geometry ) ) %>%
-  st_convex_hull()
-#write_sf(st_as_sf(KDE.99), 'C:/seabirds/temp/brbo_for_50UD.shp')
-hully_ras<-rasterize(as(hully, 'Spatial'), r1) 
-hully_pts<-rasterToPoints(hully_ras, spatial=T)
-hully_pts$ID=i
-hully_pts$layer=0
-hully_pts$weight<-extract(r2, hully_pts)
-# Foraging within 50% UD
-bfor<-b1[b1$embc=='foraging',]
+write.csv(p2, paste0('C:/seabirds/data/modelling/kernhull_pts', names(k), 'kernhull.csv'), quote=F, row.names=F)
 
-spdf<-SpatialPointsDataFrame(coords=bfor[,c(5,4)],  data=data.frame(ID=bfor$ID),
-                             proj4string =CRS(projection(ex_templ)))
-
-spdf$ID<-factor(spdf$ID)
-
-KDE.Surface <- kernelUD(spdf,same4all = F, h=hval, grid=r_pix)
-KDE.50 <- getverticeshr(KDE.Surface, percent = 50)
-#write_sf(st_as_sf(KDE.50), 'C:/seabirds/temp/brbo_for_50UD.shp')
-KDE.50_ras<-rasterize(KDE.50, r1) 
-KDE.50_pts<-rasterToPoints(KDE.50_ras, spatial=T)
-KDE.50_pts$ID=i
-KDE.50_pts$layer=1
-KDE.50_pts$weight=NA
-
-stout<-rbind(st_as_sf(hully_pts),st_as_sf(KDE.50_pts))
-if(which(i==unique(brbo$ID))==1){all_pts<-stout}else{all_pts<-rbind(all_pts, stout)}
-
-hully$id<-i
-hully$PA=0
-KDE.50$area<-NULL
-KDE.50$PA=1
-stout2<-rbind(hully,st_as_sf(KDE.50 ))
-if(which(i==unique(brbo$ID))==1){all_kerns<-stout2}else{all_kerns<-rbind(all_kerns, stout2)}
-print(i)
-}
-
-# vis and export to QGIS
-plot(all_pts[all_pts$ID=='Swains' & all_pts$layer==0, 'weight'])
-
-write_sf(all_kerns, 'C:/seabirds/temp/brbo_kerns_23Jun.shp')
 
 ex_sst<-extract(sst, all_pts)
 ex_chl<-extract(chl, all_pts)
