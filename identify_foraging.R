@@ -12,7 +12,7 @@ t_qual<-read.csv('C:/seabirds/data/tracking_trip_decisions.csv')
 
 # REMOVE 3 unwanted datasets
 t_qual<-t_qual[-which(t_qual$ID%in%c('MEND2_RFBO_Christmas', 'MEND3_RFBO_Christmas',
-                                     'AUST3_RFBO_Little Cayman')),]
+                                     'AUST3_RFBO_Little Cayman', 'GILM10_RFBO_Isabel')),]
 
 # make dset summary table
 
