@@ -174,102 +174,6 @@ d2<-d2[order(d2$ID),]
 
 #write.csv(d2, 'C:/seabirds/data/dataID_month_lookup.csv', quote=F, row.names=F) 
 
-# attrib master
-
-master_embc$sst<-NA
-master_embc$sst_sd<-NA
-master_embc$chl<-NA
-master_embc$chl_sd<-NA
-master_embc$mfr<-NA
-master_embc$mfr_sd<-NA
-master_embc$pfr<-NA
-master_embc$pfr_sd<-NA
-master_embc$bth<-NA
-master_embc$slp<-NA
-
-# we'll use the trip start month to extract data for that month for the
-# whole trip, even if the trip spans multiple months.
-
-# for dynamic vars
-for (i in c('01','02','03','04','05','06', 
-            '07','08','09','10', '11', '12'))
-{
-  # SST
-  master_embc[master_embc$ID %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$ID &
-                master_embc$trip_id %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$trip_id, 9:10]<-
-    
-    extract(subset(sst_stack, c(as.numeric(i), 13)),
-    master_embc[master_embc$ID %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$ID &
-                master_embc$trip_id %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$trip_id , 5:4])
-  
-  # CHL
-  master_embc[master_embc$ID %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$ID &
-            master_embc$trip_id %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$trip_id, 11:12]<-
-    
-    extract(subset(chl_stack, c(as.numeric(i), 13)),
-    master_embc[master_embc$ID %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$ID &
-                master_embc$trip_id %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$trip_id , 5:4])
-  
-  # mfront
-  master_embc[master_embc$ID %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$ID &
-                master_embc$trip_id %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$trip_id, 13:14]<-
-    
-    extract(subset(mfront_stack, c(as.numeric(i), 13)),
-    master_embc[master_embc$ID %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$ID &
-                master_embc$trip_id %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$trip_id , 5:4])
-  
-  # pfront
-  master_embc[master_embc$ID %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$ID &
-                master_embc$trip_id %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$trip_id, 15:16]<-
-    
-    extract(subset(pfront_stack, c(as.numeric(i), 13)),
-            master_embc[master_embc$ID %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$ID &
-                          master_embc$trip_id %in% t_qual[which(substr(t_qual$departure, 4, 5)==i),]$trip_id , 5:4])
-    
-write.csv(master_embc, 'C:/seabirds/sourced_data/tracking_data/tracking_master_forage_extract.csv', 
-          quote=F, row.names = F) 
-print(i)
-}
-
-# for static vars
-
-master_embc[,17]<-extract(bathy, master_embc[,5:4])
-master_embc[,18]<-extract(slope, master_embc[,5:4])
-
-write.csv(master_embc, 'C:/seabirds/sourced_data/tracking_data/tracking_master_forage_extract.csv', 
-          quote=F, row.names = F)
-
-
-# create and extract hulls
-
-#create hulls around each dataID
-
-hulls <- tracking %>%
-  group_by( ID ) %>%
-  summarise( geometry = st_combine( geometry ) ) %>%
-  st_convex_hull()
-
-#as sp:: objects for raster package
-
-tracking<-as(tracking, 'Spatial')
-hulls<-as(hulls, 'Spatial')
-hulls$ID2<-1:length(hulls)
-
-# give hulls pixels size of finest raster (bathy)
-hull_ras<-rasterize(hulls, bathy) # should attribute with hull rownumber if field in not specified
-hull_pts<-rasterToPoints(hull_ras, spatial=T)
-
-ex_sst<-extract(sst, hull_pts)
-ex_chl<-extract(chl, hull_pts)
-ex_front<-extract(fronts, hull_pts)
-ex_bathy<-extract(bathy, hull_pts)
-ex_slope<-extract(slope, hull_pts)
-
-hp<-left_join(as.data.frame(hull_pts@data), as.data.frame(hulls@data), by=c("layer"="ID2"))
-
-out2<-data.frame(ID=hp$ID, ex_sst, ex_chl, ex_front, ex_bathy, ex_slope)
-
-write.csv(out2, 'C:/seabirds/data/BRBO_hulls_modelready.csv', quote=F, row.names=F)
 
 # 50% core area vs convex hull psuedo-abs approach
 
@@ -427,12 +331,10 @@ k = sp_groups[1]
     if(which(i==unique(dat$coly))==1){all_kerns<-st_as_sf(KDE.50)}else{all_kerns<-rbind(all_kerns, st_as_sf(KDE.50))}
     print(i)
   }
-  
-  #plot(all_pts[all_pts$coly=='Swains' & all_pts$layer==0, 'weight'])
-  # export polygons for gis
-  write_sf(all_kerns, paste0('C:/seabirds/temp/', names(k), 'kernhull_temp.shp'), delete_dsn=T)
 
+write_sf(all_kerns, paste0('C:/seabirds/temp/', names(k), 'kernhull_temp.shp'), delete_dsn=T)
 
+##### OLD #####
 
 # Create colony max range buffers and extract
 # Pull in trip quality table
