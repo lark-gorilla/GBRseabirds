@@ -132,6 +132,34 @@ t_qual[t_qual$ID=='YODA1_BRBO_Nakanokamishima',]$departure<-as.character(format(
   t_qual[t_qual$ID=='YODA1_BRBO_Nakanokamishima',]$departure),
   origin="1970-01-01", "GMT")),"%d/%m/%Y" ))
 
+# export trips per month to decide extract time window for each dataset
+mnth_lookup<-t_qual%>% filter(complete=='complete trip') %>%
+          group_by(ID)%>%summarise(n1=length(which(substr(departure, 4,5)=='01')),
+                                               n2=length(which(substr(departure, 4,5)=='02')),
+                                               n3=length(which(substr(departure, 4,5)=='03')),
+                                               n4=length(which(substr(departure, 4,5)=='04')),
+                                               n5=length(which(substr(departure, 4,5)=='05')),
+                                               n6=length(which(substr(departure, 4,5)=='06')),
+                                               n7=length(which(substr(departure, 4,5)=='07')),
+                                               n8=length(which(substr(departure, 4,5)=='08')),
+                                               n9=length(which(substr(departure, 4,5)=='09')),
+                                               n10=length(which(substr(departure, 4,5)=='10')),
+                                               n11=length(which(substr(departure, 4,5)=='11')),
+                                               n12=length(which(substr(departure, 4,5)=='12')))
+
+d1<-as.data.frame(mnth_lookup)
+d1[1:98, 2:13]<-''
+d1.5<-as.data.frame(mnth_lookup)
+d1$ID<-as.character(d1$ID)#
+d1.5$ID<-as.character(d1.5$ID)
+d1.5$what='month'
+d1$what='decision'
+
+d2<-rbind(d1.5,d1)
+d2<-d2[order(d2$ID),]
+
+#write.csv(d2, 'C:/seabirds/data/dataID_month_lookup.csv', quote=F, row.names=F) 
+
 # attrib master
 
 master_embc$sst<-NA
@@ -299,7 +327,6 @@ print(i)
 plot(all_pts[all_pts$ID=='Swains' & all_pts$layer==0, 'weight'])
 
 write_sf(all_kerns, 'C:/seabirds/temp/brbo_kerns_23Jun.shp')
-
 
 ex_sst<-extract(sst, all_pts)
 ex_chl<-extract(chl, all_pts)
