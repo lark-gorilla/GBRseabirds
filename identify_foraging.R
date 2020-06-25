@@ -4,6 +4,8 @@ library(ggplot2)
 library(EMbC)
 library(dplyr)
 library(sf)
+# find scale of interaction BL code
+source('C:/seabirds/sourced_data/code/new_mIBA/findScale.R')
 
 # Pull in trip quality table
 t_qual<-read.csv('C:/seabirds/data/tracking_trip_decisions.csv')
@@ -104,6 +106,38 @@ p2$Latitude<-st_coordinates(p2)[,2]
 # **
 st_geometry(p2)<-NULL
 write.csv(p2, 'C:/seabirds/sourced_data/tracking_data/tracking_master_forage.csv', quote=F, row.names=F)
+
+
+#calculate scale of interaction using BL scripts
+
+# need col locs
+colz<-st_read('C:/seabirds/data/GIS/trackingID_colony_locs.shp')
+
+hvals_out<-NULL
+for( i in unique(t_qual$ID))#
+{
+  cleand<-read.csv(paste0('C:/seabirds/sourced_data/tracking_data/clean/',i, '.csv'))
+  # filter out bad trips
+  cleand<-cleand[cleand$trip_id%in% t_qual[t_qual$ID==i & t_qual$manual_keep=='Y',]$trip_id,]
+
+  s1<-t_qual[t_qual$ID==i,]
+  coly<-data.frame(Longitude=as(colz[colz$ID==i,], 'Spatial')@coords[1],
+                   Latitude= as(colz[colz$ID==i,], 'Spatial')@coords[2])
+  # make into spdf
+  sptz <- SpatialPoints(cleand[,4:3],
+                        proj4string=CRS("+proj=longlat + datum=wgs84"))
+  proj.UTM <- CRS(paste("+proj=laea +lon_0=", coly$Longitude,
+                        " +lat_0=", coly$Latitude, sep=""))
+  sptz <- spTransform(sptz, CRS=proj.UTM)
+  spdf<-SpatialPointsDataFrame(sptz, data=cleand)
+  
+  # setting res to 2km to match approx grid resolution for kde
+  Hvals<-findScale(spdf, ARSscale = T, Trips_summary=s1, Res = 2, Colony=coly) 
+
+  hvals_out<-rbind(hvals_out, data.frame(ID=i, Hvals))  
+  print(i)
+}
+
 
 
 ### OLD ####
