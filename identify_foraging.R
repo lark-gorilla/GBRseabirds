@@ -132,12 +132,17 @@ for( i in unique(t_qual$ID))#
   spdf<-SpatialPointsDataFrame(sptz, data=cleand)
   
   # setting res to 2km to match approx grid resolution for kde
-  Hvals<-findScale(spdf, ARSscale = T, Trips_summary=s1, Res = 2, Colony=coly) 
+  Hvals<-try(findScale(spdf, ARSscale = T, Trips_summary=s1, Res = 2, Colony=coly))
+  if (class(Hvals)=="try-error"){
+    Hvals<-data.frame(med_max_dist=NA, mag=NA, scaled_mag=NA, href=NA, ARSscale=NA)
+  }
 
   hvals_out<-rbind(hvals_out, data.frame(ID=i, Hvals))  
   print(i)
 }
 
+hvals_out$sp<-do.call(c, lapply(strsplit(as.character(hvals_out$ID), '_'), function(x)x[2]))
+write.csv(hvals_out, 'C:/seabirds/data/dataID_hvals.csv', quote=F, row.names=F)
 
 
 ### OLD ####
