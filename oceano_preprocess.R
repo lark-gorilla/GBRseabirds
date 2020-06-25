@@ -329,9 +329,36 @@ for(k in sp_groups)
   KDE.50_pts$layer=1
   KDE.50_pts$weight=NA
   
-  stout<-rbind(st_as_sf(hully_pts),st_as_sf(KDE.50_pts))
-  if(which(i==unique(dat$coly))==1){all_pts<-stout}else{all_pts<-rbind(all_pts, stout)}
+  ###~~ Ocean data extract ~~###
+  ext_pts<-rbind(st_as_sf(hully_pts),st_as_sf(KDE.50_pts))
   
+  # lookup months
+  moz<-which(mo_look[mo_look$sp %in% unlist(k) & mo_look$coly==i,3:14]=='Y')
+  # extract, 3 varibs use dynamic month lookup
+  ext_pts$chl<-rowMeans(extract(subset(chl_stack, moz), ext_pts), na.rm=T)
+  ext_pts$chl_sd<-extract(subset(chl_stack, 13), ext_pts)
+  
+  ext_pts$sst<-rowMeans(extract(subset(sst_stack, moz), ext_pts), na.rm=T)
+  ext_pts$sst_sd<-extract(subset(sst_stack, 13), ext_pts)
+  
+  ext_pts$mfr<-rowMeans(extract(subset(mfront_stack, moz), ext_pts), na.rm=T)
+  ext_pts$mfr_sd<-extract(subset(mfront_stack, 13), ext_pts)
+  
+  ext_pts$pfr<-rowMeans(extract(subset(pfront_stack, moz), ext_pts), na.rm=T)
+  ext_pts$pfr_sd<-extract(subset(pfront_stack, 13), ext_pts)
+  
+  ext_pts$bth<-extract(bathy, ext_pts)
+  ext_pts$slp<-extract(slope, ext_pts)
+  
+  # bind up for export as csv
+  # export points to csv
+  ext_pts$Longitude<-st_coordinates(ext_pts)[,1]
+  ext_pts$Latitude<-st_coordinates(ext_pts)[,2]
+  st_geometry(ext_pts)<-NULL
+ 
+  if(which(i==unique(dat$coly))==1){all_pts<-ext_pts}else{all_pts<-rbind(all_pts, ext_pts)}
+  
+    # bind up polygons for export
   names(KDE.50)[1]<-'coly'
   hully$coly<-i
   hully$PA=0
@@ -339,33 +366,20 @@ for(k in sp_groups)
   KDE.50$PA=1
   stout2<-rbind(hully,st_as_sf(KDE.50 ))
   if(which(i==unique(dat$coly))==1){all_kerns<-stout2}else{all_kerns<-rbind(all_kerns, stout2)}
+  
   print(i)
+  
   }
 
 #plot(all_pts[all_pts$coly=='Swains' & all_pts$layer==0, 'weight'])
 # export polygons for gis
-write_sf(all_kerns, paste0('C:/seabirds/data/GIS/', names(k), 'kernhull.shp'))
+write_sf(all_kerns, paste0('C:/seabirds/data/GIS/', names(k), 'kernhull.shp'), delete_dsn=T)
 
-# export points to csv
-p2<-all_pts
-p2$Longitude<-st_coordinates(p2)[,1]
-p2$Latitude<-st_coordinates(p2)[,2]
-st_geometry(p2)<-NULL
+write.csv(all_pts, paste0('C:/seabirds/data/modelling/kernhull_pts', names(k), 'kernhull.csv'), quote=F, row.names=F)
 
-write.csv(p2, paste0('C:/seabirds/data/modelling/kernhull_pts', names(k), 'kernhull.csv'), quote=F, row.names=F)
+print(k)
 
-
-ex_sst<-extract(sst, all_pts)
-ex_chl<-extract(chl, all_pts)
-ex_front<-extract(fronts, all_pts)
-ex_bathy<-extract(bathy, all_pts)
-ex_slope<-extract(slope, all_pts)
-
-hp<-left_join(as.data.frame(KDE.50_pts@data), as.data.frame(KDE.50@data), by=c("layer"="ID2"))
-
-out2<-data.frame(ID=hp$id, ex_sst, ex_chl, ex_front, ex_bathy, ex_slope)
-
-write.csv(out2, 'C:/seabirds/data/BRBO_forKern_modelready.csv', quote=F, row.names=F)
+} #end multi-sp loop
 
 
 # Create colony max range buffers and extract
