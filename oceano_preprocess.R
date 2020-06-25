@@ -334,17 +334,21 @@ for(k in sp_groups)
   
   # lookup months
   moz<-which(mo_look[mo_look$sp %in% unlist(k) & mo_look$coly==i,3:14]=='Y')
-  # extract, 3 varibs use dynamic month lookup
-  ext_pts$chl<-rowMeans(extract(subset(chl_stack, moz), ext_pts), na.rm=T)
+  # extract, 4 varibs use dynamic month lookup
+  if(length(moz)>1){
+    ext_pts$chl<-rowMeans(extract(subset(chl_stack, moz), ext_pts), na.rm=T)
+    ext_pts$sst<-rowMeans(extract(subset(sst_stack, moz), ext_pts), na.rm=T)
+    ext_pts$mfr<-rowMeans(extract(subset(mfront_stack, moz), ext_pts), na.rm=T)
+    ext_pts$pfr<-rowMeans(extract(subset(pfront_stack, moz), ext_pts), na.rm=T)
+    }else{
+    ext_pts$chl<-extract(subset(chl_stack, moz), ext_pts)
+    ext_pts$sst<-extract(subset(sst_stack, moz), ext_pts)
+    ext_pts$mfr<-extract(subset(mfront_stack, moz), ext_pts)
+    ext_pts$pfr<-extract(subset(pfront_stack, moz), ext_pts)}
+  
   ext_pts$chl_sd<-extract(subset(chl_stack, 13), ext_pts)
-  
-  ext_pts$sst<-rowMeans(extract(subset(sst_stack, moz), ext_pts), na.rm=T)
   ext_pts$sst_sd<-extract(subset(sst_stack, 13), ext_pts)
-  
-  ext_pts$mfr<-rowMeans(extract(subset(mfront_stack, moz), ext_pts), na.rm=T)
   ext_pts$mfr_sd<-extract(subset(mfront_stack, 13), ext_pts)
-  
-  ext_pts$pfr<-rowMeans(extract(subset(pfront_stack, moz), ext_pts), na.rm=T)
   ext_pts$pfr_sd<-extract(subset(pfront_stack, 13), ext_pts)
   
   ext_pts$bth<-extract(bathy, ext_pts)
