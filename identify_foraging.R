@@ -10,6 +10,17 @@ source('C:/seabirds/sourced_data/code/new_mIBA/findScale.R')
 # Pull in trip quality table
 t_qual<-read.csv('C:/seabirds/data/tracking_trip_decisions.csv')
 
+# Fix yoda dates
+#t_qual$departure<-as.character(t_qual$departure)
+#t_qual[t_qual$ID=='YODA1_BRBO_Nakanokamishima',]$departure<-as.character(format(as.Date(as.POSIXlt(as.numeric(
+#  t_qual[t_qual$ID=='YODA1_BRBO_Nakanokamishima',]$departure),
+#  origin="1970-01-01", "GMT")),"%d/%m/%Y" ))
+# fill NAs in non returning duration
+#t_qual$duration <-as.double(round(as.POSIXct(strptime(t_qual$return, "%d/%m/%Y %H:%M"), "GMT") -
+#                          as.POSIXct(strptime(t_qual$departure, "%d/%m/%Y %H:%M"), "GMT"), 1))
+# write out and update
+#write.csv(t_qual, 'C:/seabirds/data/tracking_trip_decisions.csv', quote=F, row.names=F)
+
 # REMOVE 3 unwanted datasets
 t_qual<-t_qual[-which(t_qual$ID%in%c('MEND2_RFBO_Christmas', 'MEND3_RFBO_Christmas',
                                      'AUST3_RFBO_Little Cayman', 'GILM10_RFBO_Isabel')),]
@@ -100,7 +111,6 @@ st_write(filter(p2, sp=='SOTE')%>%select(ID, trip_id, embc), 'C:/seabirds/data/G
 st_write(filter(p2, sp%in% c('BRNO', 'LENO', 'BLNO'))%>%select(ID, trip_id, embc), 'C:/seabirds/data/GIS/NODD_for.shp')
 st_write(filter(p2, sp%in% c('CRTE', 'ROTE', 'CATE'))%>%select(ID, trip_id, embc), 'C:/seabirds/data/GIS/TERN_for.shp')
 
-# not sure if this works **
 p2$Longitude<-st_coordinates(p2)[,1]
 p2$Latitude<-st_coordinates(p2)[,2]
 # **
