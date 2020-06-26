@@ -121,7 +121,7 @@ ex_templ<-raster('C:/seabirds/sourced_data/oceano_modelready/extraction_template
 colz<-st_read('C:/seabirds/data/GIS/trackingID_colony_locs.shp')
 colz$sp<-do.call(c, lapply(strsplit(as.character(colz$ID), '_'), function(x)x[2]))
 colz$coly<-do.call(c, lapply(strsplit(as.character(colz$ID), '_'), function(x)x[3]))
-
+colz$spcol<-paste(colz$sp, colz$coly)
 
 # load in trip quality control
 
@@ -137,6 +137,7 @@ t_qual[grep('Aride', t_qual$ID),]$WTSH_SL<-'S'
 master_embc<-read.csv('C:/seabirds/sourced_data/tracking_data/tracking_master_forage.csv')
 # add colony column
 master_embc$coly<-do.call(c, lapply(strsplit(as.character(master_embc$ID), '_'), function(x)x[3]))
+master_embc$spcol<-paste(master_embc$sp, master_embc$coly)
 
 # EDIT WTSH species into short and long trip 'species' using t_qual
 master_embc$sp<-as.character(master_embc$sp)
@@ -148,7 +149,8 @@ master_embc[master_embc$sp=='WTSH' & master_embc$trip_id %in% t_qual[t_qual$WTSH
 mo_look<-read.csv('C:/seabirds/data/dataID_month_lookup.csv')
 # collapse by sp and colony
 mo_look$coly<-do.call(c, lapply(strsplit(as.character(mo_look$ID), '_'), function(x)x[3]))
-mo_look<-mo_look%>%filter(what=='decision')%>%group_by(sp, coly)%>%
+mo_look$spcol<-paste(mo_look$sp, mo_look$coly)
+mo_look<-mo_look%>%filter(what=='decision')%>%group_by(spcol)%>%
 summarise_at(vars(n1:n12), function(x){if('Y' %in% x){'Y'}else{''}})%>%as.data.frame()  
  
 # load in hval ref
@@ -196,12 +198,13 @@ names(sp_groups) <- c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST', 'WTLG',
                       'FRBD', 'TRBD', 'NODD', 'TERN')
 
 
-for(k in sp_groups)
+for(m in 1:length(sp_groups))
 {
+  k<-sp_groups[m][[1]]
   k0<-k
-  if(unlist(k)%in% c('WTST', 'WTLG')){k0<-'WTSH'}
+  if(TRUE %in% (unlist(k)%in% c('WTST', 'WTLG'))){k0<-'WTSH'}
   
-  myhv<-(hvals_ref[hvals_ref$sp_group==k,]$med_hval)/111 # ~convert km to DD
+  myhv<-(hvals_ref[hvals_ref$sp_group==names(sp_groups[m]),]$med_hval)/111 # ~convert km to DD
   
   dat<-master_embc[master_embc$sp %in% unlist(k),]
   
@@ -209,16 +212,16 @@ for(k in sp_groups)
   colz_sp<-colz[colz$sp %in% unlist(k0),]
   
   # Psuedo-absence sampled over all col dist accessibility within convex hull
-  for(i in unique(dat$coly))
+  for(i in unique(dat$spcol))
   {
-  b1<-dat[dat$coly==i,]
-  spdf<-SpatialPointsDataFrame(coords=b1[,c(7,8)],  data=data.frame(coly=b1$coly),
+  b1<-dat[dat$spcol==i,]
+  spdf<-SpatialPointsDataFrame(coords=b1[,c(7,8)],  data=data.frame(spcol=b1$spcol),
                                proj4string =CRS(projection(ex_templ)))
   r1<-crop(ex_templ, (extent(spdf)+0.3))
   r_pix<-as(r1,"SpatialPixels")
   #make dist
   
-  r2<-rasterize(SpatialPoints(as(colz_sp[colz_sp$coly==i,],"Spatial")), r1)
+  r2<-rasterize(SpatialPoints(as(colz_sp[colz_sp$spcol==i,],"Spatial")), r1)
   r2<-(distance(r2))/1000
   r2<-abs(r2-(max(values(r2)))) # leave vals in km
   
@@ -227,23 +230,23 @@ for(k in sp_groups)
   #write_sf(st_as_sf(KDE.99), 'C:/seabirds/temp/brbo_for_50UD.shp')
   hully_ras<-rasterize(as(hully, 'Spatial'), r1) 
   hully_pts<-rasterToPoints(hully_ras, spatial=T)
-  hully_pts$coly=i
+  hully_pts$spcol=i
   hully_pts$layer=0
   hully_pts$weight<-extract(r2, hully_pts)
   # Foraging within 50% UD
   bfor<-b1[b1$embc=='foraging',]
   
-  spdf<-SpatialPointsDataFrame(coords=bfor[,c(7,8)],  data=data.frame(coly=bfor$coly),
+  spdf<-SpatialPointsDataFrame(coords=bfor[,c(7,8)],  data=data.frame(spcol=bfor$spcol),
                                proj4string =CRS(projection(ex_templ)))
   
-  spdf$coly<-factor(spdf$coly)
+  spdf$spcol<-factor(spdf$spcol)
   
   KDE.Surface <- kernelUD(spdf,same4all = F, h=myhv, grid=r_pix)
   KDE.50 <- getverticeshr(KDE.Surface, percent = 50)
   #write_sf(st_as_sf(KDE.50), 'C:/seabirds/temp/brbo_for_50UD.shp')
   KDE.50_ras<-rasterize(KDE.50, r1) 
   KDE.50_pts<-rasterToPoints(KDE.50_ras, spatial=T)
-  KDE.50_pts$coly=i
+  KDE.50_pts$spcol=i
   KDE.50_pts$layer=1
   KDE.50_pts$weight=NA
   
@@ -251,7 +254,7 @@ for(k in sp_groups)
   ext_pts<-rbind(st_as_sf(hully_pts),st_as_sf(KDE.50_pts))
   
   # lookup months
-  moz<-which(mo_look[mo_look$sp %in% unlist(k0) & mo_look$coly==i,3:14]=='Y')
+  moz<-which(mo_look[mo_look$spcol==i,2:13]=='Y')
   # extract, 4 varibs use dynamic month lookup
   if(length(moz)>1){
     ext_pts$chl<-rowMeans(extract(subset(chl_stack, moz), ext_pts), na.rm=T)
@@ -278,26 +281,26 @@ for(k in sp_groups)
   ext_pts$Latitude<-st_coordinates(ext_pts)[,2]
   st_geometry(ext_pts)<-NULL
  
-  if(which(i==unique(dat$coly))==1){all_pts<-ext_pts}else{all_pts<-rbind(all_pts, ext_pts)}
+  if(which(i==unique(dat$spcol))==1){all_pts<-ext_pts}else{all_pts<-rbind(all_pts, ext_pts)}
   
     # bind up polygons for export
-  names(KDE.50)[1]<-'coly'
-  hully$coly<-i
+  names(KDE.50)[1]<-'spcol'
+  hully$spcol<-i
   hully$PA=0
   KDE.50$area<-NULL
   KDE.50$PA=1
   stout2<-rbind(hully,st_as_sf(KDE.50 ))
-  if(which(i==unique(dat$coly))==1){all_kerns<-stout2}else{all_kerns<-rbind(all_kerns, stout2)}
+  if(which(i==unique(dat$spcol))==1){all_kerns<-stout2}else{all_kerns<-rbind(all_kerns, stout2)}
   
   print(i)
   
   }
 
-#plot(all_pts[all_pts$coly=='Swains' & all_pts$layer==0, 'weight'])
+#plot(all_pts[all_pts$spcol=='Swains' & all_pts$layer==0, 'weight'])
 # export polygons for gis
-write_sf(all_kerns, paste0('C:/seabirds/data/GIS/', names(k), 'kernhull.shp'), delete_dsn=T)
+write_sf(all_kerns, paste0('C:/seabirds/data/GIS/', names(sp_groups[m]), 'kernhull.shp'), delete_dsn=T)
 
-write.csv(all_pts, paste0('C:/seabirds/data/modelling/kernhull_pts/', names(k), '_kernhull.csv'), quote=F, row.names=F)
+write.csv(all_pts, paste0('C:/seabirds/data/modelling/kernhull_pts/', names(sp_groups[m]), '_kernhull.csv'), quote=F, row.names=F)
 
 print(k)
 
