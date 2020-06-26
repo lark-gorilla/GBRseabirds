@@ -123,14 +123,26 @@ write.csv(p2, 'C:/seabirds/sourced_data/tracking_data/tracking_master_forage.csv
 # need col locs
 colz<-st_read('C:/seabirds/data/GIS/trackingID_colony_locs.shp')
 
+# make WTSH l/S trip split
+t_qual$WTSH_SL<-ifelse(t_qual$duration>(24*3) | t_qual$max_dist>300, 'L', 'S')
+lkup<-which(t_qual$sp=='WTSH')
+lkup<-lkup[!lkup %in% grep('Aride', t_qual$ID)]
+t_qual$ID<-as.character(t_qual$ID)
+t_qual[lkup,]$ID<-paste0(t_qual[lkup,]$ID, t_qual[lkup,]$WTSH_SL)
+
 hvals_out<-NULL
 for( i in unique(t_qual$ID))#
 {
+  j<-i
+  
+  if(i %in% unique(t_qual[lkup,]$ID)){
+    i<-substr(i, 1, (nchar(i)-1))}
+
   cleand<-read.csv(paste0('C:/seabirds/sourced_data/tracking_data/clean/',i, '.csv'))
   # filter out bad trips
-  cleand<-cleand[cleand$trip_id%in% t_qual[t_qual$ID==i & t_qual$manual_keep=='Y',]$trip_id,]
+  cleand<-cleand[cleand$trip_id%in% t_qual[t_qual$ID==j & t_qual$manual_keep=='Y',]$trip_id,]
 
-  s1<-t_qual[t_qual$ID==i,]
+  s1<-t_qual[t_qual$ID==j,]
   coly<-data.frame(Longitude=as(colz[colz$ID==i,], 'Spatial')@coords[1],
                    Latitude= as(colz[colz$ID==i,], 'Spatial')@coords[2])
   # make into spdf
@@ -141,13 +153,12 @@ for( i in unique(t_qual$ID))#
   sptz <- spTransform(sptz, CRS=proj.UTM)
   spdf<-SpatialPointsDataFrame(sptz, data=cleand)
   
-  # setting res to 2km to match approx grid resolution for kde
-  Hvals<-try(findScale(spdf, ARSscale = T, Trips_summary=s1, Res = 2, Colony=coly))
-  if (class(Hvals)=="try-error"){
-    Hvals<-data.frame(med_max_dist=NA, mag=NA, scaled_mag=NA, href=NA, ARSscale=NA)
-  }
+      # setting res to 2km to match approx grid resolution for kde
+      Hvals<-try(findScale(spdf, ARSscale = T, Trips_summary=s1, Res = 2, Colony=coly))
+      if (class(Hvals)=="try-error"){
+        Hvals<-data.frame(med_max_dist=NA, mag=NA, scaled_mag=NA, href=NA, ARSscale=NA)}
 
-  hvals_out<-rbind(hvals_out, data.frame(ID=i, Hvals))  
+  hvals_out<-rbind(hvals_out, data.frame(ID=j, Hvals))  
   print(i)
 }
 
