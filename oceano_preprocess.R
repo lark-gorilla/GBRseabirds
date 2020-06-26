@@ -122,29 +122,39 @@ colz<-st_read('C:/seabirds/data/GIS/trackingID_colony_locs.shp')
 colz$sp<-do.call(c, lapply(strsplit(as.character(colz$ID), '_'), function(x)x[2]))
 colz$coly<-do.call(c, lapply(strsplit(as.character(colz$ID), '_'), function(x)x[3]))
 
+
+# load in trip quality control
+
+t_qual<-read.csv('C:/seabirds/data/tracking_trip_decisions.csv')
+t_qual<-t_qual[t_qual$manual_keep=='Y',]
+
+# make WTSH l/S trip split
+t_qual$WTSH_SL<-ifelse(t_qual$duration>(24*3) | t_qual$max_dist>300, 'L', 'S')
+t_qual[grep('Aride', t_qual$ID),]$WTSH_SL<-'S'
+
 # read in embc attributed master
 
 master_embc<-read.csv('C:/seabirds/sourced_data/tracking_data/tracking_master_forage.csv')
 # add colony column
 master_embc$coly<-do.call(c, lapply(strsplit(as.character(master_embc$ID), '_'), function(x)x[3]))
 
-# and trip quality control
+# EDIT WTSH species into short and long trip 'species' using t_qual
+master_embc$sp<-as.character(master_embc$sp)
+master_embc[master_embc$sp=='WTSH' & master_embc$trip_id %in% t_qual[t_qual$WTSH_SL=='S',]$trip_id,]$sp<-'WTST'
+master_embc[master_embc$sp=='WTSH' & master_embc$trip_id %in% t_qual[t_qual$WTSH_SL=='L',]$trip_id,]$sp<-'WTLG'
 
-t_qual<-read.csv('C:/seabirds/data/tracking_trip_decisions.csv')
-t_qual<-t_qual[t_qual$manual_keep=='Y',]
-# Fix yoda dates
-t_qual$departure<-as.character(t_qual$departure)
-t_qual[t_qual$ID=='YODA1_BRBO_Nakanokamishima',]$departure<-as.character(format(as.Date(as.POSIXlt(as.numeric(
-  t_qual[t_qual$ID=='YODA1_BRBO_Nakanokamishima',]$departure),
-  origin="1970-01-01", "GMT")),"%d/%m/%Y" ))
-
-# and oceanographic month lookup
+# load in oceanographic month lookup
 
 mo_look<-read.csv('C:/seabirds/data/dataID_month_lookup.csv')
 # collapse by sp and colony
 mo_look$coly<-do.call(c, lapply(strsplit(as.character(mo_look$ID), '_'), function(x)x[3]))
 mo_look<-mo_look%>%filter(what=='decision')%>%group_by(sp, coly)%>%
 summarise_at(vars(n1:n12), function(x){if('Y' %in% x){'Y'}else{''}})%>%as.data.frame()  
+ 
+# load in hval ref
+
+hvals<-read.csv('C:/seabirds/data/dataID_hvals.csv')
+hvals_ref<-hvals%>%group_by(sp_group)%>%summarise(med_hval=median(mag, na.rm=T))
 
 # export trips per month to decide extract time window for each dataset
 mnth_lookup<-t_qual%>% filter(complete=='complete trip') %>%
@@ -178,21 +188,25 @@ d2<-d2[order(d2$ID),]
 # 50% core area vs convex hull psuedo-abs approach
 
 sp_groups<-
-  list('BRBO', 'MABO', 'RFBO', 'WTSH', 'SOTE', 
+  list('BRBO', 'MABO', 'RFBO', 'SOTE', 'WTST', 'WTLG',
        c('GRFR', 'LEFR', 'MAFR'), c('RBTB', 'RTTB'), 
        c('BRNO', 'LENO', 'BLNO'),c('CRTE', 'ROTE', 'CATE'))
 
-names(sp_groups) <- c('BRBO', 'MABO', 'RFBO', 'WTSH', 'SOTE',
+names(sp_groups) <- c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST', 'WTLG',
                       'FRBD', 'TRBD', 'NODD', 'TERN')
 
-hval<-0.03
-  
+
 for(k in sp_groups)
 {
+  k0<-k
+  if(unlist(k)%in% c('WTST', 'WTLG')){k0<-'WTSH'}
+  
+  myhv<-(hvals_ref[hvals_ref$sp_group==k,]$med_hval)/111 # ~convert km to DD
+  
   dat<-master_embc[master_embc$sp %in% unlist(k),]
   
   # collapse colz within species
-  colz_sp<-colz[colz$sp %in% unlist(k),]
+  colz_sp<-colz[colz$sp %in% unlist(k0),]
   
   # Psuedo-absence sampled over all col dist accessibility within convex hull
   for(i in unique(dat$coly))
@@ -209,7 +223,7 @@ for(k in sp_groups)
   r2<-abs(r2-(max(values(r2)))) # leave vals in km
   
   hully<-st_as_sf(spdf)%>%summarise( geometry = st_combine( geometry ) ) %>%
-    st_convex_hull()%>%st_buffer(dist=hval)
+    st_convex_hull()%>%st_buffer(dist=myhv)
   #write_sf(st_as_sf(KDE.99), 'C:/seabirds/temp/brbo_for_50UD.shp')
   hully_ras<-rasterize(as(hully, 'Spatial'), r1) 
   hully_pts<-rasterToPoints(hully_ras, spatial=T)
@@ -224,7 +238,7 @@ for(k in sp_groups)
   
   spdf$coly<-factor(spdf$coly)
   
-  KDE.Surface <- kernelUD(spdf,same4all = F, h=hval, grid=r_pix)
+  KDE.Surface <- kernelUD(spdf,same4all = F, h=myhv, grid=r_pix)
   KDE.50 <- getverticeshr(KDE.Surface, percent = 50)
   #write_sf(st_as_sf(KDE.50), 'C:/seabirds/temp/brbo_for_50UD.shp')
   KDE.50_ras<-rasterize(KDE.50, r1) 
@@ -237,7 +251,7 @@ for(k in sp_groups)
   ext_pts<-rbind(st_as_sf(hully_pts),st_as_sf(KDE.50_pts))
   
   # lookup months
-  moz<-which(mo_look[mo_look$sp %in% unlist(k) & mo_look$coly==i,3:14]=='Y')
+  moz<-which(mo_look[mo_look$sp %in% unlist(k0) & mo_look$coly==i,3:14]=='Y')
   # extract, 4 varibs use dynamic month lookup
   if(length(moz)>1){
     ext_pts$chl<-rowMeans(extract(subset(chl_stack, moz), ext_pts), na.rm=T)
