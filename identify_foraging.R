@@ -5,7 +5,7 @@ library(EMbC)
 library(dplyr)
 library(sf)
 # find scale of interaction BL code
-source('C:/seabirds/sourced_data/code/new_mIBA/findScale.R')
+source('C:/seabirds/sourced_data/code/new_mIBA/findScaleUPDATEjun20.R')
 
 # Pull in trip quality table
 t_qual<-read.csv('C:/seabirds/data/tracking_trip_decisions.csv')
@@ -141,6 +141,8 @@ for( i in unique(t_qual$ID))#
   cleand<-read.csv(paste0('C:/seabirds/sourced_data/tracking_data/clean/',i, '.csv'))
   # filter out bad trips
   cleand<-cleand[cleand$trip_id%in% t_qual[t_qual$ID==j & t_qual$manual_keep=='Y',]$trip_id,]
+  cleand$DateTime <- as.POSIXct(strptime(as.character(cleand$DateTime),format="%Y-%m-%d %H:%M:%S",tz="GMT"))
+  cleand$ID<-factor(cleand$trip_id) # run per trip rather than track
 
   s1<-t_qual[t_qual$ID==j,]
   coly<-data.frame(Longitude=as(colz[colz$ID==i,], 'Spatial')@coords[1],
@@ -153,16 +155,47 @@ for( i in unique(t_qual$ID))#
   sptz <- spTransform(sptz, CRS=proj.UTM)
   spdf<-SpatialPointsDataFrame(sptz, data=cleand)
   
+  if(i== "ZAMO1_BRBO_Pajarera"){next} #not working for this one
+  
+  # setting res to 2km to match approx grid resolution for kde
+  Hvals<-findScale(spdf, scaleARS = T, sumTrips = s1,  res = 2, peakMethod = 'first')
+  Hvals$scaleARS_max<-findScale(spdf, scaleARS = T,  res = 2, peakMethod = 'max')$scaleARS
+  Hvals$scaleARS_steep<-findScale(spdf, scaleARS = T,  res = 2, peakMethod = 'steep')$scaleARS
+  
       # setting res to 2km to match approx grid resolution for kde
-      Hvals<-try(findScale(spdf, ARSscale = T, Trips_summary=s1, Res = 2, Colony=coly))
-      if (class(Hvals)=="try-error"){
-        Hvals<-data.frame(med_max_dist=NA, mag=NA, scaled_mag=NA, href=NA, ARSscale=NA)}
+      #Hvals<-try(findScale(spdf, scaleARS = T, sumTrips = s1,  res = 2, peakMethod = 'first'))
+      #if (class(Hvals)=="try-error"){
+      #  Hvals<-data.frame(med_max_dist=NA, mag=NA, scaled_mag=NA, href=NA, ARSscale=NA)}
 
   hvals_out<-rbind(hvals_out, data.frame(ID=j, Hvals))  
-  print(i)
+  print(hvals_out)
 }
 
 hvals_out$sp<-do.call(c, lapply(strsplit(as.character(hvals_out$ID), '_'), function(x)x[2]))
+# lookup interpolation interval
+int_sum<-read.csv('C:/seabirds/data/tracking_interval_decisions.csv')
+hvals_out<-left_join(hvals_out, int_sum[,c(1, 9)], by='ID')
+hvals_out[88:92,]$int_decision<-600
+hvals_out[101:102,]$int_decision<-1200
+hvals_out[93:100,]$int_decision<-900
+
+hvals_out$sp_group<-hvals_out$sp
+
+hvals_out[hvals_out$sp =='WTSH',]$sp_group<-'WTST' # Aride and all short trips
+hvals_out[hvals_out$sp =='WTSH' & substr(hvals_out$ID, nchar(hvals_out$ID), 
+          nchar(hvals_out$ID))=='L',]$sp_group<-'WTLG'
+
+
+hvals_out[hvals_out$sp %in% c('GRFR', 'LEFR', 'MAFR'),]$sp_group<-'FRBD'
+hvals_out[hvals_out$sp %in% c('RBTB', 'RTTB'),]$sp_group<-'TRBD'
+hvals_out[hvals_out$sp %in% c('BRNO', 'LENO', 'BLNO'),]$sp_group<-'NODD'
+hvals_out[hvals_out$sp %in% c('CRTE', 'ROTE', 'CATE'),]$sp_group<-'TERN'
+
+ggplot(data=hvals_out, aes(x=sp_group, y=href))+
+  geom_boxplot()+geom_point(aes(colour=factor(int_decision)), shape=1)
+
+hvals_out%>%group_by(sp_group)%>%summarise(med_hval=median(href, na.rm=T))
+  
 write.csv(hvals_out, 'C:/seabirds/data/dataID_hvals.csv', quote=F, row.names=F)
 
 
