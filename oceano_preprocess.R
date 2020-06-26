@@ -76,7 +76,7 @@ terrain(b4, opt='slope', unit='degrees', neighbors=4, filename='C:/seabirds/sour
 
 ### Make standardised extraction grid @ 0.02 ~ 2km degree
 r1<-raster('C:/seabirds/sourced_data/oceano_modelready/mfront_sd.tif')
-r2<-raster(extent(r1), resolution=0.02,crs=CRS("+proj=longlat +datum=WGS84"), vals=1)
+r2<-raster(extent(r1), resolution=0.01,crs=CRS("+proj=longlat +datum=WGS84"), vals=1)
 writeRaster(r2, 'C:/seabirds/sourced_data/oceano_modelready/extraction_template_1km.tif', overwrite=TRUE)
 
 
@@ -196,7 +196,6 @@ sp_groups<-
 
 names(sp_groups) <- c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST', 'WTLG',
                       'FRBD', 'TRBD', 'NODD', 'TERN')
-
 
 for(m in 1:length(sp_groups))
 {
