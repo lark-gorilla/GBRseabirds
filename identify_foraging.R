@@ -191,10 +191,10 @@ hvals_out[hvals_out$sp %in% c('RBTB', 'RTTB'),]$sp_group<-'TRBD'
 hvals_out[hvals_out$sp %in% c('BRNO', 'LENO', 'BLNO'),]$sp_group<-'NODD'
 hvals_out[hvals_out$sp %in% c('CRTE', 'ROTE', 'CATE'),]$sp_group<-'TERN'
 
-ggplot(data=hvals_out, aes(x=sp_group, y=href))+
+ggplot(data=hvals_out, aes(x=sp_group, y=ARSscale))+
   geom_boxplot()+geom_point(aes(colour=factor(int_decision)), shape=1)
 
-hvals_out%>%group_by(sp_group)%>%summarise(med_hval=median(href, na.rm=T))
+hvals_out%>%group_by(sp_group)%>%summarise(med_hval=median(mag, na.rm=T))
   
 write.csv(hvals_out, 'C:/seabirds/data/dataID_hvals.csv', quote=F, row.names=F)
 
