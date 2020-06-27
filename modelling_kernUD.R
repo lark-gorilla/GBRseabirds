@@ -70,7 +70,7 @@ ggplot(data=enviro.sites.scores, aes(x=PC1, y=PC2))+
 # Remember to check for outliers prior to normaliziation
 #dat_norm<-dat %>% group_by(spcol) %>% mutate_if(is.numeric, normalized)%>%as.data.frame()
 
-dat_nrom<-dat
+dat_norm<-dat
 
 sp_store<-NULL
 var_imp<-NULL
@@ -113,23 +113,29 @@ for( i in unique(dat_norm$spcol))
   print(Sys.time()) 
 }
 
+qplot(data=sp_store, x=Dist, y=SPAC_Ave, colour=spcol, geom="line")+
+  geom_ribbon(aes(ymin=SPAC_025, ymax=SPAC_95, fill=spcol),alpha=0.25)+theme_classic()
+
 # check cols selected and size of matrix before running
-br1<-as.data.frame(dat_norm[,c(1, 2, 16:31)])%>%gather(variable, value, -spcol, -forbin)
+ncolz<-length(unique(dat_norm$spcol))
+br1<-as.data.frame(dat_norm[,c(1, 2, 16:(16+(ncolz-1)))])%>%tidyr::gather(variable, value, -spcol, -forbin)
 aucz<-br1%>%group_by(spcol, variable)%>%
   summarise(auc=pROC::roc(forbin, value,direction="<")$auc,
-            thresh=coords(pROC::roc(forbin, value,direction="<"),0.5, transpose=F)$threshold,
-            sens=coords(pROC::roc(forbin, value,direction="<"),0.5, transpose=F)$sensitivity,
-            spec=coords(pROC::roc(forbin, value,direction="<"),0.5, transpose=F)$specificity)
+            thresh=coords(pROC::roc(forbin, value,direction="<"),'best', best.method='closest.topleft', transpose=F)$threshold,
+            sens=coords(pROC::roc(forbin, value,direction="<"),'best', best.method='closest.topleft', transpose=F)$sensitivity,
+            spec=coords(pROC::roc(forbin, value,direction="<"),'best', best.method='closest.topleft', transpose=F)$specificity)
+#closest.topleft works, youden shows error
+aucz$TSS=aucz$sens+aucz$spec-1
 # handy
 qplot(data=filter(br1, spcol=='Prickly Pear'& variable=='Danger'), x=value, fill=factor(forbin), geom='histogram')
 
 
-m1<-matrix(ncol=16, nrow=16, data =aucz$auc, dimnames=list(unique(aucz$spcol), unique(aucz$spcol)))
+m1<-matrix(ncol=ncolz, nrow=ncolz, data =aucz$auc, dimnames=list(unique(aucz$spcol), unique(aucz$spcol)))
 d1<-as.dist(1-m1)
 
 plot(hclust(d1, method='average'))
 
-ggplot(aucz, aes(x = spcol, y = variable)) + 
+p_auc<-ggplot(aucz, aes(x = spcol, y = variable)) + 
   geom_raster(aes(fill=auc)) + 
   geom_text(aes(label=round(auc, 2)))+
   scale_fill_gradient(low="grey",  high="red") +
@@ -137,6 +143,22 @@ ggplot(aucz, aes(x = spcol, y = variable)) +
                      axis.text.y=element_text(size=9),
                      plot.title=element_text(size=11))+ylab('Model predictions')+xlab('Predicting to')
 
+p_tss<-ggplot(aucz, aes(x = spcol, y = variable)) + 
+  geom_raster(aes(fill=TSS)) + 
+  geom_text(aes(label=round(TSS, 2)))+
+  scale_fill_gradient(low="grey",  high="red") +
+  theme_bw() + theme(axis.text.x=element_text(size=9, angle=90, vjust=0.3),
+                     axis.text.y=element_text(size=9),
+                     plot.title=element_text(size=11))+ylab('Model predictions')+xlab('Predicting to')
+
+
+br2<-as.data.frame(dat_norm[,c(1, 2, 14,15,16:(16+(ncolz-1)))])%>%
+  tidyr::gather(variable, value, -spcol, -forbin, -Longitude, -Latitude)
+br2<-left_join(br2, aucz[,c(1,2,4)], by=c('spcol', 'variable'))
+
+ggplot(data=br2, aes(x=Longitude, y=Latitude))+
+  geom_point(aes(colour=value))+geom_point(data=br2[br2$value>unique(br2$thresh),], shape=1, colour=2)+
+  facet_grid(spcol~variable)
 
 #caret approach
 
