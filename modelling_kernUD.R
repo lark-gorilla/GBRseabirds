@@ -23,7 +23,7 @@ for(k in sp_groups)
 dat<-read.csv(paste0('C:/seabirds/data/modelling/kernhull_pts/', k, '_kernhull.csv'))
 names(dat)[names(dat)=='layer']<-'forbin'
 dat$forbin<-as.factor(dat$forbin)
-dat[dat$forbin==1,]$weight=999 # change from NA for no.omit
+dat[dat$forbin==1,]$weight=0 # change from NA for no.omit
 
 # RM sp name unless k has conflicts
 if(k!='FRBD'){dat$spcol<-substr(dat$spcol, 6, nchar(as.character(dat$spcol)))}
@@ -43,7 +43,7 @@ dat<-rbind(dat%>%filter(forbin==1), dat%>%filter(forbin==0)%>%group_by(spcol)%>%
           mutate(w2=normalized(weight))%>% 
           sample_n(size=(unique(npres)*3), replace=F, weight=w2))%>%as.data.frame() 
 
-#check ggplot(data=filter(d2, forbin==0), aes(x=Longitude, y=Latitude, colour=w2))+geom_point(size=0.4)+facet_wrap(~spcol, scales='free')
+#check ggplot(data=filter(dat, forbin==0), aes(x=Longitude, y=Latitude, colour=w2))+geom_point(size=0.4)+facet_wrap(~spcol, scales='free')
 dat$npres<-NULL
 dat$w2<-NULL
 
@@ -91,21 +91,26 @@ for( i in unique(dat_norm$spcol))
   #gbr_norm$p1<-predict(rf1, newdata=gbr_norm, type='prob')[,2] # prob of foraging 0-1
   #names(gbr_norm)[which(names(gbr_norm)=='p1')]<-i
   
+  #varib importance
+  
+  var_imp<-rbind(var_imp, data.frame(spcol=i, t(ranger::importance(rf1)/max(ranger::importance(rf1)))))
+  
+  # rm(rf1) # save space
+  
    #SPAC assessment
-  residz<-as.integer(as.character(dat_norm[dat_norm$spcol==i,]$forbin))-dat_norm[dat_norm$spcol==i,i]
-  sp1<-spline.correlog(dat_norm[dat_norm$spcol==i,]$Longitude,
-                       dat_norm[dat_norm$spcol==i,]$Latitude, residz,
+  wtdist<-max(dat_norm[dat_norm$spcol==i,]$weight)-100 # 100 km from col
+  residz<-as.integer(as.character(dat_norm[dat_norm$spcol==i & dat_norm$weight>wtdist,]$forbin))-
+    dat_norm[dat_norm$spcol==i & dat_norm$weight>wtdist,i]
+  sp1<-spline.correlog(dat_norm[dat_norm$spcol==i& dat_norm$weight>wtdist,]$Longitude,
+                       dat_norm[dat_norm$spcol==i& dat_norm$weight>wtdist,]$Latitude, residz,
                        na.rm=T,latlon=T,resamp=10)
   plot(sp1)
   sp_store<-rbind(sp_store, data.frame(spcol=i, Dist=sp1$boot$boot.summary$predicted$x[1,],
                        SPAC_025=sp1$boot$boot.summary$predicted$y[3,],
                        SPAC_Ave=sp1$boot$boot.summary$predicted$y[6,],
                        SPAC_95=sp1$boot$boot.summary$predicted$y[9,]))
-  #varib importance
-  
-  var_imp<-rbind(var_imp, data.frame(spcol=i, t(ranger::importance(rf1)/max(ranger::importance(rf1)))))
   print(i)
-  print(Sys.time())
+  print(Sys.time()) 
 }
 
 # check cols selected and size of matrix before running
