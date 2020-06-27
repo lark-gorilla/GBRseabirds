@@ -12,9 +12,10 @@ library(raster)
 library(ncf)
 
 set.seed(24) # so that random samples and random forest models can be reproduced
+normalized<-function(x){(x-min(x))/(max(x)-min(x))} # normalise (0-1) function
 
 # read in data
-names(sp_groups) <- c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST', 'WTLG',
+sp_groups <- c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST', 'WTLG',
                       'FRBD', 'TRBD', 'NODD', 'TERN')
 
 for(k in sp_groups)
@@ -37,10 +38,14 @@ dat%>%group_by(spcol)%>%summarise(nP=length(which(forbin==1)),nA=length(which(fo
 
 dat<-dat%>%group_by(spcol)%>%mutate(npres=length(which(forbin==1)))
 
+# 3:1 Pa to A, sampled wothout replacement, over normalised inv coldist surface
 dat<-rbind(dat%>%filter(forbin==1), dat%>%filter(forbin==0)%>%group_by(spcol)%>%
-  sample_n(size=(unique(npres)*3), replace=T, weight=weight)) # 3:1 Pa to A
+          mutate(w2=normalized(weight))%>% 
+          sample_n(size=(unique(npres)*3), replace=F, weight=w2))%>%as.data.frame() 
 
+#check ggplot(data=filter(d2, forbin==0), aes(x=Longitude, y=Latitude, colour=w2))+geom_point(size=0.4)+facet_wrap(~spcol, scales='free')
 dat$npres<-NULL
+dat$w2<-NULL
 
 # niche overlap
 enviro_std<-decostand(dat[,c(4:13)], method="standardize")
@@ -48,16 +53,27 @@ enviro_rda<-rda(enviro_std, scale=T)
 screeplot(enviro_rda)
 enviro.sites.scores<-as.data.frame(scores(enviro_rda, choices=1:4, display='sites', scaling=1))
 enviro.sites.scores<-data.frame(enviro.sites.scores,dat[,c(1,2)])
+enviro.species.scores<-as.data.frame(scores(enviro_rda, display='species'))
+enviro.species.scores$Predictors<-colnames(enviro_std)
+enviro.species.scores$spcol='Danger'
+enviro.species.scores$PC1<-enviro.species.scores$PC1/30
+enviro.species.scores$PC2<-enviro.species.scores$PC2/30
 ggplot(data=enviro.sites.scores, aes(x=PC1, y=PC2))+
-  geom_density_2d(aes(colour=factor(forbin)))+facet_wrap(~spcol)+theme_bw()
+  geom_segment(data=enviro.species.scores, aes(y=0, x=0, yend=PC2, xend=PC1), arrow=arrow(length=unit(0.3,'lines')), colour='black')+
+  geom_text(data=enviro.species.scores, aes(y=PC2, x=PC1, label=Predictors), colour='black')+
+  geom_density_2d(aes(colour=factor(forbin)))+facet_wrap(~spcol)+theme_bw()+
+  scale_colour_manual('Area',values=c("seagreen3","coral2"), labels=c('Accessible \n habitat', 'Core \n foraging'))
 
 # Remember nearshore front values which ==0 should be NA
 
 # scale: normalise (0-1) each covariate per dataID
 # Remember to check for outliers prior to normaliziation
-normalized<-function(x){(x-min(x))/(max(x)-min(x))}
-dat_norm<-dat %>% group_by(spcol) %>% mutate_if(is.numeric, normalized)%>%as.data.frame()
+#dat_norm<-dat %>% group_by(spcol) %>% mutate_if(is.numeric, normalized)%>%as.data.frame()
 
+dat_nrom<-dat
+
+sp_store<-NULL
+var_imp<-NULL
 for( i in unique(dat_norm$spcol))
 {
   #pr1<-table(dat_norm[dat_norm$spcol==i,]$forbin)[1]/table(dat_norm[dat_norm$ID==i,]$forbin)[2]
@@ -67,7 +83,7 @@ for( i in unique(dat_norm$spcol))
               data=dat_norm[dat_norm$spcol==i,], num.trees=500, mtry=3, importance='impurity',
               probability =T)
   print(rf1)
-  print(ranger::importance(rf1))
+  
   # predict to other colonies
   dat_norm$p1<-predict(rf1, data=dat_norm)$predictions[,2] # prob of foraging 0-1
   names(dat_norm)[which(names(dat_norm)=='p1')]<-i
@@ -75,11 +91,19 @@ for( i in unique(dat_norm$spcol))
   #gbr_norm$p1<-predict(rf1, newdata=gbr_norm, type='prob')[,2] # prob of foraging 0-1
   #names(gbr_norm)[which(names(gbr_norm)=='p1')]<-i
   
-  # SPAC assessment
- # sp1<-spline.correlog(dat_norm[dat_norm$spcol==i,]$Longitude,
-#                       dat_norm[dat_norm$spcol==i,]$latitude, residuals(rf1, type="pearson"),
-#                       na.rm=T,latlon=T,resamp=100)
-#  plot(sp1)
+   #SPAC assessment
+  residz<-as.integer(as.character(dat_norm[dat_norm$spcol==i,]$forbin))-dat_norm[dat_norm$spcol==i,i]
+  sp1<-spline.correlog(dat_norm[dat_norm$spcol==i,]$Longitude,
+                       dat_norm[dat_norm$spcol==i,]$Latitude, residz,
+                       na.rm=T,latlon=T,resamp=10)
+  plot(sp1)
+  sp_store<-rbind(sp_store, data.frame(spcol=i, Dist=sp1$boot$boot.summary$predicted$x[1,],
+                       SPAC_025=sp1$boot$boot.summary$predicted$y[3,],
+                       SPAC_Ave=sp1$boot$boot.summary$predicted$y[6,],
+                       SPAC_95=sp1$boot$boot.summary$predicted$y[9,]))
+  #varib importance
+  
+  var_imp<-rbind(var_imp, data.frame(spcol=i, t(ranger::importance(rf1)/max(ranger::importance(rf1)))))
   print(i)
   print(Sys.time())
 }
