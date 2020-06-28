@@ -371,11 +371,24 @@ qplot(data=t_qual, x=max_dist, geom='histogram')+facet_wrap(~ID, scales='free')
 
 
 # extract pred area
+tmpl2km<-raster('C:/seabirds/sourced_data/oceano_modelready/extraction_template_2km.tif')
+
 pred_a<-read_sf('C:/seabirds/data/GIS/pred_area.shp')
 pred_a<-as(pred_a, 'Spatial')
 
+sst<-stack('C:/seabirds/sourced_data/oceano_modelready/sst_mn.tif',
+           'C:/seabirds/sourced_data/oceano_modelready/sst_sd.tif')
+chl<-stack('C:/seabirds/sourced_data/oceano_modelready/chl_mn.tif',
+           'C:/seabirds/sourced_data/oceano_modelready/chl_sd.tif') # already logged
+fronts<-stack('C:/seabirds/sourced_data/oceano_modelready/mfront_mn.tif',
+              'C:/seabirds/sourced_data/oceano_modelready/mfront_sd.tif',
+              'C:/seabirds/sourced_data/oceano_modelready/pfront_mn.tif',
+              'C:/seabirds/sourced_data/oceano_modelready/pfront_sd.tif')
+bathy<-raster('C:/seabirds/sourced_data/oceano_modelready/bathy.tif')
+slope<-raster('C:/seabirds/sourced_data/oceano_modelready/slope.tif')
+
 # give pred_a pixel size of finest raster (bathy)
-pred_ras<-rasterize(pred_a, bathy, field=1) # should attribute with hull rownumber if field in not specified
+pred_ras<-rasterize(pred_a, tmpl2km, field=1) # using 2 km rather than bathy
 pred_pts<-rasterToPoints(pred_ras, spatial=T)
 
 ex_sst<-extract(sst, pred_pts)
@@ -387,7 +400,7 @@ ex_slope<-extract(slope, pred_pts)
 out3<-data.frame(pred_pts@coords, ex_sst, ex_chl, ex_front, ex_bathy, ex_slope)
 
 out4<-na.omit(out3) # cut out land
-write.csv(out4, 'C:/seabirds/data/pred_area_modelready.csv', quote=F, row.names=F)
+write.csv(out4, 'C:/seabirds/data/pred_area_modelready_2km.csv', quote=F, row.names=F)
 
 
 # clip bathy to pred area extent as template for rasterize later on
