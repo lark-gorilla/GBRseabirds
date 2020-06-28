@@ -104,6 +104,24 @@ for( i in unique(dat$spcol))
               probability =T)
   print(rf1)
   
+  ## trial caret tune area for each model?
+  # use cv or other datasets?
+  #train_control <- trainControl( method='cv', number=5,
+  #                               classProbs = TRUE, savePredictions = TRUE,
+  #                               summaryFunction = twoClassSummary)
+  #tunegrid <- expand.grid(mtry=c(2,3,4),  splitrule = "gini", min.node.size = c(5,10, 15, 20, 50))
+  #  rf2 <- caret::train(x=dat[dat$spcol==i,c('sst','sst_sd','chl','chl_sd','mfr_sd',
+  #                                    'pfr','bth','slp')],
+  #                           y=dat[dat$spcol==i,'forbin'], method="ranger", num.trees=500, metric='ROC', 
+  #                           tuneGrid=tunegrid, trControl=train_control)
+  #print(rf2)
+  #caret_aucz<-rf_default$pred%>%group_by(Resample)%>%
+  #  summarise(auc=as.double(pROC::roc(obs, Core, direction="<")$auc),
+  #            thresh=coords(pROC::roc(obs, Core,direction="<"),'best', best.method='youden', transpose=F)$threshold[1],
+  #            sens=coords(pROC::roc(obs, Core,direction="<"),'best', best.method='youden', transpose=F)$sensitivity[1],
+  #            spec=coords(pROC::roc(obs, Core,direction="<"),'best', best.method='youden', transpose=F)$specificity[1])
+  
+  
   # predict to other colonies
   dat$p1<-predict(rf1, data=dat)$predictions[,2] # prob of foraging 0-1
   names(dat)[which(names(dat)=='p1')]<-i
@@ -148,15 +166,15 @@ names(gbr)[which(names(gbr)=='MultiCol')]<-paste(k, 'MultiCol', sep='_')
 spdf<-SpatialPointsDataFrame(SpatialPoints(gbr[,1:2], proj4string = CRS(projection(templ))),
                              data=gbr[,grep(k, names(gbr))])
 
-for(i in 1:length(spdf@data))
+for(j in 1:length(spdf@data))
 {
-  p1<-rasterize(spdf, templ, field=names(spdf@data)[i])
-  writeRaster(p1, paste0('C:/seabirds/data/modelling/GBR_preds/', k,'_', gsub(' ', '_', names(spdf@data)[i]), '.tif'), overwrite=T)
+  p1<-rasterize(spdf, templ, field=names(spdf@data)[j])
+  writeRaster(p1, paste0('C:/seabirds/data/modelling/GBR_preds/', gsub(' ', '_', names(spdf@data)[j]), '.tif'), overwrite=T)
   #if(i==1){ps<-p1}else{ps<-stack(ps, p1)}
 }
 
-print(k)
-}
+#print(k)
+#}
 
 
 #qplot(data=sp_store, x=Dist, y=SPAC_Ave, colour=spcol, geom="line")+
