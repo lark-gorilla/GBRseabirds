@@ -155,7 +155,7 @@ summarise_at(vars(n1:n12), function(x){if('Y' %in% x){'Y'}else{''}})%>%as.data.f
  
 # load in hval ref
 
-hvals<-read.csv('C:/seabirds/data/dataID_hvals.csv')
+hvals<-read.csv('C:/seabirds/data/dataID_hvals.csv') # same as updated code when using mag as reference scale
 hvals_ref<-hvals%>%group_by(sp_group)%>%summarise(med_hval=median(mag, na.rm=T))
 
 # export trips per month to decide extract time window for each dataset
@@ -309,24 +309,30 @@ print(k)
 # FAST kernel outputting to check errors
 
 sp_groups<-
-  list('BRBO', 'MABO', 'RFBO', 'WTSH', 'SOTE', 
-       c('GRFR', 'LEFR', 'MAFR'), c('RBTB', 'RTTB'), 
+  list('BRBO', 'MABO', 'RFBO', 'SOTE', 'WTST', 'WTLG',
+       c('GRFR', 'L EFR', 'MAFR'), c('RBTB', 'RTTB'), 
        c('BRNO', 'LENO', 'BLNO'),c('CRTE', 'ROTE', 'CATE'))
 
-names(sp_groups) <- c('BRBO', 'MABO', 'RFBO', 'WTSH', 'SOTE',
+names(sp_groups) <- c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST', 'WTLG',
                       'FRBD', 'TRBD', 'NODD', 'TERN')
 
-hval<-0.03
-
-k = sp_groups[1]
-
+for(m in 1:length(sp_groups))
+{
+  k<-sp_groups[m][[1]]
+  k0<-k
+  if(TRUE %in% (unlist(k)%in% c('WTST', 'WTLG'))){k0<-'WTSH'}
+  
+  myhv<-(hvals_ref[hvals_ref$sp_group==names(sp_groups[m]),]$med_hval)/111 # ~convert km to DD
+  
   dat<-master_embc[master_embc$sp %in% unlist(k),]
+  
   # collapse colz within species
-  colz_sp<-colz[colz$sp %in% unlist(k),]
-
-  for(i in unique(dat$coly))
+  colz_sp<-colz[colz$sp %in% unlist(k0),]
+  
+  for(i in unique(dat$spcol))
   {
-    b1<-dat[dat$coly==i,]
+    b1<-dat[dat$spcol==i,]
+   
     spdf<-SpatialPointsDataFrame(coords=b1[,c(7,8)],  data=data.frame(coly=b1$coly),
                                  proj4string =CRS(projection(ex_templ)))
     r1<-crop(ex_templ, (extent(spdf)+0.3))
@@ -339,17 +345,31 @@ k = sp_groups[1]
     
     spdf$coly<-factor(spdf$coly)
     
-    KDE.Surface <- kernelUD(spdf,same4all = F, h=hval, grid=r_pix)
+    KDE.Surface <- kernelUD(spdf,same4all = F, h=myhv, grid=r_pix)
     KDE.50 <- getverticeshr(KDE.Surface, percent = 50)
+    rsuf <- as(KDE.Surface[[1]], "SpatialPointsDataFrame")
+    rsuf2<-rsuf[rsuf$ud>(max(rsuf$ud)*0.25),] #points have to be within ~ 0.75 UD
+    rsuf2<-rsuf2[sample(1:nrow(rsuf2), 
+                        nrow(rsuf2[rsuf2$ud>(max(rsuf2$ud)*0.5),]),
+                        replace=F, prob =rsuf2$ud),]
+    rsuf3<-rsuf[rsuf$ud>(max(rsuf$ud)*0.05),] #points have to be within ~ 0.95 UD
+    rsuf3<-rsuf3[sample(1:nrow(rsuf3), 
+                        nrow(rsuf3[rsuf3$ud>(max(rsuf3$ud)*0.25),]),
+                        replace=F, prob =rsuf3$ud),]
     #write_sf(st_as_sf(KDE.50), 'C:/seabirds/temp/brbo_for_50UD.shp')
 
     # bind up polygons for export
-    if(which(i==unique(dat$coly))==1){all_kerns<-st_as_sf(KDE.50)}else{all_kerns<-rbind(all_kerns, st_as_sf(KDE.50))}
+    if(which(i==unique(dat$spcol))==1){all_kerns<-st_as_sf(KDE.50)}else{all_kerns<-rbind(all_kerns, st_as_sf(KDE.50))}
+    if(which(i==unique(dat$spcol))==1){kerns75<-st_as_sf(rsuf2)}else{kerns75<-rbind(kerns75, st_as_sf(rsuf2))}
+    if(which(i==unique(dat$spcol))==1){kerns95<-st_as_sf(rsuf3)}else{kerns95<-rbind(kerns95, st_as_sf(rsuf3))}
     print(i)
   }
 
-write_sf(all_kerns, paste0('C:/seabirds/temp/', names(k), 'kernhull_temp.shp'), delete_dsn=T)
+write_sf(all_kerns, paste0('C:/seabirds/temp/', names(sp_groups[m]), '50ud.shp'), delete_dsn=T)
+write_sf(kerns75, paste0('C:/seabirds/temp/', names(sp_groups[m]), 'kern75.shp'), delete_dsn=T)
+write_sf(kerns95, paste0('C:/seabirds/temp/', names(sp_groups[m]), 'kern95.shp'), delete_dsn=T)
 
+}
 ##### OLD #####
 
 # Create colony max range buffers and extract
