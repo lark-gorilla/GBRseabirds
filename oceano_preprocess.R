@@ -144,6 +144,19 @@ master_embc$sp<-as.character(master_embc$sp)
 master_embc[master_embc$sp=='WTSH' & master_embc$trip_id %in% t_qual[t_qual$WTSH_SL=='S',]$trip_id,]$sp<-'WTST'
 master_embc[master_embc$sp=='WTSH' & master_embc$trip_id %in% t_qual[t_qual$WTSH_SL=='L',]$trip_id,]$sp<-'WTLG'
 
+# Secondary removal of trips or points that cause kernel errors (e.g. overnights on islands)
+master_embc<-filter(master_embc, !(trip_id=='Nod683111' & embc=='foraging' & Latitude > '-23.2')) #overnight on island
+master_embc<-filter(master_embc, !(ID=='SOAN2_MABO_Dog' & Latitude>18.18 & Latitude< 18.24 & Longitude > '-63.03' & Longitude < '-63.11')) # island deployment locs
+master_embc<-filter(master_embc, !(ID=='CLAR1_MABO_Mid Ashmore' & Latitude> '-12.237' & Latitude< '-12.241' & Longitude > 122.977 & Longitude < 122.984)) # island nests
+master_embc<-filter(master_embc, !(ID=='CLAR1_RFBO_Mid Ashmore' & Latitude> '-12.237' & Latitude< '-12.241' & Longitude > 122.977 & Longitude < 122.984))# island nests
+master_embc<-filter(master_embc, !(ID=='CLAR1_RFBO_Mid Ashmore' & Latitude> '-12.259' & Latitude< '-12.262' & Longitude > 123.093 & Longitude < 123.099))# island nests
+master_embc<-filter(master_embc, !(ID=='CLAR1_LEFR_Mid Ashmore' & Latitude> '-12.258' & Latitude< '-12.263' & Longitude > 123.093 & Longitude < 123.099))# island nests
+master_embc<-filter(master_embc, !(ID=='CLAR1_GRFR_Mid Ashmore' & Latitude> '-12.240' & Latitude< '-12.247' & Longitude > 122.960 & Longitude < 123.972))# island nests
+
+
+
+
+
 # load in oceanographic month lookup
 
 mo_look<-read.csv('C:/seabirds/data/dataID_month_lookup.csv')
@@ -234,6 +247,7 @@ for(m in 1:length(sp_groups))
   hully_pts$weight<-extract(r2, hully_pts)
   # Foraging within 50% UD
   bfor<-b1[b1$embc=='foraging',]
+  if(substr(i, 1, 4)=='MAFR'){bfor<-b1[b1$embc=='relocating',]}
   
   spdf<-SpatialPointsDataFrame(coords=bfor[,c(7,8)],  data=data.frame(spcol=bfor$spcol),
                                proj4string =CRS(projection(ex_templ)))
