@@ -161,6 +161,25 @@ master_embc<-filter(master_embc, !(spcol=='BRBO Dog' & Latitude>18.17 & Latitude
 master_embc<-filter(master_embc, !(spcol=='BRBO Dog' & Latitude>18.58 & Latitude< 18.6 & Longitude > '-63.42' & Longitude < '-63.432'))# 
 master_embc<-filter(master_embc, !(spcol=='BRBO Dog' & Latitude>18.27 & Latitude< 18.28 & Longitude > '-63.273' & Longitude < '-63.278'))# 
 master_embc<-filter(master_embc, !(spcol=='BRBO Dog' & Latitude>18.02 & Latitude< 18.1 & Longitude > '-63.077' & Longitude < '-63.167'))# 
+master_embc<-filter(master_embc, !(spcol=='BRBO Pajarera' & Latitude>19.18 & Latitude< 19.25 & Longitude > '-104.542' & Longitude < '-104.722'))# 
+master_embc<-filter(master_embc, !(spcol=='BRBO Adele' & Latitude>'-19.91' & Latitude< '-19.94' & Longitude > 119.91 & Longitude < 119.925))# 
+master_embc<-filter(master_embc, !(spcol=='BRBO Adele' & Latitude>'-19.91' & Latitude< '-19.94' & Longitude > 119.91 & Longitude < 119.925))# 
+master_embc<-filter(master_embc, !(spcol=='BRBO Adele' & Latitude>'-16.84' & Latitude< '-16.87' & Longitude > 122.124 & Longitude < 122.154))# 
+master_embc<-filter(master_embc, !(spcol=='BRBO Adele' & Latitude>'-14.052' & Latitude< '-14.056' & Longitude > 121.775 & Longitude < 121.779))# 
+master_embc<-filter(master_embc, !(spcol=='BRBO Adele' & Latitude>'-15.057' & Latitude< '-15.068' & Longitude > 124.319 & Longitude < 124.334))# 
+master_embc<-filter(master_embc, !(spcol=='BRBO Adele' & Latitude>'-14.069' & Latitude< '-14.072' & Longitude > 125.771 & Longitude < 125.775))# 
+master_embc<-filter(master_embc, !(spcol=='BRBO Adele' & Latitude>'-12.672' & Latitude< '-12.673' & Longitude > 124.537 & Longitude < 124.540))# 
+master_embc<-filter(master_embc, !(spcol=='BRBO Mid Ashmore' & Latitude>'-12.237' & Latitude< '-12.240' & Longitude > 122.978 & Longitude < 122.983))# 
+master_embc<-filter(master_embc, !(spcol=='BRBO Mid Ashmore' & Latitude>'-10.980' & Latitude< '-10.984' & Longitude > 122.841 & Longitude < 122.845))# 
+master_embc<-filter(master_embc, !(spcol=='BRBO Mid Ashmore' & Latitude>'-10.918' & Latitude< '-10.920' & Longitude > 123.028 & Longitude < 123.031))# 
+master_embc<-filter(master_embc, !(spcol=='BRBO Swains' & Latitude>'-21.8985' & Latitude< '-21.8991' & Longitude > 152.3694 & Longitude < 152.3701))# 
+master_embc<-filter(master_embc, !(spcol=='BRBO Swains' & Latitude>'-21.9797' & Latitude< '-21.9813' & Longitude > 152.4723 & Longitude < 152.4743))# 
+master_embc<-filter(master_embc, !(spcol=='BRBO Swains' & Latitude>'-21.9645' & Latitude< '-21.9663' & Longitude > 152.5678 & Longitude < 152.5687))# 
+
+
+
+
+
 
 
 # load in oceanographic month lookup
@@ -253,7 +272,9 @@ for(m in 1:length(sp_groups))
   hully_pts$weight<-extract(r2, hully_pts)
   # Foraging within 50% UD
   bfor<-b1[b1$embc=='foraging' & b1$ColDist>4000,] # remove 'halo' of foraging points at trip start/end
-  if(substr(i, 1, 4)=='MAFR'){bfor<-b1[b1$embc=='relocating',]}
+  if(substr(i, 1, 4)=='MAFR'|
+     i=='CRTE Troubridge' | i=='CATE Senegal' | i=='ROTE Senegal' |
+     i=='BRBO Palmyra'){bfor<-b1[b1$embc=='relocating'& b1$ColDist>4000,]}
   
   spdf<-SpatialPointsDataFrame(coords=bfor[,c(7,8)],  data=data.frame(spcol=bfor$spcol),
                                proj4string =CRS(projection(ex_templ)))
