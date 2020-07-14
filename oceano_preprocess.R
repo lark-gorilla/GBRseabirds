@@ -146,15 +146,21 @@ master_embc[master_embc$sp=='WTSH' & master_embc$trip_id %in% t_qual[t_qual$WTSH
 
 # Secondary removal of trips or points that cause kernel errors (e.g. overnights on islands)
 master_embc<-filter(master_embc, !(trip_id=='Nod683111' & embc=='foraging' & Latitude > '-23.2')) #overnight on island
-master_embc<-filter(master_embc, !(ID=='SOAN2_MABO_Dog' & Latitude>18.18 & Latitude< 18.24 & Longitude > '-63.03' & Longitude < '-63.11')) # island deployment locs
-master_embc<-filter(master_embc, !(ID=='CLAR1_MABO_Mid Ashmore' & Latitude> '-12.237' & Latitude< '-12.241' & Longitude > 122.977 & Longitude < 122.984)) # island nests
-master_embc<-filter(master_embc, !(ID=='CLAR1_RFBO_Mid Ashmore' & Latitude> '-12.237' & Latitude< '-12.241' & Longitude > 122.977 & Longitude < 122.984))# island nests
-master_embc<-filter(master_embc, !(ID=='CLAR1_RFBO_Mid Ashmore' & Latitude> '-12.259' & Latitude< '-12.262' & Longitude > 123.093 & Longitude < 123.099))# island nests
-master_embc<-filter(master_embc, !(ID=='CLAR1_LEFR_Mid Ashmore' & Latitude> '-12.258' & Latitude< '-12.263' & Longitude > 123.093 & Longitude < 123.099))# island nests
-master_embc<-filter(master_embc, !(ID=='CLAR1_GRFR_Mid Ashmore' & Latitude> '-12.240' & Latitude< '-12.247' & Longitude > 122.960 & Longitude < 123.972))# island nests
-
-
-
+master_embc<-filter(master_embc, !(spcol=='MABO Dog' & Latitude>18.18 & Latitude< 18.24 & Longitude > '-63.03' & Longitude < '-63.11')) # island deployment locs
+master_embc<-filter(master_embc, !(spcol=='MABO Mid Ashmore' & Latitude> '-12.237' & Latitude< '-12.241' & Longitude > 122.977 & Longitude < 122.984)) # island nests
+master_embc<-filter(master_embc, !(spcol=='RFBO Mid Ashmore' & Latitude> '-12.237' & Latitude< '-12.241' & Longitude > 122.977 & Longitude < 122.984))# island nests
+master_embc<-filter(master_embc, !(spcol=='RFBO Mid Ashmore' & Latitude> '-12.259' & Latitude< '-12.262' & Longitude > 123.093 & Longitude < 123.099))# island nests
+master_embc<-filter(master_embc, !(spcol=='LEFR Mid Ashmore' & Latitude> '-12.258' & Latitude< '-12.263' & Longitude > 123.093 & Longitude < 123.099))# island nests
+master_embc<-filter(master_embc, !(spcol=='GRFR Mid Ashmore' & Latitude> '-12.240' & Latitude< '-12.247' & Longitude > 122.960 & Longitude < 123.972))# island nests
+master_embc<-filter(master_embc, !(spcol=='BRBO Cayman Brac' & Latitude>19.67 & Latitude< 19.71 & Longitude > '-79.828' & Longitude < '-79.915'))# island nests
+master_embc<-filter(master_embc, !(spcol=='BRBO Cayman Brac' & Latitude>19.69 & Latitude< 19.74 & Longitude > '-79.775' & Longitude < '-79.828'))# island nests
+master_embc<-filter(master_embc, !(spcol=='BRBO Cayman Brac' & Latitude>19.71 & Latitude< 19.76 & Longitude > '-79.708' & Longitude < '-79.775'))# 
+master_embc<-filter(master_embc, !(spcol=='BRBO Prickly Pear' & Latitude>18.17 & Latitude< 18.3 & Longitude > '63.140' & Longitude < '-62.932'))# 
+master_embc<-filter(master_embc, !(trip_id=='BB Somb 00940 M2')) # rm deployment trip
+master_embc<-filter(master_embc, !(spcol=='BRBO Dog' & Latitude>18.17 & Latitude< 18.3 & Longitude > '63.140' & Longitude < '-62.932'))# 
+master_embc<-filter(master_embc, !(spcol=='BRBO Dog' & Latitude>18.58 & Latitude< 18.6 & Longitude > '-63.42' & Longitude < '-63.432'))# 
+master_embc<-filter(master_embc, !(spcol=='BRBO Dog' & Latitude>18.27 & Latitude< 18.28 & Longitude > '-63.273' & Longitude < '-63.278'))# 
+master_embc<-filter(master_embc, !(spcol=='BRBO Dog' & Latitude>18.02 & Latitude< 18.1 & Longitude > '-63.077' & Longitude < '-63.167'))# 
 
 
 # load in oceanographic month lookup
@@ -246,7 +252,7 @@ for(m in 1:length(sp_groups))
   hully_pts$layer=0
   hully_pts$weight<-extract(r2, hully_pts)
   # Foraging within 50% UD
-  bfor<-b1[b1$embc=='foraging',]
+  bfor<-b1[b1$embc=='foraging' & b1$ColDist>4000,] # remove 'halo' of foraging points at trip start/end
   if(substr(i, 1, 4)=='MAFR'){bfor<-b1[b1$embc=='relocating',]}
   
   spdf<-SpatialPointsDataFrame(coords=bfor[,c(7,8)],  data=data.frame(spcol=bfor$spcol),
