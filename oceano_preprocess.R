@@ -155,9 +155,12 @@ master_embc<-filter(master_embc, !(spcol=='GRFR Mid Ashmore' & Latitude> '-12.24
 master_embc<-filter(master_embc, !(spcol=='BRBO Cayman Brac' & Latitude>19.67 & Latitude< 19.71 & Longitude > '-79.828' & Longitude < '-79.915'))# island nests
 master_embc<-filter(master_embc, !(spcol=='BRBO Cayman Brac' & Latitude>19.69 & Latitude< 19.74 & Longitude > '-79.775' & Longitude < '-79.828'))# island nests
 master_embc<-filter(master_embc, !(spcol=='BRBO Cayman Brac' & Latitude>19.71 & Latitude< 19.76 & Longitude > '-79.708' & Longitude < '-79.775'))# 
-master_embc<-filter(master_embc, !(spcol=='BRBO Prickly Pear' & Latitude>18.17 & Latitude< 18.3 & Longitude > '63.140' & Longitude < '-62.932'))# 
-master_embc<-filter(master_embc, !(trip_id=='BB Somb 00940 M2')) # rm deployment trip
-master_embc<-filter(master_embc, !(spcol=='BRBO Dog' & Latitude>18.17 & Latitude< 18.3 & Longitude > '63.140' & Longitude < '-62.932'))# 
+master_embc<-filter(master_embc, !(spcol=='BRBO Prickly Pear' & Latitude>18.17 & Latitude< 18.3 & Longitude > '-62.932' & Longitude < '-63.140'))# 
+master_embc<-filter(master_embc, !(spcol=='BRBO Prickly Pear' & Latitude>18.17 & Latitude< 18.3 & Longitude > '-62.932' & Longitude < '-63.140'))# 
+master_embc<-filter(master_embc, !(spcol=='BRBO Prickly Pear' & Latitude>18.284 & Latitude< 18.286 & Longitude > '-63.234' & Longitude < '-63.238'))# 
+master_embc<-filter(master_embc, !(spcol=='BRBO Prickly Pear' & Latitude>17.61 & Latitude< 17.642 & Longitude > '-63.211' & Longitude < '-63.230'))# 
+master_embc<-filter(master_embc, trip_id!='BB Somb 00940 M2') # rm deployment trip
+master_embc<-filter(master_embc, !(spcol=='BRBO Dog' & Latitude>18.17 & Latitude< 18.3 & Longitude > '-62.932' & Longitude < '-63.140'))# 
 master_embc<-filter(master_embc, !(spcol=='BRBO Dog' & Latitude>18.58 & Latitude< 18.6 & Longitude > '-63.42' & Longitude < '-63.432'))# 
 master_embc<-filter(master_embc, !(spcol=='BRBO Dog' & Latitude>18.27 & Latitude< 18.28 & Longitude > '-63.273' & Longitude < '-63.278'))# 
 master_embc<-filter(master_embc, !(spcol=='BRBO Dog' & Latitude>18.02 & Latitude< 18.1 & Longitude > '-63.077' & Longitude < '-63.167'))# 
@@ -175,11 +178,6 @@ master_embc<-filter(master_embc, !(spcol=='BRBO Mid Ashmore' & Latitude>'-10.918
 master_embc<-filter(master_embc, !(spcol=='BRBO Swains' & Latitude>'-21.8985' & Latitude< '-21.8991' & Longitude > 152.3694 & Longitude < 152.3701))# 
 master_embc<-filter(master_embc, !(spcol=='BRBO Swains' & Latitude>'-21.9797' & Latitude< '-21.9813' & Longitude > 152.4723 & Longitude < 152.4743))# 
 master_embc<-filter(master_embc, !(spcol=='BRBO Swains' & Latitude>'-21.9645' & Latitude< '-21.9663' & Longitude > 152.5678 & Longitude < 152.5687))# 
-
-
-
-
-
 
 
 # load in oceanographic month lookup
@@ -351,7 +349,7 @@ print(k)
 
 sp_groups<-
   list('BRBO', 'MABO', 'RFBO', 'SOTE', 'WTST', 'WTLG',
-       c('GRFR', 'L EFR', 'MAFR'), c('RBTB', 'RTTB'), 
+       c('GRFR', 'LEFR', 'MAFR'), c('RBTB', 'RTTB'), 
        c('BRNO', 'LENO', 'BLNO'),c('CRTE', 'ROTE', 'CATE'))
 
 names(sp_groups) <- c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST', 'WTLG',
@@ -380,7 +378,11 @@ for(m in 1:length(sp_groups))
     r_pix<-as(r1,"SpatialPixels")
  
     # Foraging within 50% UD
-    bfor<-b1[b1$embc=='foraging',]
+    bfor<-b1[b1$embc=='foraging' & b1$ColDist>4000,] # remove 'halo' of foraging points at trip start/end
+    if(substr(i, 1, 4)=='MAFR'|
+       i=='CRTE Troubridge' | i=='CATE Senegal' | i=='ROTE Senegal' |
+       i=='BRBO Palmyra'){bfor<-b1[b1$embc=='relocating'& b1$ColDist>4000,]}
+    
     spdf<-SpatialPointsDataFrame(coords=bfor[,c(7,8)],  data=data.frame(coly=bfor$coly),
                                  proj4string =CRS(projection(ex_templ)))
     
@@ -388,27 +390,27 @@ for(m in 1:length(sp_groups))
     
     KDE.Surface <- kernelUD(spdf,same4all = F, h=myhv, grid=r_pix)
     KDE.50 <- getverticeshr(KDE.Surface, percent = 50)
-    rsuf <- as(KDE.Surface[[1]], "SpatialPointsDataFrame")
-    rsuf2<-rsuf[rsuf$ud>(max(rsuf$ud)*0.25),] #points have to be within ~ 0.75 UD
-    rsuf2<-rsuf2[sample(1:nrow(rsuf2), 
-                        nrow(rsuf2[rsuf2$ud>(max(rsuf2$ud)*0.5),]),
-                        replace=F, prob =rsuf2$ud),]
-    rsuf3<-rsuf[rsuf$ud>(max(rsuf$ud)*0.05),] #points have to be within ~ 0.95 UD
-    rsuf3<-rsuf3[sample(1:nrow(rsuf3), 
-                        nrow(rsuf3[rsuf3$ud>(max(rsuf3$ud)*0.25),]),
-                        replace=F, prob =rsuf3$ud),]
+    #rsuf <- as(KDE.Surface[[1]], "SpatialPointsDataFrame")
+    #rsuf2<-rsuf[rsuf$ud>(max(rsuf$ud)*0.25),] #points have to be within ~ 0.75 UD
+    #rsuf2<-rsuf2[sample(1:nrow(rsuf2), 
+    #                    nrow(rsuf2[rsuf2$ud>(max(rsuf2$ud)*0.5),]),
+    #                    replace=F, prob =rsuf2$ud),]
+    #rsuf3<-rsuf[rsuf$ud>(max(rsuf$ud)*0.05),] #points have to be within ~ 0.95 UD
+    #rsuf3<-rsuf3[sample(1:nrow(rsuf3), 
+    #                    nrow(rsuf3[rsuf3$ud>(max(rsuf3$ud)*0.25),]),
+    #                    replace=F, prob =rsuf3$ud),]
     #write_sf(st_as_sf(KDE.50), 'C:/seabirds/temp/brbo_for_50UD.shp')
 
     # bind up polygons for export
     if(which(i==unique(dat$spcol))==1){all_kerns<-st_as_sf(KDE.50)}else{all_kerns<-rbind(all_kerns, st_as_sf(KDE.50))}
-    if(which(i==unique(dat$spcol))==1){kerns75<-st_as_sf(rsuf2)}else{kerns75<-rbind(kerns75, st_as_sf(rsuf2))}
-    if(which(i==unique(dat$spcol))==1){kerns95<-st_as_sf(rsuf3)}else{kerns95<-rbind(kerns95, st_as_sf(rsuf3))}
+    #if(which(i==unique(dat$spcol))==1){kerns75<-st_as_sf(rsuf2)}else{kerns75<-rbind(kerns75, st_as_sf(rsuf2))}
+    #if(which(i==unique(dat$spcol))==1){kerns95<-st_as_sf(rsuf3)}else{kerns95<-rbind(kerns95, st_as_sf(rsuf3))}
     print(i)
   }
 
 write_sf(all_kerns, paste0('C:/seabirds/temp/', names(sp_groups[m]), '50ud.shp'), delete_dsn=T)
-write_sf(kerns75, paste0('C:/seabirds/temp/', names(sp_groups[m]), 'kern75.shp'), delete_dsn=T)
-write_sf(kerns95, paste0('C:/seabirds/temp/', names(sp_groups[m]), 'kern95.shp'), delete_dsn=T)
+#write_sf(kerns75, paste0('C:/seabirds/temp/', names(sp_groups[m]), 'kern75.shp'), delete_dsn=T)
+#write_sf(kerns95, paste0('C:/seabirds/temp/', names(sp_groups[m]), 'kern95.shp'), delete_dsn=T)
 
 }
 ##### OLD #####
