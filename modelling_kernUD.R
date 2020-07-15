@@ -15,6 +15,39 @@ library(gridExtra)
 set.seed(24) # so that random samples and random forest models can be reproduced
 normalized<-function(x){(x-min(x))/(max(x)-min(x))} # normalise (0-1) function
 
+####~~ Random sampling of psuedo absences fixed for reproducability amd data compression ~~~####
+#sp_groups <- c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST', 'WTLG','FRBD', 'TRBD', 'NODD', 'TERN')
+#for(k in sp_groups)
+#{
+#  dat<-read.csv(paste0('C:/seabirds/data/modelling/kernhull_pts/', k, '_kernhull.csv'))
+#  names(dat)[names(dat)=='layer']<-'forbin'
+#  dat$forbin<-as.factor(dat$forbin)
+#  levels(dat$forbin)<-c("PsuedoA", "Core")
+#  dat[dat$forbin=='Core',]$weight=0 # change from NA for no.omit
+  
+  # set bathy vals >0 to NA then make positive
+#  dat[dat$bth>0,]$bth<-NA
+#  dat$bth<-sqrt(dat$bth^2)
+#  dat<-na.omit(dat) # so pA's aren't assigned to land
+
+  # RM sp name unless k has conflicts not FRBD or TERN
+#  if(k %in% c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST', 'WTLG',
+#              'TRBD', 'NODD')){dat$spcol<-substr(dat$spcol, 6, nchar(as.character(dat$spcol)))}
+#  dat$spcol<-factor(dat$spcol)
+  #dat%>%group_by(spcol)%>%summarise(nP=length(which(forbin=='Core')),nA=length(which(forbin=="PsuedoA"))) # don't need
+#    dat<-dat%>%group_by(spcol)%>%mutate(npres=length(which(forbin=='Core')))
+
+    # 3:1 Pa to A, sampled wothout replacement, over normalised inv coldist surface
+#  dat<-rbind(dat%>%filter(forbin=='Core'), dat%>%filter(forbin=="PsuedoA")%>%group_by(spcol)%>%
+#               mutate(w2=normalized(weight))%>% 
+#               sample_n(size=(unique(npres)*3), replace=F, weight=w2))%>%as.data.frame() 
+#  dat$npres<-NULL
+#  dat$w2<-NULL
+#  write.csv(dat,paste0('C:/seabirds/data/modelling/kernhull_pts_sample/', k, '_kernhull_sample.csv'))
+#  print(k)
+#}
+####~~~ * ~~~####
+
 #read in GBR ocean data
 gbr<-read.csv('C:/seabirds/data/pred_area_modelready_2km.csv')
 #rename
