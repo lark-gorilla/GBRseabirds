@@ -1,4 +1,4 @@
-# Modelling (kernelUD approach)
+# Modelling (kernelUD approach) sent for running on Leeds HPC
 
 library(dplyr)
 library(ranger)
@@ -23,14 +23,14 @@ for(k in sp_groups)
   
   train_control <- trainControl(method="LGOCV",index=folds,
                                 classProbs = TRUE, savePredictions = TRUE,
-                                summaryFunction = twoClassSummary)
+                                summaryFunction = twoClassSummary, verboseIter = TRUE)
   
   tunegrid <- expand.grid(mtry=c(2:6),  splitrule = "gini", min.node.size = c(5,10,20,50))
   
   rf2 <- caret::train(x=dat[,c('sst','sst_sd','chl','chl_sd','mfr_sd', 'pfr_sd',
                                'mfr','pfr','bth','slp')],
-                      y=dat[,'forbin'], method="ranger", num.trees=1000, metric='ROC', 
-                      tuneGrid=tunegrid, trControl=train_control)
+                      y=dat[,'forbin'], method="ranger", num.trees=500, metric='ROC', 
+                      tuneGrid=tunegrid, trControl=train_control, verbose = TRUE)
   print(rf2)
   # add column to output predictions with colony for TEST partition
   rf2$pred$spcol<-unlist(lapply(folds, function(x){rep(dat[-x,]$spcol, nrow(tunegrid))}))
@@ -52,12 +52,12 @@ for(k in sp_groups)
   
   train_control <- trainControl( method="LGOCV",index=folds2,
                                  classProbs = TRUE, savePredictions = TRUE,
-                                 summaryFunction = twoClassSummary)
+                                 summaryFunction = twoClassSummary, verboseIter = TRUE)
   
   rf_allcol <- caret::train(x=dat[,c('sst','sst_sd','chl','chl_sd','mfr_sd', 'pfr_sd',
                                       'mfr','pfr','bth','slp')],
-                             y=dat[,'forbin'], method="ranger", num.trees=1000, metric='ROC', 
-                             tuneGrid=tunegrid, trControl=train_control)
+                             y=dat[,'forbin'], method="ranger", num.trees=500, metric='ROC', 
+                             tuneGrid=tunegrid, trControl=train_control, verbose=T)
   # same tunegrid as indiv col models
   
   print(rf_allcol)
