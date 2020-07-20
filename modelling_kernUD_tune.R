@@ -62,7 +62,7 @@ for(k in sp_groups)
   
   print(rf_allcol)
 
-  allcol_aucz<-rf_allcol$pred%>%group_by(Resample)%>%
+  allcol_aucz<-rf_allcol$pred%>%group_by(Resample, mtry, min.node.size)%>%
     summarise(auc=as.double(pROC::roc(obs, Core, levels=c('PsuedoA', 'Core'), direction="<")$auc),
               thresh=coords(pROC::roc(obs, Core, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$threshold[1],
               sens=coords(pROC::roc(obs, Core, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$sensitivity[1],
