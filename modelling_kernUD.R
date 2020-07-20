@@ -43,8 +43,36 @@ normalized<-function(x){(x-min(x))/(max(x)-min(x))} # normalise (0-1) function
 #               sample_n(size=(unique(npres)*3), replace=F, weight=w2))%>%as.data.frame() 
 #  dat$npres<-NULL
 #  dat$w2<-NULL
-#  write.csv(dat,paste0('C:/seabirds/data/modelling/kernhull_pts_sample/', k, '_kernhull_sample.csv'))
+#  write.csv(dat,paste0('C:/seabirds/data/modelling/kernhull_pts_sample/', k, '_kernhull_sample.csv'), row.names=F, quote=F)
 #  print(k)
+#}
+####~~~ * ~~~####
+
+####~~~ Visualise RF tuning results to manually select optimum hyperparameters ~~~####
+#lsf<-list.files('C:/seabirds/data/modelling/rf_tuning')
+#indiv_tune<-NULL; for(i in lsf[grep('indiv',lsf)])
+#{indiv_tune<-rbind(indiv_tune, data.frame(read.csv(
+#  paste0('C:/seabirds/data/modelling/rf_tuning/', i)), sp=substr(i, 1,4)))}
+#all_tune<-NULL; for(i in lsf[grep('all',lsf)])
+#{all_tune<-rbind(all_tune, data.frame(read.csv(
+#  paste0('C:/seabirds/data/modelling/rf_tuning/', i)), sp=substr(i, 1,4)))}
+#sp_groups <- c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST', 'WTLG', 'FRBD', 'TRBD', 'NODD', 'TERN')
+#for(i in sp_groups)
+#{
+#  p1<-ggplot(data=filter(all_tune, sp==i), aes(x=mtry, colour=factor(min.node.size)))+
+#    geom_line(aes(y=auc))+geom_line(aes(y=TSS),linetype='dashed')+
+#    geom_point(aes(y=auc), shape=1)+geom_point(aes(y=TSS), shape=2)+facet_wrap(~Resample)+theme(legend.position = "none")  
+#  png(paste0('C:/seabirds/data/modelling/rf_tuning/plots/',i, '_all_col.png'),width = 6, height =6 , units ="in", res =600)
+#  print(p1)
+#  dev.off()
+#  for(j in unique(filter(indiv_tune, sp==i)$Resample)){
+#    p2<-ggplot(data=filter(indiv_tune, sp==i & Resample==j), aes(x=mtry, colour=factor(min.node.size)))+
+#    geom_line(aes(y=auc))+geom_line(aes(y=TSS),linetype='dashed')+
+#    geom_point(aes(y=auc), shape=1)+geom_point(aes(y=TSS), shape=2)+facet_wrap(~spcol)+theme(legend.position = "none")  
+#    png(paste0('C:/seabirds/data/modelling/rf_tuning/plots/',i, 'indiv_', j,'.png'),width = 6, height =6 , units ="in", res =600)
+#    print(p2)
+#    dev.off()}
+#  print(i)
 #}
 ####~~~ * ~~~####
 
@@ -66,54 +94,28 @@ sp_groups <- c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST', 'WTLG',
 
 for(k in sp_groups)
 {
-dat<-read.csv(paste0('C:/seabirds/data/modelling/kernhull_pts/', k, '_kernhull.csv'))
-names(dat)[names(dat)=='layer']<-'forbin'
-dat$forbin<-as.factor(dat$forbin)
-levels(dat$forbin)<-c("PsuedoA", "Core")
-dat[dat$forbin=='Core',]$weight=0 # change from NA for no.omit
-
-
-# RM sp name unless k has conflicts not FRBD or TERN
-if(k %in% c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST', 'WTLG',
-             'TRBD', 'NODD')){dat$spcol<-substr(dat$spcol, 6, nchar(as.character(dat$spcol)))}
-dat$spcol<-factor(dat$spcol)
-
-# clean up data
-# set bathy vals >0 to NA then make positive
-dat[dat$bth>0,]$bth<-NA
-dat$bth<-sqrt(dat$bth^2)
-dat<-na.omit(dat)
-
-dat%>%group_by(spcol)%>%summarise(nP=length(which(forbin=='Core')),nA=length(which(forbin=="PsuedoA")))
-
-dat<-dat%>%group_by(spcol)%>%mutate(npres=length(which(forbin=='Core')))
-
-# 3:1 Pa to A, sampled wothout replacement, over normalised inv coldist surface
-dat<-rbind(dat%>%filter(forbin=='Core'), dat%>%filter(forbin=="PsuedoA")%>%group_by(spcol)%>%
-          mutate(w2=normalized(weight))%>% 
-          sample_n(size=(unique(npres)*3), replace=F, weight=w2))%>%as.data.frame() 
-
-#check ggplot(data=filter(dat, forbin=="PsuedoA"), aes(x=Longitude, y=Latitude, colour=w2))+geom_point(size=0.4)+facet_wrap(~spcol, scales='free')
-dat$npres<-NULL
-dat$w2<-NULL
+dat<-read.csv(paste0('C:/seabirds/data/modelling/kernhull_pts_sample/', k, '_kernhull_sample.csv'))
+dat$X<-NULL
 
 # niche overlap
-#enviro_std<-decostand(dat[,c(4:13)], method="standardize")
-#enviro_rda<-rda(enviro_std, scale=T)
-#screeplot(enviro_rda)
-#enviro.sites.scores<-as.data.frame(scores(enviro_rda, choices=1:4, display='sites', scaling=1))
-#enviro.sites.scores<-data.frame(enviro.sites.scores,dat[,c(1,2)])
-#enviro.species.scores<-as.data.frame(scores(enviro_rda, display='species'))
-#enviro.species.scores$Predictors<-colnames(enviro_std)
-#enviro.species.scores$spcol=dat[1,]$spcol
-#enviro.species.scores$PC1<-enviro.species.scores$PC1/30
-#enviro.species.scores$PC2<-enviro.species.scores$PC2/30
+enviro_std<-decostand(dat[,c(4:13)], method="standardize")
+enviro_rda<-rda(enviro_std, scale=T)
+screeplot(enviro_rda)
+enviro.sites.scores<-as.data.frame(scores(enviro_rda, choices=1:4, display='sites', scaling=1))
+enviro.sites.scores<-data.frame(enviro.sites.scores,dat[,c(1,2)])
+enviro.species.scores<-as.data.frame(scores(enviro_rda, display='species'))
+enviro.species.scores$Predictors<-colnames(enviro_std)
+enviro.species.scores$spcol='X-Predictors'
+enviro.species.scores$PC1<-enviro.species.scores$PC1/30
+enviro.species.scores$PC2<-enviro.species.scores$PC2/30
 
-#pniche<-ggplot(data=enviro.sites.scores, aes(x=PC1, y=PC2))+
-#  geom_segment(data=enviro.species.scores, aes(y=0, x=0, yend=PC2, xend=PC1), arrow=arrow(length=unit(0.3,'lines')), colour='black')+
-#  geom_text(data=enviro.species.scores, aes(y=PC2, x=PC1, label=Predictors), colour='black', size=2)+
-#  geom_density_2d(aes(colour=forbin))+facet_wrap(~spcol)+theme_bw()+
-#  scale_colour_manual('Area',values=c("seagreen3","coral2"), labels=c('Accessible \n habitat', 'Core \n foraging'))
+pniche<-ggplot(data=enviro.sites.scores, aes(x=PC1, y=PC2))+
+  geom_segment(data=enviro.species.scores, aes(y=0, x=0, yend=PC2, xend=PC1), arrow=arrow(length=unit(0.3,'lines')), colour='black')+
+  geom_text(data=enviro.species.scores, aes(y=PC2, x=PC1, label=Predictors), colour='black', size=2)+
+  geom_density_2d(aes(colour=forbin), alpha=0.6)+facet_wrap(~spcol)+theme_bw()+
+  scale_colour_manual('Area',values=c("coral2", "seagreen3"), labels=c('Core \n foraging', 'Accessible \n habitat'))
+
+# Do hull and order sites by dendrogram or geometric distance
 
 #png(paste0('C:/seabirds/data/modelling/plots/',k, '_niche.png'),width = 6, height =6 , units ="in", res =600)
 #print(pniche)
@@ -130,30 +132,12 @@ var_imp<-NULL
 for( i in unique(dat$spcol))
 {
   #pr1<-table(dat[dat$spcol==i,]$forbin)[1]/table(dat[dat$ID==i,]$forbin)[2]
-  cw<-ifelse(dat[dat$spcol==i,]$forbin=="PsuedoA", 1, 3)  
-  
-  rf1<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr+bth+slp,
-              data=dat[dat$spcol==i,], num.trees=500, mtry=3, importance='impurity',
+
+  rf1<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp,
+              data=dat[dat$spcol==i,], num.trees=500, 
+              mtry=my.mtry,  splitrule = "gini", min.node.size =my.mns,  importance='impurity',
               probability =T)
   print(rf1)
-  
-  ## trial caret tune area for each model?
-  # use cv or other datasets?
-  #train_control <- trainControl( method='cv', number=5,
-  #                               classProbs = TRUE, savePredictions = TRUE,
-  #                               summaryFunction = twoClassSummary)
-  #tunegrid <- expand.grid(mtry=c(2,3,4),  splitrule = "gini", min.node.size = c(5,10, 15, 20, 50))
-  #  rf2 <- caret::train(x=dat[dat$spcol==i,c('sst','sst_sd','chl','chl_sd','mfr_sd',
-  #                                    'pfr','bth','slp')],
-  #                           y=dat[dat$spcol==i,'forbin'], method="ranger", num.trees=500, metric='ROC', 
-  #                           tuneGrid=tunegrid, trControl=train_control)
-  #print(rf2)
-  #caret_aucz<-rf_default$pred%>%group_by(Resample)%>%
-  #  summarise(auc=as.double(pROC::roc(obs, Core, direction="<")$auc),
-  #            thresh=coords(pROC::roc(obs, Core,direction="<"),'best', best.method='youden', transpose=F)$threshold[1],
-  #            sens=coords(pROC::roc(obs, Core,direction="<"),'best', best.method='youden', transpose=F)$sensitivity[1],
-  #            spec=coords(pROC::roc(obs, Core,direction="<"),'best', best.method='youden', transpose=F)$specificity[1])
-  
   
   # predict to other colonies
   dat$p1<-predict(rf1, data=dat)$predictions[,2] # prob of foraging 0-1
@@ -190,7 +174,7 @@ for( i in unique(dat$spcol))
 
 # make full model and predict to GBR
 
-rf1<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr+bth+slp,
+rf1<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
             data=dat, num.trees=500, mtry=3, importance='impurity',
             probability =T)
 gbr$MultiCol<-predict(rf1, data=gbr)$predictions[,2]
