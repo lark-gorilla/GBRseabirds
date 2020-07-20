@@ -84,6 +84,8 @@ names(gbr)<-c('x', 'y', 'sst', 'sst_sd', 'chl', 'chl_sd',
 # and clean
 gbr[gbr$bth>0,]$bth<-0
 gbr$bth<-sqrt(gbr$bth^2)
+# Remember nearshore front values which ==0 should be NA
+
 
 # read in 2km rasterize template
 templ<-raster('C:/seabirds/data/GIS/pred_area_ras_template2km.tif')
@@ -121,12 +123,6 @@ pniche<-ggplot(data=enviro.sites.scores, aes(x=PC1, y=PC2))+
 #print(pniche)
 #dev.off()
 
-# Remember nearshore front values which ==0 should be NA
-
-# scale: normalise (0-1) each covariate per dataID
-# Remember to check for outliers prior to normaliziation
-#dat<-dat %>% group_by(spcol) %>% mutate_if(is.numeric, normalized)%>%as.data.frame()
-
 sp_store<-NULL
 var_imp<-NULL
 for( i in unique(dat$spcol))
@@ -135,19 +131,15 @@ for( i in unique(dat$spcol))
 
   rf1<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp,
               data=dat[dat$spcol==i,], num.trees=500, 
-              mtry=my.mtry,  splitrule = "gini", min.node.size =my.mns,  importance='impurity',
+              mtry=3,  splitrule = "gini", min.node.size =10,  importance='impurity',
               probability =T)
   print(rf1)
   
   # predict to other colonies
   dat$p1<-predict(rf1, data=dat)$predictions[,2] # prob of foraging 0-1
   names(dat)[which(names(dat)=='p1')]<-i
-  # predict to GBR
-  #gbr_norm$p1<-predict(rf1, newdata=gbr_norm, type='prob')[,2] # prob of foraging 0-1
-  #names(gbr_norm)[which(names(gbr_norm)=='p1')]<-i
-  
+ 
   #varib importance
-  
   var_imp<-rbind(var_imp, data.frame(spcol=i, t(ranger::importance(rf1)/max(ranger::importance(rf1)))))
   
   # predict to GBR
@@ -175,7 +167,7 @@ for( i in unique(dat$spcol))
 # make full model and predict to GBR
 
 rf1<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
-            data=dat, num.trees=500, mtry=3, importance='impurity',
+            data=dat, num.trees=500, mtry=3,  splitrule = "gini", min.node.size =10, importance='impurity',
             probability =T)
 gbr$MultiCol<-predict(rf1, data=gbr)$predictions[,2]
 names(gbr)[which(names(gbr)=='MultiCol')]<-paste(k, 'MultiCol', sep='_')
@@ -189,9 +181,6 @@ for(j in 1:length(spdf@data))
   writeRaster(p1, paste0('C:/seabirds/data/modelling/GBR_preds/', gsub(' ', '_', names(spdf@data)[j]), '.tif'), overwrite=T)
   #if(i==1){ps<-p1}else{ps<-stack(ps, p1)}
 }
-
-#print(k)
-#}
 
 
 #qplot(data=sp_store, x=Dist, y=SPAC_Ave, colour=spcol, geom="line")+
@@ -288,71 +277,5 @@ dev.off()
 
 }# close loop
 
-br2<-as.data.frame(dat[,c(1, 2, 14,15,16:(16+(ncolz-1)))])%>%
-  tidyr::gather(variable, value, -spcol, -forbin, -Longitude, -Latitude)
-br2<-left_join(br2, aucz[,c(1,2,4)], by=c('spcol', 'variable'))
-br2$pred_core<-ifelse(br2$value>=br2$thresh, 1, 0)
 
-ggplot(data=br2[br2$spcol=='Swains',], aes(x=Longitude, y=Latitude))+
-  geom_point(aes(colour=value), size=0.5)+
-  geom_point(data=br2[br2$spcol=='Swains' & br2$pred_core==1,], shape=1, colour='green', size=0.5)+
-  scale_colour_gradientn(colours = heat.colors(10))+
-  facet_wrap(~variable, scales='free')+theme_bw()
-
-#caret approach
-
-#test_dat<-as.data.frame(dat[dat$ID %in% unique(dat$ID)[c(2,4,5)],])
-
-#try subsample data to something that will actually run
-dat%>%group_by(ID)%>%summarise(n())
-test_dat<-dat%>%group_by(ID)%>%
-  slice(1:4500)%>%as.data.frame()  # grab first 4500 rows
-
-# test_dat has to be data.frame otherwise caret 'y' classerror
-
-# make forbin a factor with labels attached rather than 0, 1
-test_dat$forbin<-as.factor(test_dat$forbin)
-levels(test_dat$forbin)<-c("transit", "forage")
-
-
-
-test_dat$ID<-factor(test_dat$ID)
-folds <- groupKFold(test_dat$ID)
-
-train_control <- trainControl( method="LGOCV",
-                               index=folds,
-                               classProbs = TRUE,
-                               savePredictions = TRUE,
-                               summaryFunction = twoClassSummary)
-
-tunegrid <- expand.grid(mtry=3,  
-                        splitrule = "gini",
-                        min.node.size = 10)
-
-### DONT USE FORMULA INTERFACE!
-
-rf_default <- caret::train(x=test_dat[,c('sst_mn','sst_sd','chl_mn','chl_sd','mfront_sd',
-                                         'pfront_mn','ex_bathy','ex_slope')],
-                           y=test_dat[,12], method="ranger", num.trees=500, metric='ROC', 
-                           tuneGrid=tunegrid, trControl=train_control)
-print(rf_default)
-
-rf_default$resample
-
-head(rf_default$pred)
-
-rf_default$pred%>%group_by(Resample)%>%summarise(auc=pROC::roc(obs, forage)$auc,
-                                                 sens=pROC::roc(obs, forage)$sensitivities[which(pROC::roc(obs, forage)$thresholds>0.5 & pROC::roc(obs, forage)$thresholds<0.51)[1]],
-                                                 spec=pROC::roc(obs, forage)$specificities[which(pROC::roc(obs, forage)$thresholds>0.5 & pROC::roc(obs, forage)$thresholds<0.51)[1]])
-
-# Check why thereis huge difference between sensitivity and specificity, 
-# basically the model isn't predicting presences
-table(rf_default$pred$pred); table(rf_default$pred$obs)
-
-
-# OLD
-# do somne variable vis
-td <- test_dat %>% dplyr::select(-embc, -trip_id)%>%gather(variable, value, -ID, -forbin)
-ggplot(data=td, aes(x=value, colour=forbin))+
-  geom_density()+facet_grid(ID~variable, scales='free')
 
