@@ -269,6 +269,7 @@ for(m in 1:length(sp_groups))
   
   KDE.Surface <- kernelUD(spdf,same4all = F, h=myhv, grid=r_pix)
   KDE.50 <- getverticeshr(KDE.Surface, percent = 50)
+  if(i=='BRBO Swains'){KDE.50 <-getverticeshr(KDE.Surface, percent = 65)} # more representative for small dataset
   #write_sf(st_as_sf(KDE.50), 'C:/seabirds/temp/brbo_for_50UD.shp')
   KDE.50_ras<-rasterize(KDE.50, r1) 
   KDE.50_pts<-rasterToPoints(KDE.50_ras, spatial=T)
