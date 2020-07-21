@@ -175,25 +175,12 @@ master_embc<-filter(master_embc, !(spcol=='BRBO Adele' & Latitude>'-12.672' & La
 master_embc<-filter(master_embc, !(spcol=='BRBO Mid Ashmore' & Latitude>'-12.237' & Latitude< '-12.240' & Longitude > 122.978 & Longitude < 122.983))# 
 master_embc<-filter(master_embc, !(spcol=='BRBO Mid Ashmore' & Latitude>'-10.980' & Latitude< '-10.984' & Longitude > 122.841 & Longitude < 122.845))# 
 master_embc<-filter(master_embc, !(spcol=='BRBO Mid Ashmore' & Latitude>'-10.918' & Latitude< '-10.920' & Longitude > 123.028 & Longitude < 123.031))# 
-master_embc<-filter(master_embc, !(spcol=='BRBO Swains' & Latitude>'-21.8985' & Latitude< '-21.8991' & Longitude > 152.3694 & Longitude < 152.3701))# 
-master_embc<-filter(master_embc, !(spcol=='BRBO Swains' & Latitude>'-21.9797' & Latitude< '-21.9813' & Longitude > 152.4723 & Longitude < 152.4743))# 
-master_embc<-filter(master_embc, !(spcol=='BRBO Swains' & Latitude>'-21.9645' & Latitude< '-21.9663' & Longitude > 152.5678 & Longitude < 152.5687))# 
+#master_embc<-filter(master_embc, !(spcol=='BRBO Swains' & Latitude>'-21.8985' & Latitude< '-21.8991' & Longitude > 152.3694 & Longitude < 152.3701))# 
+#master_embc<-filter(master_embc, !(spcol=='BRBO Swains' & Latitude>'-21.9797' & Latitude< '-21.9813' & Longitude > 152.4723 & Longitude < 152.4743))# 
+#master_embc<-filter(master_embc, !(spcol=='BRBO Swains' & Latitude>'-21.9645' & Latitude< '-21.9663' & Longitude > 152.5678 & Longitude < 152.5687))# 
 
 
-# load in oceanographic month lookup
-
-mo_look<-read.csv('C:/seabirds/data/dataID_month_lookup.csv')
-# collapse by sp and colony
-mo_look$coly<-do.call(c, lapply(strsplit(as.character(mo_look$ID), '_'), function(x)x[3]))
-mo_look$spcol<-paste(mo_look$sp, mo_look$coly)
-mo_look<-mo_look%>%filter(what=='decision')%>%group_by(spcol)%>%
-summarise_at(vars(n1:n12), function(x){if('Y' %in% x){'Y'}else{''}})%>%as.data.frame()  
  
-# load in hval ref
-
-hvals<-read.csv('C:/seabirds/data/dataID_hvals.csv') # same as updated code when using mag as reference scale
-hvals_ref<-hvals%>%group_by(sp_group)%>%summarise(med_hval=median(mag, na.rm=T))
-
 # export trips per month to decide extract time window for each dataset
 mnth_lookup<-t_qual%>% filter(complete=='complete trip') %>%
           group_by(ID)%>%summarise(n1=length(which(substr(departure, 4,5)=='01')),
@@ -272,7 +259,8 @@ for(m in 1:length(sp_groups))
   bfor<-b1[b1$embc=='foraging' & b1$ColDist>4000,] # remove 'halo' of foraging points at trip start/end
   if(substr(i, 1, 4)=='MAFR'|
      i=='CRTE Troubridge' | i=='CATE Senegal' | i=='ROTE Senegal' |
-     i=='BRBO Palmyra'){bfor<-b1[b1$embc=='relocating'& b1$ColDist>4000,]}
+     i=='BRBO Palmyra'| i=='BRBO Swains'| i=='MABO Swains'){
+    bfor<-b1[b1$embc=='relocating'& b1$ColDist>4000,]}
   
   spdf<-SpatialPointsDataFrame(coords=bfor[,c(7,8)],  data=data.frame(spcol=bfor$spcol),
                                proj4string =CRS(projection(ex_templ)))
@@ -381,7 +369,7 @@ for(m in 1:length(sp_groups))
     bfor<-b1[b1$embc=='foraging' & b1$ColDist>4000,] # remove 'halo' of foraging points at trip start/end
     if(substr(i, 1, 4)=='MAFR'|
        i=='CRTE Troubridge' | i=='CATE Senegal' | i=='ROTE Senegal' |
-       i=='BRBO Palmyra'){bfor<-b1[b1$embc=='relocating'& b1$ColDist>4000,]}
+       i=='BRBO Palmyra'| i=='BRBO Swains'| i=='MABO Swains'){bfor<-b1[b1$embc=='relocating'& b1$ColDist>4000,]}
     
     spdf<-SpatialPointsDataFrame(coords=bfor[,c(7,8)],  data=data.frame(coly=bfor$coly),
                                  proj4string =CRS(projection(ex_templ)))
