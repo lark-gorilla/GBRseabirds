@@ -1,7 +1,6 @@
 # Modelling (kernelUD approach)
 
 library(dplyr)
-library(tidyr)
 library(ggplot2)
 #library(GGally)
 library(ranger)
@@ -48,6 +47,8 @@ normalized<-function(x){(x-min(x))/(max(x)-min(x))} # normalise (0-1) function
 #}
 ####~~~ * ~~~####
 
+####~~~ Loop above creates data that are handed to modelling_kernUD.R for tuning on HPC ~~~####
+
 ####~~~ Visualise RF tuning results to manually select optimum hyperparameters ~~~####
 #lsf<-list.files('C:/seabirds/data/modelling/rf_tuning')
 #indiv_tune<-NULL; for(i in lsf[grep('indiv',lsf)])
@@ -76,6 +77,9 @@ normalized<-function(x){(x-min(x))/(max(x)-min(x))} # normalise (0-1) function
 #}
 ####~~~ * ~~~####
 
+# Read in optimal hyperparameters
+my_hyp<-read.csv('C:/seabirds/data/rf_optimal_hyp.csv')
+
 #read in GBR ocean data
 gbr<-read.csv('C:/seabirds/data/pred_area_modelready_2km.csv')
 #rename
@@ -96,32 +100,20 @@ sp_groups <- c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST', 'WTLG',
 
 for(k in sp_groups)
 {
-dat<-read.csv(paste0('C:/seabirds/data/modelling/kernhull_pts_sample/', k, '_kernhull_sample.csv'))
-dat$X<-NULL
+  
+  dat<-read.csv(paste0('C:/seabirds/data/modelling/kernhull_pts_sample/', k, '_kernhull_sample.csv'))
+  dat$X<-NULL
 
-# niche overlap
-enviro_std<-decostand(dat[,c(4:13)], method="standardize")
-enviro_rda<-rda(enviro_std, scale=T)
-screeplot(enviro_rda)
-enviro.sites.scores<-as.data.frame(scores(enviro_rda, choices=1:4, display='sites', scaling=1))
-enviro.sites.scores<-data.frame(enviro.sites.scores,dat[,c(1,2)])
-enviro.species.scores<-as.data.frame(scores(enviro_rda, display='species'))
-enviro.species.scores$Predictors<-colnames(enviro_std)
-enviro.species.scores$spcol='X-Predictors'
-enviro.species.scores$PC1<-enviro.species.scores$PC1/30
-enviro.species.scores$PC2<-enviro.species.scores$PC2/30
+  # Read in tuning results
+  indiv_col_tune<-read.csv(paste0('C:/seabirds/data/modelling/rf_tuning/',k, '_indiv_col_tune.csv'))
+  all_col_tune<-read.csv(paste0('C:/seabirds/data/modelling/rf_tuning/',k, '_all_col_tune.csv'))
 
-pniche<-ggplot(data=enviro.sites.scores, aes(x=PC1, y=PC2))+
-  geom_segment(data=enviro.species.scores, aes(y=0, x=0, yend=PC2, xend=PC1), arrow=arrow(length=unit(0.3,'lines')), colour='black')+
-  geom_text(data=enviro.species.scores, aes(y=PC2, x=PC1, label=Predictors), colour='black', size=2)+
-  geom_density_2d(aes(colour=forbin), alpha=0.6)+facet_wrap(~spcol)+theme_bw()+
-  scale_colour_manual('Area',values=c("coral2", "seagreen3"), labels=c('Core \n foraging', 'Accessible \n habitat'))
-
-# Do hull and order sites by dendrogram or geometric distance
-
-#png(paste0('C:/seabirds/data/modelling/plots/',k, '_niche.png'),width = 6, height =6 , units ="in", res =600)
-#print(pniche)
-#dev.off()
+  # lookup optimal vals
+  indiv_col_tune<-na.omit(left_join(indiv_col_tune, filter(my_hyp, sp==k),
+                                    by=c('Resample', 'mtry', 'min.node.size')))
+  indiv_col_tune$sp<-NULL
+  all_col_tune<-na.omit(left_join(all_col_tune, filter(my_hyp, Resample=='MultiCol' & sp==k),
+                            by=c('mtry', 'min.node.size')))
 
 sp_store<-NULL
 var_imp<-NULL
@@ -131,24 +123,30 @@ for( i in unique(dat$spcol))
 
   rf1<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp,
               data=dat[dat$spcol==i,], num.trees=500, 
-              mtry=3,  splitrule = "gini", min.node.size =10,  importance='impurity',
-              probability =T)
+              mtry=unique(filter(indiv_col_tune, Resample==i)$mtry), 
+              min.node.size=unique(filter(indiv_col_tune, Resample==i)$min.node.size),
+              splitrule = "gini",  importance='impurity',probability =T)
   print(rf1)
   
-  # predict to other colonies
-  dat$p1<-predict(rf1, data=dat)$predictions[,2] # prob of foraging 0-1
-  names(dat)[which(names(dat)=='p1')]<-i
+  # predict to training and add to validation data.frame
+  p1<-predict(rf1, data=dat[dat$spcol==i,])$predictions[,1] # prob of foraging 0-1 Note column 1 == Core
+  auc1<-pROC::roc(dat[dat$spcol==i,]$forbin, p1, levels=c('PsuedoA', 'Core'), direction="<")
+  co1<-coords(pROC::roc(dat[dat$spcol==i,]$forbin, p1, levels=c('PsuedoA', 'Core'), direction="<"),'best', best.method='youden', transpose=F)
+  
+  indiv_col_tune<-rbind(indiv_col_tune, 
+  data.frame(Resample=i, spcol=i,  mtry=rf1$mtry, min.node.size=rf1$min.node.size, auc=as.double(auc1$auc), 
+             thresh=co1$threshold[1], sens=co1$sensitivity[1], spec=co1$specificity[1],
+             TSS=co1$sensitivity[1]+co1$specificity[1]-1))
+
  
   #varib importance
   var_imp<-rbind(var_imp, data.frame(spcol=i, t(ranger::importance(rf1)/max(ranger::importance(rf1)))))
   
   # predict to GBR
-  gbr$p1<-predict(rf1, data=gbr)$predictions[,2] # prob of foraging 0-1
+  gbr$p1<-predict(rf1, data=gbr)$predictions[,1] # prob of foraging 0-1
   names(gbr)[which(names(gbr)=='p1')]<-paste(k, i, sep='_')
   
-  # rm(rf1) # save space
-  
-   #SPAC assessment
+  #SPAC assessment
   #wtdist<-max(dat[dat$spcol==i,]$weight)-100 # 100 km from col
   #residz<-as.integer(as.character(dat[dat$spcol==i & dat$weight>wtdist,]$forbin))-
   #  dat[dat$spcol==i & dat$weight>wtdist,i]
@@ -162,16 +160,21 @@ for( i in unique(dat$spcol))
   #                     SPAC_95=sp1$boot$boot.summary$predicted$y[9,]))
   print(i)
   print(Sys.time()) 
+  rm(rf1) # save space
 }
 
 # make full model and predict to GBR
 
 rf1<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
-            data=dat, num.trees=500, mtry=3,  splitrule = "gini", min.node.size =10, importance='impurity',
-            probability =T)
-gbr$MultiCol<-predict(rf1, data=gbr)$predictions[,2]
+            data=dat, num.trees=500,  
+            mtry=unique(all_col_tune$mtry), 
+            min.node.size=unique(all_col_tune$min.node.size),
+            splitrule = "gini",  importance='impurity',probability =T)
+
+gbr$MultiCol<-predict(rf1, data=gbr)$predictions[,1]
 names(gbr)[which(names(gbr)=='MultiCol')]<-paste(k, 'MultiCol', sep='_')
 
+# Write out spatial predictions
 spdf<-SpatialPointsDataFrame(SpatialPoints(gbr[,1:2], proj4string = CRS(projection(templ))),
                              data=gbr[,grep(k, names(gbr))])
 
@@ -182,33 +185,29 @@ for(j in 1:length(spdf@data))
   #if(i==1){ps<-p1}else{ps<-stack(ps, p1)}
 }
 
-
-#qplot(data=sp_store, x=Dist, y=SPAC_Ave, colour=spcol, geom="line")+
-#  geom_ribbon(aes(ymin=SPAC_025, ymax=SPAC_95, fill=spcol),alpha=0.25)+theme_classic()
-
 #write.csv(sp_store, paste0('C:/seabirds/data/modelling/SPAC/',k,'_spac.csv'), quote=F, row.names = F)
 write.csv(var_imp, paste0('C:/seabirds/data/modelling/var_imp/',k,'_var_imp.csv'), quote=F, row.names = F)
 
-# check cols selected and size of matrix before running
-ncolz<-length(unique(dat$spcol))
-br1<-as.data.frame(dat[,c(1, 2, 16:(16+(ncolz-1)))])%>%tidyr::gather(variable, value, -spcol, -forbin)
-aucz<-br1%>%group_by(spcol, variable)%>%
-  summarise(auc=as.double(pROC::roc(forbin, value,direction="<")$auc),
-            thresh=coords(pROC::roc(forbin, value,direction="<"),'best', best.method='youden', transpose=F)$threshold[1],
-            sens=coords(pROC::roc(forbin, value,direction="<"),'best', best.method='youden', transpose=F)$sensitivity[1],
-            spec=coords(pROC::roc(forbin, value,direction="<"),'best', best.method='youden', transpose=F)$specificity[1])
+# Clustering sites based on predictive ability
 
-#closest.topleft works or youden 
-# calc TSS
-aucz$TSS=aucz$sens+aucz$spec-1
-# handy
-#qplot(data=filter(br1, spcol=='Prickly Pear'& variable=='Danger'), x=value, fill=forbin, geom='histogram')
+indiv_col_tune$id<-apply(as.data.frame(indiv_col_tune), 1, FUN=function(x){paste(sort(c(as.character(x[1]), as.character(x[2]))), sep='.', collapse='.')})
+matxdat<-indiv_col_tune%>%group_by(id)%>%summarise_if(is.numeric, sum)
+indiv_col_tune$id<-NULL
+matxdat$Resample<-unlist(lapply(strsplit(matxdat$id, '\\.'), function(x){x[1]}))
+matxdat$spcol<-unlist(lapply(strsplit(matxdat$id, '\\.'), function(x){x[2]}))
 
-m1<-matrix(ncol=ncolz, nrow=ncolz, data =aucz$auc, dimnames=list(unique(aucz$spcol), unique(aucz$spcol)))
-d1<-as.dist(1-m1)
+d1<-with(matxdat[matxdat$Resample!=matxdat$spcol,c(9,10,4)], 
+     structure(auc, Size = length(unique(matxdat$Resample)),
+      Labels = unique(matxdat$Resample),
+      Diag = F, Upper = FALSE,method = "user", class = "dist"))
 
-m1<-matrix(ncol=ncolz, nrow=ncolz, data =aucz$TSS, dimnames=list(unique(aucz$spcol), unique(aucz$spcol)))
-d2<-as.dist(1-m1)
+d1<-(2-d1)
+
+d2<-with(matxdat[matxdat$Resample!=matxdat$spcol,c(9,10,8)], 
+         structure(TSS, Size = length(unique(matxdat$Resample)),
+                   Labels = unique(matxdat$Resample),
+                   Diag = F, Upper = FALSE,method = "user", class = "dist"))
+d2<-(2-d2)
 
 png(paste0('C:/seabirds/data/modelling/plots/',k, '_hclust.png'),width = 6, height =12 , units ="in", res =300)
 par(mfrow=c(2,1))
@@ -217,63 +216,76 @@ plot(hclust(d2, method='average'), main='TSS-derived clustering')
 dev.off()
 par(mfrow=c(1,1))
 
+# Visualising predicitve ability between colonies
+names(all_col_tune)[names(all_col_tune)=='Resample.x']<-'spcol'
+all_col_tune$sp<-NULL
+all_col_tune$Resample.y<-NULL
+aucz<-rbind(indiv_col_tune, data.frame(Resample='MultiCol', all_col_tune))
 
-# caret LGOCV combi-spcol model
-folds <- groupKFold(dat$spcol)
+temp1<-aucz%>%group_by(Resample)%>%
+  filter(as.character(spcol)!=as.character(Resample))%>%summarise_if(is.numeric ,sum)
+aucz<-rbind(aucz,data.frame(temp1[,1], spcol='SUM', temp1[,2:8]))
 
-train_control <- trainControl( method="LGOCV",index=folds,
-                               classProbs = TRUE, savePredictions = TRUE,
-                               summaryFunction = twoClassSummary)
-
-tunegrid <- expand.grid(mtry=3,  splitrule = "gini", min.node.size = 10)
-
-rf_default <- caret::train(x=dat[,c('sst','sst_sd','chl','chl_sd','mfr_sd',
-                                         'pfr','bth','slp')],
-                           y=dat[,'forbin'], method="ranger", num.trees=500, metric='ROC', 
-                           tuneGrid=tunegrid, trControl=train_control)
-print(rf_default)
-
-rf_default$resample
-
-head(rf_default$pred)
-
-caret_aucz<-rf_default$pred%>%group_by(Resample)%>%
-  summarise(auc=as.double(pROC::roc(obs, Core, direction="<")$auc),
-            thresh=coords(pROC::roc(obs, Core,direction="<"),'best', best.method='youden', transpose=F)$threshold[1],
-            sens=coords(pROC::roc(obs, Core,direction="<"),'best', best.method='youden', transpose=F)$sensitivity[1],
-            spec=coords(pROC::roc(obs, Core,direction="<"),'best', best.method='youden', transpose=F)$specificity[1])
-
-caret_aucz<-data.frame(spcol=paste(unlist(lapply(folds, function(x){unique(dat$spcol) [-which(unique(dat$spcol) %in% unique(dat[x,]$spcol))][[1]]}))),
-                       variable='MultiCol', caret_aucz[,2:5])
-caret_aucz$TSS=caret_aucz$sens+caret_aucz$spec-1
-
-aucz<-rbind(as.data.frame(aucz), as.data.frame(caret_aucz))
-aucz<-rbind(aucz, data.frame(spcol='SUM', aucz%>%group_by(variable)%>%
-                               filter(as.character(spcol)!=as.character(variable))%>%summarise_if(is.numeric ,sum)))
-aucz$variable<-factor(aucz$variable)
-aucz$variable<-relevel(aucz$variable, ref = "MultiCol")
+aucz$Resample<-factor(aucz$Resample)
+aucz$Resample<-relevel(aucz$Resample, ref = "MultiCol")
 aucz$spcol<-factor(aucz$spcol)
 aucz$spcol<-relevel(aucz$spcol, ref = "SUM")
 
-p_auc<-ggplot(aucz, aes(x = spcol, y = variable)) + 
-  geom_raster(aes(fill=auc)) + 
-  geom_text(aes(label=round(auc, 2)), size=2)+
-  scale_fill_gradient(limits=c(0.5, 1), low="grey",  high="red") +
-  theme_bw() + theme(axis.text.x=element_text(size=9, angle=90, vjust=0.3),
-                     axis.text.y=element_text(size=9),
-                     plot.title=element_text(size=11))+ylab('Model predictions')+xlab('Predicting to')
+aucz$auctemp<-aucz$auc
+aucz[aucz$spcol=='SUM',]$auctemp<-NA
+aucz$auc_bin<-cut(aucz$auctemp, c(0, 0.5, 0.6, 0.7, 0.8, 0.9, 1))
+aucz$auc_bin<-factor(aucz$auc_bin, levels = levels(addNA(aucz$auc_bin)),
+                     labels = c("grey", "#ffffb2", "#fed976", '#feb24c', '#fd8d3c', '#fc4e2a', '#dadaeb'), exclude = NULL)
 
-p_tss<-ggplot(aucz, aes(x = spcol, y = variable)) + 
-  geom_raster(aes(fill=TSS)) + 
-  geom_text(aes(label=round(TSS, 2)), size=2)+
-  scale_fill_gradient(limits=c(0,1),low="grey",  high="red") +
+aucz$tsstemp<-aucz$TSS
+aucz[aucz$spcol=='SUM',]$tsstemp<-NA
+aucz$tss_bin<-cut(aucz$tsstemp, c(0, 0.4, 0.5, 0.6, 0.7, 0.8, 1))
+aucz$tss_bin<-factor(aucz$tss_bin, levels = levels(addNA(aucz$tss_bin)),
+                     labels = c("grey", "#ffffb2", "#fed976", '#feb24c', '#fd8d3c', '#fc4e2a', '#dadaeb'), exclude = NULL)
+
+p_auc<-ggplot(aucz, aes(x = spcol, y = Resample)) + 
+  geom_raster(aes(fill=auc_bin)) +scale_fill_identity()+ 
+  geom_text(aes(label=round(auc, 2)), size=2)+
   theme_bw() + theme(axis.text.x=element_text(size=9, angle=90, vjust=0.3),
                      axis.text.y=element_text(size=9),
-                     plot.title=element_text(size=11))+ylab('Model predictions')+xlab('Predicting to')
+                     plot.title=element_text(size=11))+ylab('Predictions from')+xlab('Predicting to')
+
+p_tss<-ggplot(aucz, aes(x = spcol, y = Resample)) + 
+  geom_raster(aes(fill=tss_bin)) +scale_fill_identity()+ 
+  geom_text(aes(label=round(TSS, 2)), size=2)+
+  theme_bw() + theme(axis.text.x=element_text(size=9, angle=90, vjust=0.3),
+                     axis.text.y=element_text(size=9),
+                     plot.title=element_text(size=11))+ylab('Predictions from')+xlab('Predicting to')
 
 png(paste0('C:/seabirds/data/modelling/plots/',k, '_pred_acc.png'),width = 6, height =12 , units ="in", res =600)
 grid.arrange(p_auc, p_tss)
 dev.off()
+
+# niche overlap
+enviro_std<-decostand(dat[,c(4:13)], method="standardize")
+enviro_rda<-rda(enviro_std, scale=T)
+screeplot(enviro_rda)
+enviro.sites.scores<-as.data.frame(scores(enviro_rda, choices=1:4, display='sites', scaling=1))
+enviro.sites.scores<-data.frame(enviro.sites.scores,dat[,c(1,2)])
+enviro.species.scores<-as.data.frame(scores(enviro_rda, display='species'))
+enviro.species.scores$Predictors<-colnames(enviro_std)
+enviro.species.scores$spcol='X-Predictors'
+enviro.species.scores$PC1<-enviro.species.scores$PC1/30
+enviro.species.scores$PC2<-enviro.species.scores$PC2/30
+enviro.sites.scores$forbin<-relevel(enviro.sites.scores$forbin, ref='PsuedoA')
+
+pniche<-ggplot(data=enviro.sites.scores, aes(x=PC1, y=PC2))+
+  geom_segment(data=enviro.species.scores, aes(y=0, x=0, yend=PC2, xend=PC1), arrow=arrow(length=unit(0.3,'lines')), colour='black')+
+  geom_text(data=enviro.species.scores, aes(y=PC2, x=PC1, label=Predictors), colour='red', size=2)+
+  geom_bin2d(aes(fill=forbin), alpha=0.6)+facet_wrap(~spcol)+theme_bw()+
+  scale_fill_manual('Area',values=c( "seagreen3","coral2"), labels=c('Accessible \nhabitat','Core \nforaging'))
+
+# Do hull and order sites by dendrogram or geometric distance
+
+png(paste0('C:/seabirds/data/modelling/plots/',k, '_niche.png'),width = 6, height =6 , units ="in", res =600)
+print(pniche)
+dev.off()
+
 
 }# close loop
 
