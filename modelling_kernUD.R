@@ -114,6 +114,14 @@ for(k in sp_groups)
   indiv_col_tune$sp<-NULL
   all_col_tune<-na.omit(left_join(all_col_tune, filter(my_hyp, Resample=='MultiCol' & sp==k),
                             by=c('mtry', 'min.node.size')))
+  
+  if(k=='RFBO')
+  {
+    indiv_col_tune<-filter(indiv_col_tune, Resample!='Christmas') 
+    indiv_col_tune<-filter(indiv_col_tune, spcol!='Christmas') 
+    all_col_tune<-filter(all_col_tune, Resample.x!='Christmas') 
+    dat<-filter(dat, spcol!='Christmas') 
+  }
 
 sp_store<-NULL
 var_imp<-NULL
@@ -189,6 +197,15 @@ for(j in 1:length(spdf@data))
 write.csv(var_imp, paste0('C:/seabirds/data/modelling/var_imp/',k,'_var_imp.csv'), quote=F, row.names = F)
 
 # Clustering sites based on predictive ability
+if(k=='SOTE'){
+  indiv_col_tune$Resample<-as.character(indiv_col_tune$Resample)
+  indiv_col_tune$spcol<-as.character(indiv_col_tune$spcol)
+  indiv_col_tune[indiv_col_tune$Resample=='chick',]$Resample<-'Rat'
+  indiv_col_tune[indiv_col_tune$spcol=='chick',]$spcol<-'Rat'
+  all_col_tune$Resample.x<-as.character(all_col_tune$Resample.x)
+  all_col_tune[all_col_tune$Resample.x=='chick',]$Resample.x<-'Rat'
+  dat$spcol<-as.character(dat$spcol)
+  dat[dat$spcol=='chick',]$spcol<-'Rat'}
 
 indiv_col_tune$id<-apply(as.data.frame(indiv_col_tune), 1, FUN=function(x){paste(sort(c(as.character(x[1]), as.character(x[2]))), sep='.', collapse='.')})
 matxdat<-indiv_col_tune%>%group_by(id)%>%summarise_if(is.numeric, sum)
@@ -322,4 +339,4 @@ thresh_sum<-calc(thresh_stack, sum)
 writeRaster(sp_sum, paste0('C:/seabirds/data/modelling/GBR_preds/', i, '_indivSUM.tif'),overwrite=T )
 writeRaster(thresh_sum, paste0('C:/seabirds/data/modelling/GBR_preds/', i, '_indivSUM_class.tif'),overwrite=T)
 print(i)}
-
+ 
