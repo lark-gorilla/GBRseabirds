@@ -233,15 +233,15 @@ aucz$spcol<-relevel(aucz$spcol, ref = "SUM")
 
 aucz$auctemp<-aucz$auc
 aucz[aucz$spcol=='SUM',]$auctemp<-NA
-aucz$auc_bin<-cut(aucz$auctemp, c(0, 0.5, 0.6, 0.7, 0.8, 0.9, 1))
+aucz$auc_bin<-cut(aucz$auctemp, c(0, 0.6, 0.7, 0.8, 0.9, 1),include.lowest =T)
 aucz$auc_bin<-factor(aucz$auc_bin, levels = levels(addNA(aucz$auc_bin)),
-                     labels = c("grey", "#ffffb2", "#fed976", '#feb24c', '#fd8d3c', '#fc4e2a', '#dadaeb'), exclude = NULL)
+                     labels = c("#cccccc", "#ffffb2", "#fecc5c", '#fd8d3c', '#f03b20', '#c6dbef'), exclude = NULL)
 
 aucz$tsstemp<-aucz$TSS
 aucz[aucz$spcol=='SUM',]$tsstemp<-NA
-aucz$tss_bin<-cut(aucz$tsstemp, c(0, 0.4, 0.5, 0.6, 0.7, 0.8, 1))
+aucz$tss_bin<-cut(aucz$tsstemp, c(0, 0.2, 0.6, 1), include.lowest =T)
 aucz$tss_bin<-factor(aucz$tss_bin, levels = levels(addNA(aucz$tss_bin)),
-                     labels = c("grey", "#ffffb2", "#fed976", '#feb24c', '#fd8d3c', '#fc4e2a', '#dadaeb'), exclude = NULL)
+                     labels = c("#cccccc", "#fecc5c", '#f03b20', '#c6dbef'), exclude = NULL)
 
 p_auc<-ggplot(aucz, aes(x = spcol, y = Resample)) + 
   geom_raster(aes(fill=auc_bin)) +scale_fill_identity()+ 
@@ -290,4 +290,36 @@ dev.off()
 }# close loop
 
 
+####~~ Individual colony model overlap ~~####
+pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds', full.names=T)
+pred_list<-pred_list[-grep('MultiCol', pred_list)]
+pred_list<-pred_list[-grep('indiv', pred_list)]
+sp_groups <- c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST', 'WTLG', 'FRBD', 'TRBD', 'NODD', 'TERN')
+for(i in sp_groups){
+sp_stack<-stack(pred_list[grep(i, pred_list)])
+#sp_norm<-normalized(sp_stack)
+sp_sum<-calc(sp_stack, sum)
+
+# Read in tuning results
+indiv_col_tune<-read.csv(paste0('C:/seabirds/data/modelling/rf_tuning/',i, '_indiv_col_tune.csv'))
+# lookup optimal vals
+indiv_col_tune<-na.omit(left_join(indiv_col_tune, filter(my_hyp, sp==i),
+                                  by=c('Resample', 'mtry', 'min.node.size')))
+
+ict_med<-indiv_col_tune%>%group_by(Resample)%>%summarise(thresh=median(thresh, ra.rm=T))
+
+for(k in 1:nlayers(sp_stack))
+{
+ r1<-subset(sp_stack, k)
+ med_lookup<-ict_med[ict_med$Resample==gsub('_', ' ',substr(names(r1), 6,nchar(names(r1)))),]$thresh
+ r1<-reclassify(r1, c(-Inf, med_lookup, 0, med_lookup,Inf,1))
+ if(k==1){thresh_stack<-r1}else{thresh_stack<-stack(thresh_stack, r1)}
+}
+
+thresh_sum<-calc(thresh_stack, sum)
+
+#sp_norm_sum<-calc(sp_norm, sum)
+writeRaster(sp_sum, paste0('C:/seabirds/data/modelling/GBR_preds/', i, '_indivSUM.tif'),overwrite=T )
+writeRaster(thresh_sum, paste0('C:/seabirds/data/modelling/GBR_preds/', i, '_indivSUM_class.tif'),overwrite=T)
+print(i)}
 
