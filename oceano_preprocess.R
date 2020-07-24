@@ -180,7 +180,20 @@ master_embc<-filter(master_embc, !(spcol=='BRBO Mid Ashmore' & Latitude>'-10.918
 #master_embc<-filter(master_embc, !(spcol=='BRBO Swains' & Latitude>'-21.9645' & Latitude< '-21.9663' & Longitude > 152.5678 & Longitude < 152.5687))# 
 
 
- 
+# load in oceanographic month lookup
+mo_look<-read.csv('C:/seabirds/data/dataID_month_lookup.csv')
+
+# collapse by sp and colony
+mo_look$coly<-do.call(c, lapply(strsplit(as.character(mo_look$ID), '_'), function(x)x[3]))
+mo_look$spcol<-paste(mo_look$sp, mo_look$coly)
+mo_look<-mo_look%>%filter(what=='decision')%>%group_by(spcol)%>%
+summarise_at(vars(n1:n12), function(x){if('Y' %in% x){'Y'}else{''}})%>%as.data.frame()  
+
+# load in hval ref
+hvals<-read.csv('C:/seabirds/data/dataID_hvals.csv') # same as updated code when using mag as reference scale
+hvals_ref<-hvals%>%group_by(sp_group)%>%summarise(med_hval=median(mag, na.rm=T))
+
+
 # export trips per month to decide extract time window for each dataset
 mnth_lookup<-t_qual%>% filter(complete=='complete trip') %>%
           group_by(ID)%>%summarise(n1=length(which(substr(departure, 4,5)=='01')),
