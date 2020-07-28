@@ -98,6 +98,9 @@ templ<-raster('C:/seabirds/data/GIS/pred_area_ras_template2km.tif')
 sp_groups <- c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST', 'WTLG',
                       'FRBD', 'TRBD', 'NODD', 'TERN')
 
+matx_out<-NULL # capture hclust for plotting
+aucz_out<-NULL # capture validation for plotting
+
 for(k in sp_groups)
 {
   
@@ -226,10 +229,13 @@ d2<-with(matxdat[matxdat$Resample!=matxdat$spcol,c(9,10,8)],
                    Diag = F, Upper = FALSE,method = "user", class = "dist"))
 d2<-(2-d2)
 
+hc_auc<-hclust(d1, method='average')
+hc_tss<-hclust(d2, method='average')
+
 png(paste0('C:/seabirds/data/modelling/plots/',k, '_hclust.png'),width = 6, height =12 , units ="in", res =300)
 par(mfrow=c(2,1))
-plot(hclust(d1, method='average'), main='AUC-derived clustering')
-plot(hclust(d2, method='average'), main='TSS-derived clustering')
+plot(hc_auc, main='AUC-derived clustering')
+plot(hc_tss, main='TSS-derived clustering')
 dev.off()
 par(mfrow=c(1,1))
 
@@ -243,10 +249,11 @@ temp1<-aucz%>%group_by(Resample)%>%
   filter(as.character(spcol)!=as.character(Resample))%>%summarise_if(is.numeric ,sum)
 aucz<-rbind(aucz,data.frame(temp1[,1], spcol='SUM', temp1[,2:8]))
 
-aucz$Resample<-factor(aucz$Resample)
-aucz$Resample<-relevel(aucz$Resample, ref = "MultiCol")
-aucz$spcol<-factor(aucz$spcol)
-aucz$spcol<-relevel(aucz$spcol, ref = "SUM")
+aucz$Resample_auc<-factor(aucz$Resample, levels=c("MultiCol",rev(hc_auc$labels[hc_auc$order])))
+aucz$spcol_auc<-factor(aucz$spcol,levels=c("SUM",rev(hc_auc$labels[hc_auc$order])))
+aucz$Resample_tss<-factor(aucz$Resample, levels=c("MultiCol",rev(hc_tss$labels[hc_tss$order])))
+aucz$spcol_tss<-factor(aucz$spcol,levels=c("SUM",rev(hc_tss$labels[hc_tss$order])))
+
 
 aucz$auctemp<-aucz$auc
 aucz[aucz$spcol=='SUM',]$auctemp<-NA
@@ -260,14 +267,14 @@ aucz$tss_bin<-cut(aucz$tsstemp, c(0, 0.2, 0.6, 1), include.lowest =T)
 aucz$tss_bin<-factor(aucz$tss_bin, levels = levels(addNA(aucz$tss_bin)),
                      labels = c("#cccccc", "#fecc5c", '#f03b20', '#c6dbef'), exclude = NULL)
 
-p_auc<-ggplot(aucz, aes(x = spcol, y = Resample)) + 
+p_auc<-ggplot(aucz, aes(x = spcol_auc, y = Resample_auc)) + 
   geom_raster(aes(fill=auc_bin)) +scale_fill_identity()+ 
   geom_text(aes(label=round(auc, 2)), size=2)+
   theme_bw() + theme(axis.text.x=element_text(size=9, angle=90, vjust=0.3),
                      axis.text.y=element_text(size=9),
                      plot.title=element_text(size=11))+ylab('Predictions from')+xlab('Predicting to')
 
-p_tss<-ggplot(aucz, aes(x = spcol, y = Resample)) + 
+p_tss<-ggplot(aucz, aes(x = spcol_tss, y = Resample_tss)) + 
   geom_raster(aes(fill=tss_bin)) +scale_fill_identity()+ 
   geom_text(aes(label=round(TSS, 2)), size=2)+
   theme_bw() + theme(axis.text.x=element_text(size=9, angle=90, vjust=0.3),
@@ -303,9 +310,15 @@ png(paste0('C:/seabirds/data/modelling/plots/',k, '_niche.png'),width = 6, heigh
 print(pniche)
 dev.off()
 
+# save outputs
+matx_out<-rbind(matx_out, data.frame(sp=k, matxdat)) # capture hclust for plotting
+aucz_out<-rbind(aucz_out, data.frame(sp=k, aucz)) # capture validation for plotting
 
 }# close loop
 
+# write out saved auc and hclust data
+write.csv(aucz_out, 'C:/seabirds/data/mod_validation_vals.csv', quote=F, row.names=F)
+write.csv(matx_out, 'C:/seabirds/data/mod_clustering_vals.csv', quote=F, row.names=F)
 
 ####~~ Individual colony model overlap ~~####
 pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds', full.names=T)
