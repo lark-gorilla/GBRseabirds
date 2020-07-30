@@ -77,7 +77,7 @@ p1[which(p1$Species==2),]$sp<-'SOTE'
 p1$colony='Lancelin'
 p1[which(p1$Species==2),]$colony<-'Rat'
 p1$breedstage='incubation'
-p1[which(p1$Species==2),]$colony<-'chick'
+p1[which(p1$Species==2),]$breedstage<-'chick'
 master<-rbind(master, data.frame(dataID='SHEP1',sp=p1$sp, colony=p1$colony,
                                  trackID=factor(p1$ID),date=gsub('-', '/', substr(p1$DateTimeWST, 1,10)),time=substr(p1$DateTimeWST, 12, 19),
                                  latitude=p1$LatDD,longitude=p1$LongDD, breedstage=p1$breedstage))
