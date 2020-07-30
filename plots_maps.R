@@ -33,6 +33,9 @@ colz<-colz%>%group_by(sp, coly)%>%summarise_all(first)
 t_qual<-t_qual[-which(t_qual$ID%in%c('MEND2_RFBO_Christmas', 'MEND3_RFBO_Christmas',
                                      'AUST3_RFBO_Little Cayman', 'GILM10_RFBO_Isabel')),]
 t_qual$coly<-do.call(c, lapply(strsplit(as.character(t_qual$ID), '_'), function(x)x[3]))
+t_qual[t_qual$ID=='YODA1_BRBO_Nakanokamishima',]$duration<-(as.numeric(as.character(t_qual[t_qual$ID=='YODA1_BRBO_Nakanokamishima',]$return))-
+   as.numeric(as.character(t_qual[t_qual$ID=='YODA1_BRBO_Nakanokamishima',]$departure)))/3600 
+
 #lookup col coords
 t_qual<-left_join(t_qual, colz[,c(1,2,5,6)], by=c('sp', 'coly'))
 # make WTSH l/S trip split
@@ -66,6 +69,21 @@ spcol_tab[spcol_tab$coly=='chick',]$coly<-'Rat' # edit to name
 spcol_tab[spcol_tab$sp_group=='WTST' | spcol_tab$sp_group=='WTLG',]$sp<-'WTSH'
 
 #write.csv(spcol_tab, 'C:/seabirds/data/sp_col_summary.csv', quote=F, row.names=F)
+
+# more detailed check
+
+t_qual_ret_day<-t_qual[t_qual$complete=='complete trip',]
+t_qual_ret_day<-t_qual_ret_day[t_qual_ret_day$breedstage %in% c('chick', 'incubation'),]
+t_qual_ret_day$breedstage<-factor(t_qual_ret_day$breedstage)
+
+t_qual_ret_day$day<-cut(t_qual_ret_day$duration, breaks=c(0,24*1:7, 999999),
+                                   labels=(c('<1', '1-2', '2-3', '3-4','4-5', '5-6', '6-7', '>7')),right=F, include.lowest = T)
+t_qual_ret_day$breedstage<-factor(t_qual_ret_day$breedstage)
+t_tripmetric<-t_qual_ret_day%>%group_by(sp_group, sp, coly, breedstage, day)%>%
+  summarise(ntrack=length(unique(trip_id)),max_for=max(max_dist))%>%as.data.frame()
+
+#write.csv(t_tripmetric, 'C:/seabirds/data/sp_col_day_summary.csv', quote=F, row.names=F)
+
 
 #### sp-group summary table
 
