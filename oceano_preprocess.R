@@ -150,7 +150,7 @@ master_embc<-filter(master_embc, !(spcol=='MABO Dog' & Latitude>18.18 & Latitude
 master_embc<-filter(master_embc, !(spcol=='MABO Mid Ashmore' & Latitude> '-12.237' & Latitude< '-12.241' & Longitude > 122.977 & Longitude < 122.984)) # island nests
 master_embc<-filter(master_embc, !(spcol=='RFBO Mid Ashmore' & Latitude> '-12.237' & Latitude< '-12.241' & Longitude > 122.977 & Longitude < 122.984))# island nests
 master_embc<-filter(master_embc, !(spcol=='RFBO Mid Ashmore' & Latitude> '-12.259' & Latitude< '-12.262' & Longitude > 123.093 & Longitude < 123.099))# island nests
-master_embc<-filter(master_embc, !(spcol=='LEFR Mid Ashmore' & Latitude> '-12.258' & Latitude< '-12.263' & Longitude > 123.093 & Longitude < 123.099))# island nests
+master_embc<-filter(master_embc, !(spcol=='LEFR Mid Ashmore' & Latitude> '-12.25' & Latitude< '-12.27' & Longitude > 123.02 & Longitude < 123.1))# island nests
 master_embc<-filter(master_embc, !(spcol=='GRFR Mid Ashmore' & Latitude> '-12.240' & Latitude< '-12.247' & Longitude > 122.960 & Longitude < 123.972))# island nests
 master_embc<-filter(master_embc, !(spcol=='BRBO Cayman Brac' & Latitude>19.67 & Latitude< 19.71 & Longitude > '-79.828' & Longitude < '-79.915'))# island nests
 master_embc<-filter(master_embc, !(spcol=='BRBO Cayman Brac' & Latitude>19.69 & Latitude< 19.74 & Longitude > '-79.775' & Longitude < '-79.828'))# island nests
@@ -192,6 +192,12 @@ summarise_at(vars(n1:n12), function(x){if('Y' %in% x){'Y'}else{''}})%>%as.data.f
 # load in hval ref
 hvals<-read.csv('C:/seabirds/data/dataID_hvals.csv') # same as updated code when using mag as reference scale
 hvals_ref<-hvals%>%group_by(sp_group)%>%summarise(med_hval=median(mag, na.rm=T))
+#p1<-ggplot(data=hvals, aes(x=sp_group, y=mag))+
+#  geom_boxplot()+geom_point(aes(colour=factor(int_decision)), shape=1)+theme_bw()+
+#  xlab('Species group')+ylab('log mean foraging range (km)')+scale_colour_discrete("GPS temporal \nresolution (s)")
+#  png('C:/seabirds/outputs/kernel_scale.png',width = 6, height =6 , units ="in", res =600)
+#  print(p1)
+#  dev.off()
 
 
 # export trips per month to decide extract time window for each dataset
@@ -270,7 +276,7 @@ for(m in 1:length(sp_groups))
   hully_pts$weight<-extract(r2, hully_pts)
   # Foraging within 50% UD
   bfor<-b1[b1$embc=='foraging' & b1$ColDist>4000,] # remove 'halo' of foraging points at trip start/end
-  if(substr(i, 1, 4)=='MAFR'|
+  if(substr(i, 1, 4)=='MAFR'|substr(i, 1, 4)=='GRFR'|substr(i, 1, 4)=='LEFR'|
      i=='CRTE Troubridge' | i=='CATE Senegal' | i=='ROTE Senegal' |
      i=='BRBO Palmyra'| i=='BRBO Swains'| i=='MABO Swains'){
     bfor<-b1[b1$embc=='relocating'& b1$ColDist>4000,]}
