@@ -1,6 +1,6 @@
 # Plotting and mapping
 library(ggplot2)
-#library(ggdendro)
+library(ggdendro)
 library(dplyr)
 #library(grid)
 #library(gridExtra)
@@ -61,15 +61,24 @@ t_nused<-t_qual%>%group_by(sp_group, sp, coly)%>%
 spcol_tab<-data.frame(spcol_tab, n_usedtracks=t_nused$n_usedtracks)
 # keep only returning trips
 t_qual_ret<-t_qual[t_qual$complete=='complete trip',]
-t_tripmetric<-t_qual_ret%>%group_by(sp_group, sp, coly)%>%
+t_tripmetric<-t_qual_ret%>%filter(duration<296.1)%>%group_by(sp_group, sp, coly)%>%
   summarise(max_for=max(max_dist), med_for=median(max_dist), breedstage=paste(unique(breedstage), collapse=' '))%>%as.data.frame()
 spcol_tab<-data.frame(spcol_tab, t_tripmetric[,c(4,5,6)])
 # tidy
 spcol_tab[spcol_tab$coly=='chick',]$coly<-'Rat' # edit to name
 spcol_tab[spcol_tab$sp_group=='WTST' | spcol_tab$sp_group=='WTLG',]$sp<-'WTSH'
+spcol_tab[spcol_tab$coly=='Adele' & spcol_tab$sp=='BRBO',]$max_for<-139.6 # manual edit
 
 #write.csv(spcol_tab, 'C:/seabirds/data/sp_col_summary.csv', quote=F, row.names=F)
 
+# check max for ranges are not erroroneus
+#tq_check<-t_qual_ret %>%filter(duration<296.1)%>% 
+#     group_by(sp_group) %>%
+#       filter(max_dist == max(max_dist))
+#mst<-master_embc<-read.csv('C:/seabirds/sourced_data/tracking_data/tracking_master_forage.csv')
+#mst<-filter(mst, trip_id %in% tq_check$trip_id)
+#write.csv(mst, 'C:/seabirds/temp/max_dist_trips.csv', quote=F, row.names=F)
+#ggplot(data=mst, aes(x=Longitude, y=Latitude))+geom_point()+facet_wrap(~sp, scales='free')
 # more detailed check
 
 t_qual_ret_day<-t_qual[t_qual$complete=='complete trip',]
@@ -141,9 +150,18 @@ mkVal<-function(my.sp='BRBO', my.metric='AUC', calc.niche=T)
   d1<-(2-d1)
   hc1<-hclust(d1, method='average')
   hc_dend<-ggdendrogram(data = as.dendrogram(hc1), rotate = T)
+  
+  # make sum/ave vals
+  my.aucz<-my.aucz[,c(1:10, 16, 18)]
+  my.aucz<-filter(my.aucz, spcol!='SUM')
+  my.aucz$spcol<-factor(my.aucz$spcol)
+  
+  temp1<-my.aucz%>%group_by(Resample)%>%
+    filter(as.character(spcol)!=as.character(Resample))%>%summarise_if(is.numeric ,mean)
+  my.aucz<-rbind(my.aucz,data.frame(sp=my.sp,temp1[,1], spcol='MEAN', temp1[,2:8], auc_bin='#c6dbef', tss_bin='#c6dbef'))
 
   my.aucz$Resample<-factor(my.aucz$Resample, levels=c("MultiCol", paste(hc1$labels[hc1$order])))
-  my.aucz$spcol<-factor(my.aucz$spcol,levels=c("SUM", paste(hc1$labels[hc1$order])))
+  my.aucz$spcol<-factor(my.aucz$spcol,levels=c("MEAN", paste(hc1$labels[hc1$order])))
   
   if(my.metric=='AUC')
   {  
@@ -312,6 +330,7 @@ png(paste0('C:/seabirds/data/modelling/plots/TERN_val.png'),width = 7, height =1
 (sp_auc[[2]]+ggtitle('A)'))+p1+(sp_tss[[2]]+ggtitle('B)'))+p2+
   plot_layout(ncol=2, nrow=2, widths=c(3,1))
 dev.off()
+
 
 
 
