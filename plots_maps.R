@@ -67,7 +67,7 @@ spcol_tab<-data.frame(spcol_tab, t_tripmetric[,c(4,5,6)])
 # tidy
 spcol_tab[spcol_tab$coly=='chick',]$coly<-'Rat' # edit to name
 spcol_tab[spcol_tab$sp_group=='WTST' | spcol_tab$sp_group=='WTLG',]$sp<-'WTSH'
-spcol_tab[spcol_tab$coly=='Adele' & spcol_tab$sp=='BRBO',]$max_for<-139.6 # manual edit
+spcol_tab[spcol_tab$coly=='Adele' & spcol_tab$sp=='BRBO',]$max_for<-139.6  # manual edit
 
 #write.csv(spcol_tab, 'C:/seabirds/data/sp_col_summary.csv', quote=F, row.names=F)
 
@@ -96,12 +96,36 @@ t_tripmetric<-t_qual_ret_day%>%group_by(sp_group, sp, coly, breedstage, day)%>%
 
 #### sp-group summary table
 
+spcol_tab<-read.csv('C:/seabirds/data/sp_col_summary.csv')
 
+for_rang<-spcol_tab%>%group_by(Species.Group)%>%summarise(min.for=min(Max.roraging.range),
+                                                med.for=median(Max.roraging.range),
+                                                max.for=max(Max.roraging.range))
 
-aucz_out%>%filter(as.character(spcol)!=as.character(Resample) & spcol!='SUM')%>%group_by(sp, Resample)%>%
-  summarise(mean_auc=mean(auc), sd_auc=sd(auc))
+sp_col_summr<-aucz_out%>%filter(as.character(spcol)!=as.character(Resample) & spcol!='SUM')%>%group_by(sp, Resample)%>%
+  summarise(mean_auc=mean(auc), sd_auc=sd(auc), max_auc=max(auc),
+            mean_tss=mean(TSS), sd_tss=sd(TSS),max_tss=max(TSS))
 
+sp_col_summr<-sp_col_summr%>%ungroup()%>%
+  group_by(sp)%>%mutate(auc_rank=rank(-mean_auc, 'first'))
 
+mean_valz<-sp_col_summr%>%ungroup()%>%filter(Resample!='MultiCol')%>%group_by(sp)%>%
+  summarise(mn_auc=mean(mean_auc), sd_auc=sd(mean_auc),
+            mn_max_auc=mean(max_auc), sd_max_auc=sd(max_auc))
+
+multi_rank<-sp_col_summr%>%filter(Resample=='MultiCol')%>%select(auc_rank)
+
+#GBR pred
+aucz_out%>%filter(as.character(spcol)!=as.character(Resample) & spcol%in%c('Raine', 'Swains', 'Heron')& auc>0.69)%>%group_by(sp, Resample)
+GBR_pred<-sp_col_summr%>%ungroup()%>%filter(Resample!='MultiCol')%>%group_by(sp)%>%
+
+bind_out<-bind_cols(mean_valz, multi_rank, for_rang)
+
+bind_out$mn_sumr<-paste0(round(bind_out$mn_auc, 2),'±', round(bind_out$sd_auc, 2))
+bind_out$mx_sumr<-paste0(round(bind_out$mn_max_auc, 2),'±', round(bind_out$sd_max_auc, 2))
+
+bind_out2<-bind_out%>%select(sp, mn_sumr, mx_sumr, auc_rank, min.for, med.for, max.for)
+#write.csv(bind_out2, 'C:/seabirds/data/sp_main_summary.csv', quote=F, row.names=F)
 
 
 
