@@ -136,6 +136,56 @@ bind_out2<-bind_out%>%select(sp, mn_sumr, mx_sumr, mn_sumr_ts, mx_sumr_ts, auc_r
 #### ~~~~ **** ~~~~ ####
 
 #### ~~~~ Make GBR colony radii ~~~~####
+gbr_short<-gbr_cols%>%gather(species, trigger, -designation_name, -site_name, -designation_type, -Latitude, -Longitude )
+gbr_short<-na.omit(gbr_short) # remove sp not at sites
+gbr_short<-filter(gbr_short, !species %in% c('herald_petrel', 'silver_gull', 'australian_pelican',
+                                   'bridled_tern', 'blacknaped_tern', 'little_tern',
+                                   'roseate_tern', 'newcaledonianfairy_tern')) # rm unmodelled sp
+
+# replicate data *3 for min, med and max buffers
+gbr_rep<-bind_rows(gbr_short%>%mutate(rad_class='min'), 
+                   gbr_short%>%mutate(rad_class='med'),
+                   gbr_short%>%mutate(rad_class='max'))
+#make lookup
+gbr_rep$mod_spgroup<-recode(gbr_rep$species, brown_booby='BRBO',
+              masked_booby = 'MABO', redfooted_booby= 'RFBO',
+           lesser_frigatebird = 'FRBD', greater_frigatebird = 'FRBD',
+          redtailed_tropicbird = 'TRBD', wedgetailed_shearwater = 'WTST',
+          black_noddy='NODD', common_noddy='NODD',sooty_tern='SOTE',
+          caspian_tern='TERN', crested_tern='TERN', lessercrested_tern='TERN')
+#replicate wtsh long trips and bind back in
+wtlong<-gbr_rep%>%filter(species=='wedgetailed_shearwater')
+wtlong$mod_spgroup<-'WTLG'
+gbr_rep<-bind_rows(gbr_rep, wtlong)%>%arrange(designation_name, site_name, mod_spgroup, species)
+
+#do dist lookup
+spgroup_dists<-spgroup_summ%>%select(Speces.group, Min.foraging.range, Median.foraging.range, Max.foraging.range)%>%
+  gather(rad_class, dist, -Speces.group)
+spgroup_dists$rad_class<-recode(spgroup_dists$rad_class,  Min.foraging.range='min',
+                                Median.foraging.range ='med',  Max.foraging.range='max')
+gbr_rep<-left_join(gbr_rep, spgroup_dists, by=c('mod_spgroup'='Speces.group', 'rad_class'))
+# make spatial
+gbr_rep<-gbr_rep%>%st_as_sf(coords=c('Longitude', 'Latitude'), crs=4326)
+
+for(i in unique(gbr_rep$site_name))
+{
+  col<-gbr_rep%>%filter(site_name==i)
+  colproj<-st_transform(col, crs=paste0('+proj=laea +lon_0=',st_coordinates(col)[1,1],
+                                        '+lat_0=',st_coordinates(col)[2,2], '+ellps=WGS84'))
+  colbuf<-colproj%>%st_buffer(dist=colproj$dist*1000)
+  colbuf<-colbuf%>%st_transform(crs=4326)
+  if(which(i==unique(gbr_rep$site_name))==1){buf_out<-colbuf}else{
+  buf_out<-rbind(buf_out, colbuf)}
+  print(i)
+}
+
+#write_sf(buf_out, 'C:/seabirds/data/GIS/foraging_radii.shp')
+
+
+
+# not pred
+# herald_petrel, silver_gull, australian_pelican, bridled_tern,
+# blacknaped_tern, roseate_tern, newcaledonianfairy_tern
 
 #### ~~~~ **** ~~~~ ####
 
