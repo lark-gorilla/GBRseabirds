@@ -15,9 +15,10 @@ aucz_out<-read.csv('C:/seabirds/data/mod_validation_vals.csv')
 matx_out<-read.csv('C:/seabirds/data/mod_clustering_vals.csv')
 t_qual<-read.csv('C:/seabirds/data/tracking_trip_decisions.csv')
 colz<-st_read('C:/seabirds/data/GIS/trackingID_colony_locs.shp')
+spgroup_summ<-read.csv('C:/seabirds/data/sp_main_summary.csv')
+gbr_cols<-read.csv('C:/seabirds/data/parks_gbr_colony_data.csv')
 
-
-#### sp-col summary table
+####~~~~ sp-col summary table ~~~~####
 
 # formatting col
 colz$sp<-do.call(c, lapply(strsplit(as.character(colz$ID), '_'), function(x)x[2]))
@@ -92,9 +93,9 @@ t_tripmetric<-t_qual_ret_day%>%group_by(sp_group, sp, coly, breedstage, day)%>%
   summarise(ntrack=length(unique(trip_id)),max_for=max(max_dist))%>%as.data.frame()
 
 #write.csv(t_tripmetric, 'C:/seabirds/data/sp_col_day_summary.csv', quote=F, row.names=F)
+#### ~~~~ **** ~~~~ ####
 
-
-#### sp-group summary table
+####~~~~ sp-group summary table ~~~~####
 
 spcol_tab<-read.csv('C:/seabirds/data/sp_col_summary.csv')
 
@@ -107,29 +108,39 @@ sp_col_summr<-aucz_out%>%filter(as.character(spcol)!=as.character(Resample) & sp
             mean_tss=mean(TSS), sd_tss=sd(TSS),max_tss=max(TSS))
 
 sp_col_summr<-sp_col_summr%>%ungroup()%>%
-  group_by(sp)%>%mutate(auc_rank=rank(-mean_auc, 'first'))
+  group_by(sp)%>%mutate(auc_rank=rank(-mean_auc, 'first'),tss_rank=rank(-mean_tss, 'first'))
 
 mean_valz<-sp_col_summr%>%ungroup()%>%filter(Resample!='MultiCol')%>%group_by(sp)%>%
   summarise(mn_auc=mean(mean_auc), sd_auc=sd(mean_auc),
-            mn_max_auc=mean(max_auc), sd_max_auc=sd(max_auc))
+            mn_max_auc=mean(max_auc), sd_max_auc=sd(max_auc),
+            mn_tss=mean(mean_tss), sd_tss=sd(mean_tss),
+            mn_max_tss=mean(max_tss), sd_max_tss=sd(max_tss))
 
-multi_rank<-sp_col_summr%>%filter(Resample=='MultiCol')%>%select(auc_rank)
+multi_rank<-sp_col_summr%>%filter(Resample=='MultiCol')%>%select(auc_rank, tss_rank)
 
 #GBR pred
 aucz_out%>%filter(as.character(spcol)!=as.character(Resample) & spcol%in%c('Raine', 'Swains', 'Heron')& auc>0.69)%>%group_by(sp, Resample)
-GBR_pred<-sp_col_summr%>%ungroup()%>%filter(Resample!='MultiCol')%>%group_by(sp)%>%
+GBR_pred<-sp_col_summr%>%ungroup()%>%filter(Resample!='MultiCol')%>%group_by(sp)
 
 bind_out<-bind_cols(mean_valz, multi_rank, for_rang)
 
 bind_out$mn_sumr<-paste0(round(bind_out$mn_auc, 2),'±', round(bind_out$sd_auc, 2))
 bind_out$mx_sumr<-paste0(round(bind_out$mn_max_auc, 2),'±', round(bind_out$sd_max_auc, 2))
+bind_out$mn_sumr_ts<-paste0(round(bind_out$mn_tss, 2),'±', round(bind_out$sd_tss, 2))
+bind_out$mx_sumr_ts<-paste0(round(bind_out$mn_max_tss, 2),'±', round(bind_out$sd_max_tss, 2))
 
-bind_out2<-bind_out%>%select(sp, mn_sumr, mx_sumr, auc_rank, min.for, med.for, max.for)
+
+bind_out2<-bind_out%>%select(sp, mn_sumr, mx_sumr, mn_sumr_ts, mx_sumr_ts, auc_rank, tss_rank, min.for, med.for, max.for)
 #write.csv(bind_out2, 'C:/seabirds/data/sp_main_summary.csv', quote=F, row.names=F)
 
+#### ~~~~ **** ~~~~ ####
+
+#### ~~~~ Make GBR colony radii ~~~~####
+
+#### ~~~~ **** ~~~~ ####
 
 
-# AUC/TSS density plot
+####~~~~ AUC/TSS density plot ~~~~####
 
 densdat<-aucz_out%>%filter(as.character(spcol)!=as.character(Resample) & spcol!='SUM')%>%
   select(sp, auc, TSS)%>%gather(variable, value, -sp)
@@ -150,6 +161,8 @@ p1<-ggplot(data=densdat, aes(x=value, stat(scaled), colour=variable))+
 #png(paste0('C:/seabirds/outputs/sp_validation_comparison.png'),width = 6, height =6 , units ="in", res =600)
 #p1
 #dev.off()
+
+#### ~~~~ **** ~~~~ ####
 
 ####~~~~ return cluster and heatmap validation plot function ~~~~####
 mkVal<-function(my.sp='BRBO', my.metric='AUC', calc.niche=T)
@@ -233,6 +246,7 @@ mkVal<-function(my.sp='BRBO', my.metric='AUC', calc.niche=T)
 }
 #### ~~~~ *** ~~~~ ####
 
+#### ~~~~ AUC/TSS matrix and hclust plots ~~~~####
 #https://cran.r-project.org/web/packages/ggplotify/vignettes/ggplotify.html
 
 # BRBO
