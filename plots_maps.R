@@ -1,4 +1,5 @@
 # Plotting and mapping
+library(raster)
 library(ggplot2)
 library(ggdendro)
 library(dplyr)
@@ -9,6 +10,7 @@ library(ggplotify)
 library(patchwork)
 library(vegan)
 library(sf)
+
 
 ####~~~~ read in data ~~~~####
 aucz_out<-read.csv('C:/seabirds/data/mod_validation_vals.csv')
@@ -189,6 +191,69 @@ for(i in unique(gbr_rep$site_name))
 
 #### ~~~~ **** ~~~~ ####
 
+#### ~~~~ Make plots ~~~~ ####
+#read in spatial data
+for_rad<-read_sf('C:/seabirds/data/GIS/foraging_radii.shp')
+land<-read_sf('C:/coral_fish/sourced_data/country_borders/TM_WORLD_BORDERS-0.3.shp')
+gbr_reef<-read_sf('C:/seabirds/sourced_data/GBRMPA_Data Export/Great_Barrier_Reef_Features.shp')
+gbrmp<-read_sf('C:/seabirds/sourced_data/GBRMPA_Data Export/GBRMP_BOUNDS.shp')             
+pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds', full.names=T)
+pred_list<-pred_list[grep('indivSUM.tif', pred_list)]
+mod_pred<-stack(pred_list)
+# merge colz by md_spgr and rd_class
+rad_diss<-for_rad%>%group_by(md_spgr, rd_clss)%>%summarize(geometry = st_union(geometry))
+
+#### ~~~~ GBR plot function ~~~~ ####
+mk_gbrplot<-function(spg='TERN'){
+  ext<-unlist(raster::extract(subset(mod_pred, paste0(spg,'_indivSUM')),
+  as(filter(rad_diss, md_spgr==spg & rd_clss=='max'), 'Spatial')))
+
+  p1<-ggplot() +
+  layer_spatial(data=subset(mod_pred, paste0(spg,'_indivSUM'))) +
+  geom_sf(data=filter(gbr_reef, FEAT_NAME=='Reef'), fill='NA', colour=alpha('black',0.4)) +
+  geom_sf(data=filter(rad_diss, md_spgr==spg), aes(colour=rd_clss), fill='NA') +
+  geom_sf(data=gbrmp, col='white', fill='NA') +
+  geom_sf(data=land, col='black', fill='grey') +
+  theme_bw()+
+  annotation_scale(location = "bl")+  
+  annotation_north_arrow(location = "tr", which_north = "true")+
+  labs(x='Longitude', y='Latitude')+
+  coord_sf(xlim = c(142, 158), ylim = c(-29, -7), expand = FALSE)+
+  scale_colour_manual(values=c('#00FFFF','#66FFCC', '#00FF66' ))+
+  scale_fill_viridis(limits=c(min(ext), max(ext)), option='magma', na.value = NA)+
+  theme(legend.position = "none") 
+  return(p1)}
+#### ~~~~ **** ~~~~ #####
+p_brbo<-mk_gbrplot(spg='BRBO')
+p_mabo<-mk_gbrplot(spg='MABO')
+p_rfbo<-mk_gbrplot(spg='RFBO')
+p_frbd<-mk_gbrplot(spg='FRBD')
+p_trbd<-mk_gbrplot(spg='TRBD')
+p_wtst<-mk_gbrplot(spg='WTST')
+p_wtlg<-mk_gbrplot(spg='WTLG')
+p_sote<-mk_gbrplot(spg='SOTE')
+p_nodd<-mk_gbrplot(spg='NODD')
+p_tern<-mk_gbrplot(spg='TERN')
+
+png(paste0('C:/seabirds/outputs/maps/gbr_wide/boobies2frigate.png'),width = 8.3, height =11.7 , units ="in", res =300)
+(p_brbo+ggtitle('A)')+p_mabo+ggtitle('B)')+
+ p_rfbo+ggtitle('C)')+p_frbd+ggtitle('D)')+
+  plot_layout(ncol=2, nrow=2))
+dev.off()
+
+png(paste0('C:/seabirds/outputs/maps/gbr_wide/tropbd2wtsh2sote.png'),width = 8.3, height =11.7 , units ="in", res =300)
+(p_trbd+ggtitle('A)')+p_wtst+ggtitle('B)')+
+    p_wtlg+ggtitle('C)')+p_sote+ggtitle('D)')+
+    plot_layout(ncol=2, nrow=2))
+dev.off()
+
+png(paste0('C:/seabirds/outputs/maps/gbr_wide/nodd2tern.png'),width = 8.3, height =5.85 , units ="in", res =300)
+(p_nodd+ggtitle('A)')+p_tern+ggtitle('B)')+
+    plot_layout(ncol=2))
+dev.off()
+
+
+#### ~~~~ **** ~~~~ #####
 
 ####~~~~ AUC/TSS density plot ~~~~####
 
