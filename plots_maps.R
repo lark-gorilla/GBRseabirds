@@ -144,17 +144,23 @@ gbr_short<-filter(gbr_short, !species %in% c('herald_petrel', 'silver_gull', 'au
                                    'bridled_tern', 'blacknaped_tern', 'little_tern',
                                    'roseate_tern', 'newcaledonianfairy_tern')) # rm unmodelled sp
 
+#make lookup
+gbr_short$mod_spgroup<-recode(gbr_short$species, brown_booby='BRBO',
+                            masked_booby = 'MABO', redfooted_booby= 'RFBO',
+                            lesser_frigatebird = 'FRBD', greater_frigatebird = 'FRBD',
+                            redtailed_tropicbird = 'TRBD', wedgetailed_shearwater = 'WTST',
+                            black_noddy='NODD', common_noddy='NODD',sooty_tern='SOTE',
+                            caspian_tern='TERN', crested_tern='TERN', lessercrested_tern='TERN')
+# filter and cols write as shapefile
+# make spatial
+#colz_sp<-gbr_short%>%st_as_sf(coords=c('Longitude', 'Latitude'), crs=4326)
+#write_sf(colz_sp, 'C:/seabirds/data/GIS/parks_gbr_cols.shp')
+
 # replicate data *3 for min, med and max buffers
 gbr_rep<-bind_rows(gbr_short%>%mutate(rad_class='min'), 
                    gbr_short%>%mutate(rad_class='med'),
                    gbr_short%>%mutate(rad_class='max'))
-#make lookup
-gbr_rep$mod_spgroup<-recode(gbr_rep$species, brown_booby='BRBO',
-              masked_booby = 'MABO', redfooted_booby= 'RFBO',
-           lesser_frigatebird = 'FRBD', greater_frigatebird = 'FRBD',
-          redtailed_tropicbird = 'TRBD', wedgetailed_shearwater = 'WTST',
-          black_noddy='NODD', common_noddy='NODD',sooty_tern='SOTE',
-          caspian_tern='TERN', crested_tern='TERN', lessercrested_tern='TERN')
+
 #replicate wtsh long trips and bind back in
 wtlong<-gbr_rep%>%filter(species=='wedgetailed_shearwater')
 wtlong$mod_spgroup<-'WTLG'
