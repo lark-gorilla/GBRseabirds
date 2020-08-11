@@ -1,6 +1,7 @@
 # Plotting and mapping
 library(raster)
 library(ggplot2)
+library(ggspatial)
 library(ggdendro)
 library(dplyr)
 #library(grid)
@@ -10,6 +11,7 @@ library(ggplotify)
 library(patchwork)
 library(vegan)
 library(sf)
+library(viridis)
 
 
 ####~~~~ read in data ~~~~####
@@ -200,23 +202,37 @@ for(i in unique(gbr_rep$site_name))
 #### ~~~~ Make plots ~~~~ ####
 #read in spatial data
 for_rad<-read_sf('C:/seabirds/data/GIS/foraging_radii.shp')
+# add sp colours
+for_rad$md_spgr<-factor(for_rad$md_spgr, levels=c("BRBO", 'MABO', 'RFBO', 'FRBD', 'TRBD', 'WTST', "WTLG", "SOTE" , 'NODD', 'TERN'))
+for_rad$spcol<-recode(for_rad$md_spgr, "BRBO"='#8dd3c7','MABO'='#ffffb3','RFBO'='#bebada','FRBD'='#fb8072', 'TRBD'='#80b1d3',
+                      'WTST'='#fdb462','WTLG'='#b3de69',"SOTE"='#fccde5','NODD'='#d9d9d9','TERN'='#bc80bd')
+
+
 land<-read_sf('C:/coral_fish/sourced_data/country_borders/TM_WORLD_BORDERS-0.3.shp')
 gbr_reef<-read_sf('C:/seabirds/sourced_data/GBRMPA_Data Export/Great_Barrier_Reef_Features.shp')
-gbrmp<-read_sf('C:/seabirds/sourced_data/GBRMPA_Data Export/GBRMP_BOUNDS.shp')             
+gbrmp<-read_sf('C:/seabirds/sourced_data/GBRMPA_Data Export/GBRMP_BOUNDS.shp') 
+colz<-read_sf('C:/seabirds/data/GIS/parks_gbr_cols.shp')
 pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds', full.names=T)
 pred_list<-pred_list[grep('indivSUM.tif', pred_list)]
 mod_pred<-stack(pred_list)
-# merge colz by md_spgr and rd_class
+# merge colz by md_spgr and rd_class for gbr-wide plots
+
 rad_diss<-for_rad%>%group_by(md_spgr, rd_clss)%>%summarize(geometry = st_union(geometry))
 
 #### ~~~~ GBR plot function ~~~~ ####
 mk_gbrplot<-function(spg='TERN'){
   ext<-unlist(raster::extract(subset(mod_pred, paste0(spg,'_indivSUM')),
   as(filter(rad_diss, md_spgr==spg & rd_clss=='max'), 'Spatial')))
+  mn<-min(ext, na.rm=T)
+  mx<-max(ext, na.rm=T)
+  
+  r1<-subset(mod_pred, paste0(spg,'_indivSUM'))
+  r1[values(r1)>mx]<-mx
+  r1[values(r1)<mn]<-mn
 
   p1<-ggplot() +
-  layer_spatial(data=subset(mod_pred, paste0(spg,'_indivSUM'))) +
-  geom_sf(data=filter(gbr_reef, FEAT_NAME=='Reef'), fill='NA', colour=alpha('black',0.4)) +
+  layer_spatial(data=r1) +
+  geom_sf(data=filter(colz, md_spgr==spg), colour='yellow', size=0.5) +
   geom_sf(data=filter(rad_diss, md_spgr==spg), aes(colour=rd_clss), fill='NA') +
   geom_sf(data=gbrmp, col='white', fill='NA') +
   geom_sf(data=land, col='black', fill='grey') +
@@ -225,10 +241,18 @@ mk_gbrplot<-function(spg='TERN'){
   annotation_north_arrow(location = "tr", which_north = "true")+
   labs(x='Longitude', y='Latitude')+
   coord_sf(xlim = c(142, 158), ylim = c(-29, -7), expand = FALSE)+
-  scale_colour_manual(values=c('#00FFFF','#66FFCC', '#00FF66' ))+
-  scale_fill_viridis(limits=c(min(ext), max(ext)), option='magma', na.value = NA)+
-  theme(legend.position = "none") 
+  scale_colour_manual('Forgaing radii', values=c('#00FFFF','#66FFCC', '#00FF66' ), labels=c(
+    'Maximum', 'Median', 'Minimum'))+
+  scale_fill_viridis('Likely\nforaging\nhabitat', limits=c(mn, mx), breaks=c(mn, mx), labels=c('low', 'high'),
+                     option='magma', na.value = NA)+
+  theme(legend.position = 'none')
   return(p1)}
+
+#theme(legend.position = c(0.2, 0.3), legend.background = element_rect(fill = "grey"),
+ #     legend.key = element_rect(fill = "grey"))
+# check higher res/different png dimensions
+# patchwork <-p1 + p2 + p3 + p4 + plot_layout(ncol = 4,guides = "collect")
+
 #### ~~~~ **** ~~~~ #####
 p_brbo<-mk_gbrplot(spg='BRBO')
 p_mabo<-mk_gbrplot(spg='MABO')
@@ -241,23 +265,91 @@ p_sote<-mk_gbrplot(spg='SOTE')
 p_nodd<-mk_gbrplot(spg='NODD')
 p_tern<-mk_gbrplot(spg='TERN')
 
-png(paste0('C:/seabirds/outputs/maps/gbr_wide/boobies2frigate.png'),width = 8.3, height =11.7 , units ="in", res =300)
-(p_brbo+ggtitle('A)')+p_mabo+ggtitle('B)')+
- p_rfbo+ggtitle('C)')+p_frbd+ggtitle('D)')+
+png(paste0('C:/seabirds/outputs/maps/gbr_wide/boobies2frigate.png'),width = 8.3, height =11.7 , units ="in", res =600)
+(p_brbo+ggtitle('A) Brown Booby')+p_mabo+ggtitle('B) Masked Booby')+
+ p_rfbo+ggtitle('C) Red-footed Booby')+p_frbd+ggtitle('D) Frigatebird species-group')+
   plot_layout(ncol=2, nrow=2))
 dev.off()
 
-png(paste0('C:/seabirds/outputs/maps/gbr_wide/tropbd2wtsh2sote.png'),width = 8.3, height =11.7 , units ="in", res =300)
-(p_trbd+ggtitle('A)')+p_wtst+ggtitle('B)')+
-    p_wtlg+ggtitle('C)')+p_sote+ggtitle('D)')+
+png(paste0('C:/seabirds/outputs/maps/gbr_wide/tropbd2wtsh2sote.png'),width = 8.3, height =11.7 , units ="in", res =600)
+(p_trbd+ggtitle('E) Tropicbird species-group')+p_wtst+ggtitle('F) Wedge-tailed Shearwater short trips')+
+    p_wtlg+ggtitle('G) Wedge-tailed Shearwater long trips')+p_sote+ggtitle('H) Sooty Tern')+
     plot_layout(ncol=2, nrow=2))
 dev.off()
 
-png(paste0('C:/seabirds/outputs/maps/gbr_wide/nodd2tern.png'),width = 8.3, height =5.85 , units ="in", res =300)
-(p_nodd+ggtitle('A)')+p_tern+ggtitle('B)')+
+png(paste0('C:/seabirds/outputs/maps/gbr_wide/nodd2tern.png'),width = 8.3, height =5.85 , units ="in", res =600)
+(p_nodd+ggtitle('I) Noddy species-group')+p_tern+ggtitle('J) Tern species-group')+
     plot_layout(ncol=2))
 dev.off()
 
+#### ~~~~ kba/site local plot function ~~~~ ####
+mk_kbaplot<-function(site="Capricornia Cays KBA"){
+  
+  rad_diss_site<-filter(for_rad, dsgntn_n==site)%>%group_by(md_spgr, rd_clss)%>%
+    summarize(spcol=first(spcol),geometry = st_union(geometry))
+   plim<-st_bbox(filter(rad_diss_site,rd_clss=='med'))
+  p1<-ggplot() +
+    geom_sf(data=filter(gbr_reef, FEAT_NAME=='Reef'), fill='NA', colour=alpha('black',0.5))+
+    geom_sf(data=filter(colz, dsgntn_n==site), shape = 23, fill = "darkred") +
+    geom_sf(data=filter(rad_diss_site,rd_clss=='med'), aes(colour=spcol), fill='NA') +
+    geom_sf(data=gbrmp, col='black', fill='NA') +
+    geom_sf(data=land, col='black', fill='grey') +
+    theme_bw()+
+    annotation_scale(location = "bl")+  
+    annotation_north_arrow(location = "tr", which_north = "true")+
+    labs(x='Longitude', y='Latitude')+
+    coord_sf(xlim = plim[c(1,3)], ylim = plim[c(2,4)], expand = T)+
+    scale_colour_identity('Species',labels = unique(rad_diss_site$md_spgr),
+        breaks = unique(rad_diss_site$spcol), guide = "legend")+ggtitle(paste0('A) ', site))
+  
+  p_spz<-list()
+  for(i in unique(rad_diss_site$md_spgr))
+  {
+  r1<-subset(mod_pred, paste0(i,'_indivSUM'))
+  beeb<-bbox(as(filter(rad_diss_site, md_spgr==i), 'Spatial'))
+  beeb[c(1, 2)]<-beeb[c(1, 2)]-0.1
+  beeb[c(3, 4)]<-beeb[c(3, 4)]+0.1
+  r1<-crop(r1, beeb)
+  mn<-min(values(r1), na.rm=T)+var(values(r1), na.rm=T) # small fudge
+  mx<-max(values(r1), na.rm=T)-var(values(r1), na.rm=T)
+  plim<-st_bbox(r1)  
+  p2<-ggplot() +
+    layer_spatial(data=r1) +
+    geom_sf(data=filter(gbr_reef, FEAT_NAME=='Reef'), fill='NA', colour=alpha('black',0.5))+
+    geom_sf(data=filter(colz, dsgntn_n==site& md_spgr==i), shape = 23, fill = "darkred") +
+    geom_sf(data=filter(rad_diss_site, md_spgr==i), aes(colour=rd_clss), fill='NA') +
+    geom_sf(data=gbrmp, col='white', fill='NA') +
+    geom_sf(data=land, col='black', fill='grey') +
+    theme_bw()+
+    annotation_scale(location = "bl")+  
+    annotation_north_arrow(location = "tr", which_north = "true")+
+    labs(x='Longitude', y='Latitude')+
+    coord_sf(xlim = plim[c(1,3)], ylim = plim[c(2,4)], expand = T)+
+    scale_colour_manual('Forgaing\nradii', values=c('#00FFFF','#66FFCC', '#00FF66' ), labels=c(
+      'Max', 'Med', 'Min'))+
+    scale_fill_viridis('Likely\nforaging\nhabitat',option='magma',
+                       breaks=c(mn, mx), labels=c('low', 'high'),na.value = NA)+
+    ggtitle(paste0(LETTERS[(which(i== unique(rad_diss_site$md_spgr)))+1], ') ', i))
+  
+  if(which(i== unique(rad_diss_site$md_spgr))!=1){p2<-p2+theme(legend.position = 'none')}
+  p_spz[[which(i== unique(rad_diss_site$md_spgr))]]<-p2
+  print(i)
+  }
+  
+  pw_plot<-p1+p_spz+ plot_layout(ncol=3, guides='collect')
+  
+  return(pw_plot)}
+#### ~~~~ **** ~~~~ #####
+
+#### ~~~~ Make local KBA  plots ~~~~ ####
+
+for(k in unique(for_rad$dsgntn_n))
+{
+  multip<-mk_kbaplot(site=k) 
+  png(paste0('C:/seabirds/outputs/maps/local_site/',gsub( ',', '',k),'.png'),width = 8.3, height =11.7 , units ="in", res =600)
+  multip
+  dev.off()
+}
 
 #### ~~~~ **** ~~~~ #####
 
