@@ -192,8 +192,13 @@ gbr$MultiCol<-predict(rf1, data=gbr)$predictions[,1]
 names(gbr)[which(names(gbr)=='MultiCol')]<-paste(k, 'MultiCol', sep='_')
 
 # predict to GBR training data for certain sp
+#rf1<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
+#            data=dat[dat$spcol!='Heron',], num.trees=500,  
+#            mtry=unique(all_col_tune$mtry), 
+#            min.node.size=unique(all_col_tune$min.node.size),
+#            splitrule = "gini",  importance='impurity',probability =T)
 #gbr_valdat$p1<-predict(rf1, data=gbr_valdat)$predictions[,1]
-#names(gbr_valdat)[which(names(gbr_valdat)=='p1')]<-paste(k, 'MultiCol', sep='_')
+#names(gbr_valdat)[which(names(gbr_valdat)=='p1')]<-paste(k, 'MultiCol_Heron', sep='_')
 # Write out predictions for sp with GBR-local data for validation plots
 #write.csv(gbr_valdat, 'C:/seabirds/data/modelling/GBR_validation/NODD_gbr_val.csv', quote=F, row.names = F)
 
