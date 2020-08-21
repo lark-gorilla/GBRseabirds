@@ -126,6 +126,8 @@ for(k in sp_groups)
     dat<-filter(dat, spcol!='Christmas') 
   }
 
+
+#gbr_valdat<-dat[dat$spcol %in% c('Swains', 'Raine', 'Heron'),] #gbr valdat when needed
 sp_store<-NULL
 var_imp<-NULL
 for( i in unique(dat$spcol))
@@ -157,6 +159,10 @@ for( i in unique(dat$spcol))
   gbr$p1<-predict(rf1, data=gbr)$predictions[,1] # prob of foraging 0-1
   names(gbr)[which(names(gbr)=='p1')]<-paste(k, i, sep='_')
   
+  # predict to GBR training data for certain sp
+  #gbr_valdat$p1<-predict(rf1, data=gbr_valdat)$predictions[,1]
+  #names(gbr_valdat)[which(names(gbr_valdat)=='p1')]<-paste(k, i, sep='_')
+  
   #SPAC assessment
   #wtdist<-max(dat[dat$spcol==i,]$weight)-100 # 100 km from col
   #residz<-as.integer(as.character(dat[dat$spcol==i & dat$weight>wtdist,]$forbin))-
@@ -184,6 +190,13 @@ rf1<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
 
 gbr$MultiCol<-predict(rf1, data=gbr)$predictions[,1]
 names(gbr)[which(names(gbr)=='MultiCol')]<-paste(k, 'MultiCol', sep='_')
+
+# predict to GBR training data for certain sp
+#gbr_valdat$p1<-predict(rf1, data=gbr_valdat)$predictions[,1]
+#names(gbr_valdat)[which(names(gbr_valdat)=='p1')]<-paste(k, 'MultiCol', sep='_')
+# Write out predictions for sp with GBR-local data for validation plots
+#write.csv(gbr_valdat, 'C:/seabirds/data/modelling/GBR_validation/NODD_gbr_val.csv', quote=F, row.names = F)
+
 
 # Write out spatial predictions
 spdf<-SpatialPointsDataFrame(SpatialPoints(gbr[,1:2], proj4string = CRS(projection(templ))),
