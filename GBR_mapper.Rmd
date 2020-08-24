@@ -1,0 +1,28 @@
+---
+title: "Great Barrier Reef seabird foraging mapper"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, echo=F, warning=F, message=F}
+library(raster)
+library(dplyr)
+library(sf)
+library(leaflet)
+
+```
+
+
+```{r, echo=FALSE}
+colz<-read_sf('C:/seabirds/data/GIS/parks_gbr_cols.shp')
+
+m <- leaflet(colz) %>%
+  addTiles() %>% 
+  addCircleMarkers( popup= paste("Site:", colz$site_nm , "<br>", "species:", colz$species), stroke=F, radius=6, fillOpacity = 0.5)
+   
+m     
+```
