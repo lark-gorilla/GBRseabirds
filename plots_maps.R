@@ -33,7 +33,6 @@ colz$Longitude<-st_coordinates(colz)[,1]
 colz$Latitude<-st_coordinates(colz)[,2]
 st_geometry(colz)<-NULL
 colz<-colz%>%group_by(sp, coly)%>%summarise_all(first)
-colz2<-colz
 
 # formatting t_qual
 t_qual<-t_qual[-which(t_qual$ID%in%c('MEND2_RFBO_Christmas', 'MEND3_RFBO_Christmas',
@@ -225,8 +224,7 @@ if(i=='BRBO'){hotsp<-r2}else{hotsp<-hotsp+r2}
 
 #### ~~~~ **** ~~~~ ####
 
-#### ~~~~ Make plots ~~~~ ####
-#read in spatial data
+#### ~~~~ Read in spatial data ~~~~ ####
 for_rad<-read_sf('C:/seabirds/data/GIS/foraging_radii.shp')
 # add sp colours
 for_rad$md_spgr<-factor(for_rad$md_spgr, levels=c("BRBO", 'MABO', 'RFBO', 'FRBD', 'TRBD', 'WTST', "WTLG", "SOTE" , 'NODD', 'TERN'))
@@ -427,6 +425,68 @@ for(k in unique(for_rad$dsgntn_n))
 }
 
 #### ~~~~ **** ~~~~ #####
+
+#### ~~~~ Make GBR validation plots ~~~~ ####
+#
+mkGBRval<-function(my.sp='BRBO', pred_col='Swains')
+{
+sp_val<-read.csv(paste0('C:/seabirds/data/modelling/GBR_validation/', my.sp, '_GBR_val.csv'))
+# read foraging/hull shp
+forhull<-read_sf(paste0('C:/seabirds/data/GIS/', my.sp, 'kernhull.shp'))
+forhull$spcol<-substr(forhull$spcol, 6, nchar(forhull$spcol))
+forhull<-filter(forhull, spcol==pred_col & PA==1)
+
+if(my.sp=='BRBO'){gp1<-grep('MultiCol_',names(sp_val))
+notin<-names(sp_val)[gp1][paste(my.sp, 'MultiCol', pred_col, sep='_')!=names(sp_val)[gp1]]
+sp_val<-sp_val[,- which(notin==names(sp_val))]}
+
+names(sp_val)[grep('MultiCol',names(sp_val))]<-paste0(my.sp, '_MultiCol')
+
+sp_val<-filter(sp_val, spcol==pred_col)
+aucz_val<-filter(aucz_out, spcol==pred_col & sp==my.sp)
+sp_val<-sp_val[,c(1, 2, 14:ncol(sp_val))]%>%tidyr::gather(model, pred, -spcol, -forbin, -Latitude, -Longitude)
+sp_val$model<-substr(sp_val$model, 6, nchar(as.character(sp_val$model)))
+sp_val$model<-gsub("\\.", " ", sp_val$model)
+sp_val<-left_join(sp_val, aucz_val[,c(2, 7)], by=c('model'='Resample'))
+if('-Inf'%in%sp_val$thresh){sp_val[which(sp_val$thresh=='-Inf'),]$thresh<-0.5}
+sp_val$PA<-ifelse(sp_val$pred>=sp_val$thresh, 1, 0)
+
+sf_val<-sp_val%>%st_as_sf(coords=c('Longitude', 'Latitude'), crs=4326)
+sf_val$model<-as.factor(sf_val$model)
+sf_val$model<-factor(sf_val$model, levels=c(levels(sf_val$model)[levels(sf_val$model)!='MultiCol'], 'MultiCol'))
+plim=st_bbox(sf_val)
+
+p1<-ggplot()+geom_sf(data=sf_val, aes(colour=factor(PA)))+
+  geom_sf(data=filter(gbr_reef, FEAT_NAME=='Reef'), fill='NA', colour=alpha('brown',0.2))+
+  geom_sf(data=forhull, fill=NA)+facet_wrap(~model)+theme_bw()+
+  coord_sf(xlim = plim[c(1,3)], ylim = plim[c(2,4)], expand = F)+
+theme(legend.position = 'none')
+return(p1)
+}
+#### ~~~~ **** ~~~~ #####
+
+####~~~~ return GBR validation plots for GBR local sp ~~~~####
+png('C:/seabirds/plots/brbo_swains_GBRvalidation.png',width = 10, height =10 , units ="in", res =300)
+print(mkGBRval(my.sp='BRBO', pred_col='Swains')) ;dev.off()
+
+png('C:/seabirds/plots/brbo_raine_GBRvalidation.png',width = 10, height =10 , units ="in", res =300)
+print(mkGBRval(my.sp='BRBO', pred_col='Raine')) ;dev.off()
+
+png('C:/seabirds/plots/mabo_swains_GBRvalidation.png',width = 10, height =10 , units ="in", res =300)
+print(mkGBRval(my.sp='MABO', pred_col='Swains')) ;dev.off()
+
+png('C:/seabirds/plots/nodd_heron_GBRvalidation.png',width = 10, height =10 , units ="in", res =300)
+print(mkGBRval(my.sp='NODD', pred_col='Heron')) ;dev.off()
+
+png('C:/seabirds/plots/wtst_heron_GBRvalidation.png',width = 10, height =10 , units ="in", res =300)
+print(mkGBRval(my.sp='WTST', pred_col='Heron')) ;dev.off()
+
+png('C:/seabirds/plots/wtlg_heron_GBRvalidation.png',width = 10, height =10 , units ="in", res =300)
+print(mkGBRval(my.sp='WTLG', pred_col='Heron')) ;dev.off()
+
+
+#### ~~~~ **** ~~~~ #####
+
 
 ####~~~~ AUC/TSS density plot ~~~~####
 
@@ -683,6 +743,7 @@ mklocada<-function(my.sp='BRBO', my.metric='AUC')
   colz2$Latitude<-st_coordinates(colz2)[,2]
   st_geometry(colz2)<-NULL
   colz2<-colz2%>%group_by(sp, coly)%>%summarise_all(first)
+  colz2[colz2$coly=='chick',]$coly<-'Rat'
   
   colz2$sp_group<-colz2$sp
   colz2[colz2$sp %in% c('GRFR', 'LEFR', 'MAFR'),]$sp_group<-'FRBD'
@@ -756,12 +817,18 @@ mklocada<-function(my.sp='BRBO', my.metric='AUC')
     enviro_std<-decostand(dat[,c(4:13)], method="standardize")
     enviro_rda<-rda(enviro_std, scale=T)
     #screeplot(enviro_rda)
+    eig<-eigenvals(enviro_rda)
     enviro.sites.scores<-as.data.frame(scores(enviro_rda, choices=1:4, display='sites', scaling=1))
     enviro.sites.scores<-data.frame(enviro.sites.scores,dat[,c(1,2)])
-    es1<-enviro.sites.scores%>%filter(forbin!= 'Core')%>%group_by(spcol)%>%slice(chull(PC1, PC2))
+    es1<-enviro.sites.scores%>%filter(forbin!= 'Core')%>%group_by(spcol)%>%slice(chull(PC1, PC2))%>%as.data.frame()
+    es2<-enviro.sites.scores%>%filter(forbin!= 'Core')%>%
+      group_by(spcol)%>%summarise(PC1=median(PC1), PC2=median(PC2))%>%as.data.frame()
     
-    pniche<-ggplot(data=es1, aes(x=PC1, y=PC2))+
-      geom_polygon(aes(colour=spcol, fill=spcol), alpha=0.3)+theme_bw()
+    pniche<-ggplot()+
+      geom_polygon(data=es1, aes(x=PC1, y=PC2, colour=spcol,fill=spcol), alpha=0.3)+
+      geom_point(data=es2,aes(x=PC1, y=PC2, colour=spcol))+theme_bw()+
+      scale_y_continuous(paste(names(eig[2]), sprintf('(%0.1f%% explained var.)', 100* eig[2]/sum(eig))))+
+      scale_x_continuous(paste(names(eig[1]), sprintf('(%0.1f%% explained var.)', 100* eig[1]/sum(eig))))
     
     multiplot<-p1+p2+pniche
       
