@@ -139,7 +139,7 @@ bind_out2<-bind_out%>%select(sp, mn_sumr, mx_sumr, mn_sumr_ts, mx_sumr_ts, auc_r
 
 #### ~~~~ **** ~~~~ ####
 
-#### ~~~~ Make GBR colony radii ~~~~####
+#### ~~~~ Make GBR colony radii min, med, max~~~~####
 gbr_short<-gbr_cols%>%gather(species, trigger, -designation_name, -site_name, -designation_type, -Latitude, -Longitude )
 gbr_short<-na.omit(gbr_short) # remove sp not at sites
 gbr_short<-filter(gbr_short, !species %in% c('herald_petrel', 'silver_gull', 'australian_pelican',
@@ -194,6 +194,55 @@ for(i in unique(gbr_rep$site_name))
 # not pred
 # herald_petrel, silver_gull, australian_pelican, bridled_tern,
 # blacknaped_tern, roseate_tern, newcaledonianfairy_tern
+
+#### ~~~~ **** ~~~~ ####
+
+#### ~~~~ Make GBR colony radii ALL distances ~~~~####
+gbr_short<-gbr_cols%>%gather(species, trigger, -designation_name, -site_name, -designation_type, -Latitude, -Longitude )
+gbr_short<-na.omit(gbr_short) # remove sp not at sites
+gbr_short<-filter(gbr_short, !species %in% c('herald_petrel', 'silver_gull', 'australian_pelican',
+                                             'bridled_tern', 'blacknaped_tern', 'little_tern',
+                                             'roseate_tern', 'newcaledonianfairy_tern')) # rm unmodelled sp
+
+#make lookup
+gbr_short$mod_spgroup<-recode(gbr_short$species, brown_booby='BRBO',
+                              masked_booby = 'MABO', redfooted_booby= 'RFBO',
+                              lesser_frigatebird = 'FRBD', greater_frigatebird = 'FRBD',
+                              redtailed_tropicbird = 'TRBD', wedgetailed_shearwater = 'WTST',
+                              black_noddy='NODD', common_noddy='NODD',sooty_tern='SOTE',
+                              caspian_tern='TERN', crested_tern='TERN', lessercrested_tern='TERN')
+
+
+#replicate wtsh long trips and bind back in
+wtlong<-gbr_short%>%filter(species=='wedgetailed_shearwater')
+wtlong$mod_spgroup<-'WTLG'
+gbr_short<-bind_rows(gbr_short, wtlong)
+
+# gather species names within species groups
+gbr_short<-gbr_short%>%group_by(designation_name, site_name, Latitude, Longitude, designation_type, mod_spgroup)%>%
+  summarise(species=paste(species, collapse='_'), trigger=paste(trigger, collapse='_'))%>%
+  arrange(designation_name, site_name, mod_spgroup, species)%>%as.data.frame()
+
+#do dist lookup based on each radii
+spcol_tab<-read.csv('C:/seabirds/data/sp_col_summary.csv')
+
+gbr_rep<-left_join(gbr_short, spcol_tab[,c(1,9)], by=c('mod_spgroup'='Species.Group'))
+# make spatial
+gbr_rep<-gbr_rep%>%st_as_sf(coords=c('Longitude', 'Latitude'), crs=4326)
+
+for(i in unique(gbr_rep$site_name))
+{
+  col<-gbr_rep%>%filter(site_name==i)
+  colproj<-st_transform(col, crs=paste0('+proj=laea +lon_0=',st_coordinates(col)[1,1],
+                                        '+lat_0=',st_coordinates(col)[2,2], '+ellps=WGS84'))
+  colbuf<-colproj%>%st_buffer(dist=colproj$Max.roraging.range*1000)
+  colbuf<-colbuf%>%st_transform(crs=4326)
+  if(which(i==unique(gbr_rep$site_name))==1){buf_out<-colbuf}else{
+    buf_out<-rbind(buf_out, colbuf)}
+  print(i)
+}
+
+#write_sf(buf_out, 'C:/seabirds/data/GIS/foraging_radii_all_rad.shp')
 
 #### ~~~~ **** ~~~~ ####
 
@@ -428,7 +477,7 @@ for(k in unique(for_rad$dsgntn_n))
 
 #### ~~~~ Make GBR validation plots ~~~~ ####
 #
-mkGBRval<-function(my.sp='BRBO', pred_col='Swains')
+mkGBRval<-function(my.sp='BRBO', pred_col='Swains', with_reef=FALSE)
 {
 sp_val<-read.csv(paste0('C:/seabirds/data/modelling/GBR_validation/', my.sp, '_GBR_val.csv'))
 # read foraging/hull shp
@@ -443,11 +492,14 @@ sp_val<-sp_val[,- which(notin==names(sp_val))]}
 names(sp_val)[grep('MultiCol',names(sp_val))]<-paste0(my.sp, '_MultiCol')
 
 sp_val<-filter(sp_val, spcol==pred_col)
-aucz_val<-filter(aucz_out, spcol==pred_col & sp==my.sp)
+#aucz_val<-filter(aucz_out, spcol==pred_col & sp==my.sp)
 sp_val<-sp_val[,c(1, 2, 14:ncol(sp_val))]%>%tidyr::gather(model, pred, -spcol, -forbin, -Latitude, -Longitude)
 sp_val$model<-substr(sp_val$model, 6, nchar(as.character(sp_val$model)))
 sp_val$model<-gsub("\\.", " ", sp_val$model)
-sp_val<-left_join(sp_val, aucz_val[,c(2, 7)], by=c('model'='Resample'))
+thresh_lkup<-sp_val%>%group_by(model)%>%
+  summarise(thresh=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),
+                          'best', best.method='youden', transpose=F)$threshold[1])
+sp_val<-left_join(sp_val, thresh_lkup, by='model')
 if('-Inf'%in%sp_val$thresh){sp_val[which(sp_val$thresh=='-Inf'),]$thresh<-0.5}
 sp_val$PA<-ifelse(sp_val$pred>=sp_val$thresh, 1, 0)
 
@@ -456,9 +508,11 @@ sf_val$model<-as.factor(sf_val$model)
 sf_val$model<-factor(sf_val$model, levels=c(levels(sf_val$model)[levels(sf_val$model)!='MultiCol'], 'MultiCol'))
 plim=st_bbox(sf_val)
 
-p1<-ggplot()+geom_sf(data=sf_val, aes(colour=factor(PA)))+
-  geom_sf(data=filter(gbr_reef, FEAT_NAME=='Reef'), fill='NA', colour=alpha('brown',0.2))+
-  geom_sf(data=forhull, fill=NA)+facet_wrap(~model)+theme_bw()+
+p1<-ggplot()+geom_sf(data=sf_val, aes(colour=factor(PA)))
+
+  if(with_reef==TRUE){p1<-p1+geom_sf(data=filter(gbr_reef, FEAT_NAME=='Reef'), fill='NA', colour=alpha('brown',0.2))}
+  
+p1<-p1+geom_sf(data=forhull, fill=NA)+facet_wrap(~model)+theme_bw()+
   coord_sf(xlim = plim[c(1,3)], ylim = plim[c(2,4)], expand = F)+
 theme(legend.position = 'none')
 return(p1)
@@ -466,22 +520,22 @@ return(p1)
 #### ~~~~ **** ~~~~ #####
 
 ####~~~~ return GBR validation plots for GBR local sp ~~~~####
-png('C:/seabirds/plots/brbo_swains_GBRvalidation.png',width = 10, height =10 , units ="in", res =300)
+png('C:/seabirds/plots/brbo_swains_GBRvalidation2.png',width = 10, height =10 , units ="in", res =300)
 print(mkGBRval(my.sp='BRBO', pred_col='Swains')) ;dev.off()
 
-png('C:/seabirds/plots/brbo_raine_GBRvalidation.png',width = 10, height =10 , units ="in", res =300)
+png('C:/seabirds/plots/brbo_raine_GBRvalidation2.png',width = 10, height =10 , units ="in", res =300)
 print(mkGBRval(my.sp='BRBO', pred_col='Raine')) ;dev.off()
 
-png('C:/seabirds/plots/mabo_swains_GBRvalidation.png',width = 10, height =10 , units ="in", res =300)
+png('C:/seabirds/plots/mabo_swains_GBRvalidation2.png',width = 10, height =10 , units ="in", res =300)
 print(mkGBRval(my.sp='MABO', pred_col='Swains')) ;dev.off()
 
-png('C:/seabirds/plots/nodd_heron_GBRvalidation.png',width = 10, height =10 , units ="in", res =300)
+png('C:/seabirds/plots/nodd_heron_GBRvalidation2.png',width = 10, height =10 , units ="in", res =300)
 print(mkGBRval(my.sp='NODD', pred_col='Heron')) ;dev.off()
 
-png('C:/seabirds/plots/wtst_heron_GBRvalidation.png',width = 10, height =10 , units ="in", res =300)
+png('C:/seabirds/plots/wtst_heron_GBRvalidation2.png',width = 10, height =10 , units ="in", res =300)
 print(mkGBRval(my.sp='WTST', pred_col='Heron')) ;dev.off()
 
-png('C:/seabirds/plots/wtlg_heron_GBRvalidation.png',width = 10, height =10 , units ="in", res =300)
+png('C:/seabirds/plots/wtlg_heron_GBRvalidation2.png',width = 10, height =10 , units ="in", res =300)
 print(mkGBRval(my.sp='WTLG', pred_col='Heron')) ;dev.off()
 
 
