@@ -246,6 +246,65 @@ for(i in unique(gbr_rep$site_name))
 
 #### ~~~~ **** ~~~~ ####
 
+#### ~~~~ Make spgroup-colony foraging hotspots ~~~~ ####
+all_rad<-read_sf('C:/seabirds/data/GIS/foraging_radii_all_rad.shp')
+
+pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds', full.names=T)
+pred_list<-pred_list[grep('indivSUM.tif', pred_list)]
+mod_pred<-stack(pred_list)
+
+for( i in unique(all_rad$md_spgr))
+{
+  col<-all_rad[all_rad$md_spgr==i,]
+  sp_ras1<-subset(mod_pred, paste0(i,'_indivSUM'))
+  
+  for(j in unique(col$site_nm))
+  {
+    col_sp<-filter(col, site_nm==j)%>%arrange(desc(Mx_rrg_))
+    sp_ras<-crop(sp_ras1, extent(col_sp[1,]))
+    
+    for(k in 1:nrow(col_sp))
+    {
+      inrad<-mask(sp_ras, as(col_sp[k,], 'Spatial'), updatevalue=0, updateNA=T)
+      ir2<-inrad
+      ir2[ir2==0]<-NA
+      q <- quantile(ir2, 0.8) # top 20%
+      toprad<-reclassify(inrad, c(-Inf, q, 0, q, Inf, 1))
+      if(k==1){sum_rad<-toprad}else{sum_rad<-sum_rad+toprad}
+      #plot(sum_rad)
+    }
+    
+    if(which(j==unique(col$site_nm))==1){mos_ras<-sum_rad}else{
+      mos_ras <- mosaic(mos_ras, sum_rad, fun = sum)}
+    
+    sr2<-sum_rad
+    sr2[sr2==0]<-NA
+    q2 <- quantile(sr2, 0.8) # top 20%
+    hots<-reclassify(sum_rad, c(-Inf, q2, NA, q2, Inf, 1))
+    s1<-st_as_sf(rasterToPolygons(hots, dissolve = T)) 
+    s2<-drop_crumbs(s1, threshold=12000000)
+    s3<-fill_holes(s2, threshold=54000000)
+    #s4 <- smoothr::smooth(s3, method = "ksmooth", smoothness = 2)
+    s3$dsgntn_n<-col$dsgntn_n[1]
+    s3$site_nm<-col$site_nm[1]
+    s3$dsgntn_t<-col$dsgntn_t[1]
+    s3$md_spgr<-col$md_spgr[1]
+    s3$species<-col$species[1]
+    s3$trigger<-col$trigger[1]
+    
+    if(which(j==unique(col$site_nm))==1){core_pols<-s3}else{
+      core_pols <- rbind(core_pols, s3)}
+    
+    plot(mos_ras)
+    plot(core_pols, add=T)
+    
+  }
+  
+}
+
+#### ~~~~ **** ~~~~ ####
+
+
 #### ~~~~ Make foraging hotspot layer ~~~~ ####
 pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds', full.names=T)
 pred_list<-pred_list[grep('indivSUM.tif', pred_list)]
