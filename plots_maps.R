@@ -273,9 +273,10 @@ for( i in unique(all_rad$md_spgr))
       if(k==1){sum_rad<-toprad}else{sum_rad<-sum_rad+toprad}
       #plot(sum_rad)
     }
+    # need to incorporate population information
     
     if(which(j==unique(col$site_nm))==1){mos_ras<-sum_rad}else{
-      mos_ras <- mosaic(mos_ras, sum_rad, fun = sum)}
+      mos_ras <- mosaic(mos_ras, sum_rad, fun = mean)} # or max
     
     sr2<-sum_rad
     sr2[sr2==0]<-NA
@@ -285,12 +286,12 @@ for( i in unique(all_rad$md_spgr))
     s2<-drop_crumbs(s1, threshold=12000000)
     s3<-fill_holes(s2, threshold=54000000)
     #s4 <- smoothr::smooth(s3, method = "ksmooth", smoothness = 2)
-    s3$dsgntn_n<-col$dsgntn_n[1]
-    s3$site_nm<-col$site_nm[1]
-    s3$dsgntn_t<-col$dsgntn_t[1]
-    s3$md_spgr<-col$md_spgr[1]
-    s3$species<-col$species[1]
-    s3$trigger<-col$trigger[1]
+    s3$dsgntn_n<-col_sp$dsgntn_n[1]
+    s3$site_nm<-col_sp$site_nm[1]
+    s3$dsgntn_t<-col_sp$dsgntn_t[1]
+    s3$md_spgr<-col_sp$md_spgr[1]
+    s3$species<-col_sp$species[1]
+    s3$trigger<-col_sp$trigger[1]
     
     if(which(j==unique(col$site_nm))==1){core_pols<-s3}else{
       core_pols <- rbind(core_pols, s3)}
@@ -299,7 +300,9 @@ for( i in unique(all_rad$md_spgr))
     plot(core_pols, add=T)
     
   }
-  
+writeRaster(mos_ras, paste0('C:/seabirds/data/modelling/GBR_preds/col_radii_hotspots_', i, '.tif'), overwrite=T)
+write_sf(core_pols, paste0('C:/seabirds/data/GIS/col_radii_core_hotspots_', i, '.shp'), delete_layer = T)
+print(i)  
 }
 
 #### ~~~~ **** ~~~~ ####
