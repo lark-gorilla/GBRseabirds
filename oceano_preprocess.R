@@ -228,6 +228,32 @@ d2<-d2[order(d2$ID),]
 
 #write.csv(d2, 'C:/seabirds/data/dataID_month_lookup.csv', quote=F, row.names=F) 
 
+#### ~~~~ custom merging of WTSH Heron GPS (2015) with PTT kernels from 2011 and 2013 (Miller et al 2015, MEPS) ~~~~####
+#kerns
+gps_2015<-read_sf('C:/seabirds/data/GIS/WTLGkernhull.shp')%>%
+  filter(spcol=='WTSH Heron' & PA==1)
+ptt_2011<-read_sf('C:/seabirds/phd/analyses/paper2/spatial/LTHeronPTT2011.shp')%>%
+  filter(id==25)%>% st_set_crs(st_crs(gps_2015)) #select 25% UD
+ptt_2013<-read_sf('C:/seabirds/phd/analyses/paper2/spatial/LTHeronPTT2013.shp')%>%
+  filter(id==25)%>% st_set_crs(st_crs(gps_2015))#select 25% UD
+s1<-st_union(gps_2015,ptt_2013)
+s2<-st_union(s1,ptt_2011)
+s2<-s2%>%dplyr::select('spcol', 'PA')
+#hull
+gps_hull<-read_sf('C:/seabirds/data/GIS/WTLGkernhull.shp')%>%
+  filter(spcol=='WTSH Heron' & PA==0)
+ptt_pts<-read.csv('C:/seabirds/phd/analyses/paper2/spreads/heron_PTT_LT_only.csv')
+ptt_pts<-ptt_pts[-grep('2012', ptt_pts$Date),]
+ptt_pts<-ptt_pts[ptt_pts$Nest_id!=66,]
+ptt_pts<-st_as_sf(ptt_pts,coords=c('Longitude', 'Latitude'), crs=4326)%>%
+  summarise( geometry = st_combine( geometry ))
+both_hulls<-st_union(gps_hull, ptt_pts)%>%st_convex_hull()
+
+heron1<-rbind(s2, both_hulls)
+wtlg_kerns<-filter(wtlg_kerns, spcol!='WTSH Heron')
+wtlg_kerns<-rbind(wtlg_kerns, heron1)
+write_sf(wtlg_kerns, 'C:/seabirds/data/GIS/WTLGkernhull.shp', delete_dsn=T)
+####~~~ + ~~~~####
 
 # 50% core area vs convex hull psuedo-abs approach
 
@@ -444,7 +470,7 @@ qplot(data=t_qual, x=max_dist, geom='histogram')+facet_wrap(~ID, scales='free')
 # extract pred area
 tmpl2km<-raster('C:/seabirds/sourced_data/oceano_modelready/extraction_template_2km.tif')
 
-pred_a<-read_sf('C:/seabirds/data/GIS/pred_area.shp')
+pred_a<-read_sf('C:/seabirds/data/GIS/pred_area_large.shp')
 pred_a<-as(pred_a, 'Spatial')
 
 sst<-stack('C:/seabirds/sourced_data/oceano_modelready/sst_mn.tif',
@@ -471,7 +497,7 @@ ex_slope<-extract(slope, pred_pts)
 out3<-data.frame(pred_pts@coords, ex_sst, ex_chl, ex_front, ex_bathy, ex_slope)
 
 out4<-na.omit(out3) # cut out land
-write.csv(out4, 'C:/seabirds/data/pred_area_modelready_2km.csv', quote=F, row.names=F)
+write.csv(out4, 'C:/seabirds/data/pred_area_large_modelready_2km.csv', quote=F, row.names=F)
 
 
 # clip bathy to pred area extent as template for rasterize later on
