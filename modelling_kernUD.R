@@ -135,11 +135,14 @@ for( i in unique(dat$spcol))
   #pr1<-table(dat[dat$spcol==i,]$forbin)[1]/table(dat[dat$ID==i,]$forbin)[2]
 
   rf1<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp,
-              data=dat[dat$spcol==i,], num.trees=500, 
-              mtry=unique(filter(indiv_col_tune, Resample==i)$mtry), 
-              min.node.size=unique(filter(indiv_col_tune, Resample==i)$min.node.size),
-              splitrule = "gini",  importance='impurity',probability =T)
-  print(rf1)
+                data=dat[dat$spcol==i,], num.trees=500, 
+                mtry=unique(filter(indiv_col_tune, Resample==i)$mtry), 
+                min.node.size=unique(filter(indiv_col_tune, Resample==i)$min.node.size),
+                splitrule = "gini",  importance='impurity',probability =T)  
+    
+  # predict to other colonies 
+  dat$p1<-predict(rf1, data=dat)$predictions[,1] # prob of foraging 0-1
+  names(dat)[which(names(dat)=='p1')]<-paste(k, i, sep='_')
   
   # predict to training and add to validation data.frame
   p1<-predict(rf1, data=dat[dat$spcol==i,])$predictions[,1] # prob of foraging 0-1 Note column 1 == Core
@@ -162,6 +165,40 @@ for( i in unique(dat$spcol))
   # predict to GBR training data for certain sp
   #gbr_valdat$p1<-predict(rf1, data=gbr_valdat)$predictions[,1]
   #names(gbr_valdat)[which(names(gbr_valdat)=='p1')]<-paste(k, i, sep='_')
+  
+  # Internval cross validation for GBR models
+  #coltemp<-dat[dat$spcol==i,]
+  #coltempcore<-coltemp[coltemp$forbin=='Core',]
+  #coltempcore$clust<-kmeans(coltempcore[,14:15], 10)$cluster
+  
+  #coltemp_subs<-NULL
+  #for(h in 1:max(coltempcore$clust))
+  #{
+  #maxn<-nrow(coltemp[coltemp$forbin=='PsuedoA',])
+  #PA_samp<-coltemp[coltemp$forbin=='PsuedoA',][sample(1:maxn, (nrow(coltempcore[coltempcore$clust==h,])*3), replace=F),]
+  #PA_samp$clust<-h
+  #coltemp_subs<-rbind(coltemp_subs, rbind(coltempcore[coltempcore$clust==h,], PA_samp))
+}
+# output sample so it is fixed 
+
+# subs_preds<-NULL
+#  for(m in 1:max(coltempcore$clust))
+#  {
+#  rf1<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp,
+#              data=coltemp_subs[coltemp_subs$clust==m,], num.trees=500, 
+#              mtry=unique(filter(indiv_col_tune, Resample==i)$mtry), 
+#              min.node.size=unique(filter(indiv_col_tune, Resample==i)$min.node.size),
+#              splitrule = "gini",  importance='impurity',probability =T)
+#  
+#  subs_preds<-cbind(subs_preds, predict(rf1, data=dat)$predictions[,1])
+#  #print(head(subs_preds))
+#  print(m)
+#  }
+
+# predict to other colonies 
+#dat$p1<-rowSums(subs_preds) # prob of foraging 0-1
+#names(dat)[which(names(dat)=='p1')]<-paste(k, i, sep='_')  
+
   
   #SPAC assessment
   #wtdist<-max(dat[dat$spcol==i,]$weight)-100 # 100 km from col
@@ -371,3 +408,55 @@ writeRaster(sp_sum, paste0('C:/seabirds/data/modelling/GBR_preds/', i, '_indivSU
 writeRaster(thresh_sum, paste0('C:/seabirds/data/modelling/GBR_preds/', i, '_indivSUM_class.tif'),overwrite=T)
 print(i)}
  
+
+#temp checking
+dat$spcol<-paste('BRBO', dat$spcol, sep='_')
+dat<-dat%>%group_by(spcol)%>%mutate(index=1:n())%>%as.data.frame()
+#dat$sum_mod<-rowSums(dat[,16:31])
+#dat$mean_mod<-rowMeans(dat[,16:31])
+#dat<-dat%>%group_by(spcol)%>%mutate(sum_mod_norm=normalized(sum_mod))%>%as.data.frame()
+
+d1<-dat[,c(1,2,16:32)]%>%tidyr::gather('predcol', 'pred', -spcol,-forbin,-index)
+
+d1<-d1%>%group_by(spcol, predcol)%>%mutate(pred_norm=normalized(pred))%>%as.data.frame()
+
+d_sum<-d1%>%filter(spcol!=predcol)%>%group_by(forbin, spcol, index)%>%
+  summarise(predcol='SUM',pred=sum(pred))%>%as.data.frame()
+
+d_sum2<-d1%>%filter(spcol!=predcol)%>%group_by(forbin, spcol, index)%>%
+  summarise(predcol='SUM2',pred=sum(pred_norm))%>%as.data.frame()
+
+d3<-rbind(d1%>%select(-pred_norm), d_sum, d_sum2)
+
+indiv_aucz<-d3%>%group_by(spcol,predcol)%>%
+  summarise(auc=as.double(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'), direction="<")$auc),
+            thresh=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$threshold[1],
+            sens=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$sensitivity[1],
+            spec=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$specificity[1])
+indiv_aucz$TSS=indiv_aucz$sens+indiv_aucz$spec-1
+
+dt1<-indiv_aucz%>%filter(spcol!=predcol )%>%group_by(predcol)%>%summarise(mean(auc))
+dt1$auc_norm<-normalized(dt1$`mean(auc)`)
+d4<-left_join(d1, dt1, by="predcol")
+
+d_sum3<-d4%>%filter(spcol!=predcol)%>%group_by(forbin, spcol, index)%>%
+  summarise(predcol='SUM3',pred=sum(pred_norm*auc_norm))%>%as.data.frame()
+
+indiv_auczSUM<-d_sum3%>%group_by(spcol, predcol)%>%
+  summarise(auc=as.double(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'), direction="<")$auc),
+            thresh=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$threshold[1],
+            sens=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$sensitivity[1],
+            spec=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$specificity[1])
+indiv_aucz$TSS=indiv_aucz$sens+indiv_aucz$spec-1
+
+indiv_aucz2<-rbind(indiv_aucz, indiv_auczSUM)
+
+indiv_aucz2%>%filter(spcol!=predcol )%>%group_by(predcol)%>%summarise(mean(auc))
+
+ggplot(indiv_aucz2, aes(x = spcol, y = predcol)) + 
+       geom_raster(aes(fill=auc))+ 
+       geom_text(aes(label=round(auc, 2)), size=2)+
+       theme_bw() + theme(axis.text.x=element_text(size=9, angle=90, vjust=0.3),
+        axis.text.y=element_text(size=9),
+        plot.title=element_text(size=11))+ylab('Predictions from')+xlab('Predicting to')
+        
