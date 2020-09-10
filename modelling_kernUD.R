@@ -169,7 +169,7 @@ for( i in unique(dat$spcol))
   # Internval cross validation for GBR models
   #coltemp<-dat[dat$spcol==i,]
   #coltempcore<-coltemp[coltemp$forbin=='Core',]
-  #coltempcore$clust<-kmeans(coltempcore[,14:15], 10)$cluster
+  #coltempcore$clust<-kmeans(coltempcore[,14:15], 5)$cluster
   
   #coltemp_subs<-NULL
   #for(h in 1:max(coltempcore$clust))
@@ -178,7 +178,7 @@ for( i in unique(dat$spcol))
   #PA_samp<-coltemp[coltemp$forbin=='PsuedoA',][sample(1:maxn, (nrow(coltempcore[coltempcore$clust==h,])*3), replace=F),]
   #PA_samp$clust<-h
   #coltemp_subs<-rbind(coltemp_subs, rbind(coltempcore[coltempcore$clust==h,], PA_samp))
-}
+  #}
 # output sample so it is fixed 
 
 # subs_preds<-NULL
@@ -197,6 +197,14 @@ for( i in unique(dat$spcol))
 
 # predict to other colonies 
 #dat$p1<-rowSums(subs_preds) # prob of foraging 0-1
+#names(dat)[which(names(dat)=='p1')]<-paste(k, i, sep='_')  
+
+  # messing with stratified sampling
+#model2 = randomForest(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp, 
+#                                           data = coltemp_subs, 
+#                                          sampsize=rep(min(table(coltemp_subs$clust)),5),
+#                      strata=coltemp_subs$clust)
+#dat$p1<-predict(model2, newdata=dat, type='prob')[,1]
 #names(dat)[which(names(dat)=='p1')]<-paste(k, i, sep='_')  
 
   
