@@ -129,7 +129,7 @@ for( i in unique(dat$spcol))
     
   # predict to other colonies 
   dat$p1<-predict(rf1, data=dat)$predictions[,1] # prob of foraging 0-1
-  names(dat)[which(names(dat)=='p1')]<-paste(k, i, sep='_')
+  names(dat)[which(names(dat)=='p1')]<-i
   
   # predict to training and add to validation data.frame
   p1<-predict(rf1, data=dat[dat$spcol==i,])$predictions[,1] # prob of foraging 0-1 Note column 1 == Core
@@ -219,87 +219,81 @@ for(j in 1:length(spdf@data))
 #write.csv(sp_store, paste0('C:/seabirds/data/modelling/SPAC/',k,'_spac.csv'), quote=F, row.names = F)
 write.csv(var_imp, paste0('C:/seabirds/data/modelling/var_imp/',k,'_var_imp.csv'), quote=F, row.names = F)
 
-# Clustering sites based on predictive ability
-if(k=='SOTE'){
-  indiv_col_tune$Resample<-as.character(indiv_col_tune$Resample)
-  indiv_col_tune$spcol<-as.character(indiv_col_tune$spcol)
-  indiv_col_tune[indiv_col_tune$Resample=='chick',]$Resample<-'Rat'
-  indiv_col_tune[indiv_col_tune$spcol=='chick',]$spcol<-'Rat'
-  all_col_tune$Resample.x<-as.character(all_col_tune$Resample.x)
-  all_col_tune[all_col_tune$Resample.x=='chick',]$Resample.x<-'Rat'
-  dat$spcol<-as.character(dat$spcol)
-  dat[dat$spcol=='chick',]$spcol<-'Rat'}
+#calc AUC and TSS
 
-indiv_col_tune$id<-apply(as.data.frame(indiv_col_tune), 1, FUN=function(x){paste(sort(c(as.character(x[1]), as.character(x[2]))), sep='.', collapse='.')})
-matxdat<-indiv_col_tune%>%group_by(id)%>%summarise_if(is.numeric, sum)
-indiv_col_tune$id<-NULL
+indiv_aucz<-tidyr::gather(dat[,c(1,2,16:ncol(dat))], Resample, pred, -forbin, -spcol)%>%
+  group_by(Resample, spcol)%>%
+  summarise(auc=as.double(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'), direction="<")$auc),
+            thresh=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$threshold[1],
+            sens=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$sensitivity[1],
+            spec=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$specificity[1])
+indiv_aucz$TSS=indiv_aucz$sens+indiv_aucz$spec-1
+
+# Clustering sites based on predictive ability
+
+indiv_aucz$id<-apply(as.data.frame(indiv_aucz), 1, FUN=function(x){paste(sort(c(as.character(x[1]), as.character(x[2]))), sep='.', collapse='.')})
+matxdat<-indiv_aucz%>%group_by(id)%>%summarise_if(is.numeric, sum)
+indiv_aucz$id<-NULL
 matxdat$Resample<-unlist(lapply(strsplit(matxdat$id, '\\.'), function(x){x[1]}))
 matxdat$spcol<-unlist(lapply(strsplit(matxdat$id, '\\.'), function(x){x[2]}))
 
-d1<-with(matxdat[matxdat$Resample!=matxdat$spcol,c(9,10,4)], 
-     structure(auc, Size = length(unique(matxdat$Resample)),
-      Labels = unique(matxdat$Resample),
-      Diag = F, Upper = FALSE,method = "user", class = "dist"))
+# calc AUC weighted ensemble of colony models
 
-d1<-(2-d1)
+dat<-dat%>%group_by(spcol)%>%mutate(index=1:n())%>%as.data.frame()
 
-d2<-with(matxdat[matxdat$Resample!=matxdat$spcol,c(9,10,8)], 
-         structure(TSS, Size = length(unique(matxdat$Resample)),
-                   Labels = unique(matxdat$Resample),
-                   Diag = F, Upper = FALSE,method = "user", class = "dist"))
-d2<-(2-d2)
+d1<-dat[,c(1,2,16:ncol(dat))]%>%tidyr::gather('Resample', 'pred', -spcol,-forbin,-index)
 
-hc_auc<-hclust(d1, method='average')
-hc_tss<-hclust(d2, method='average')
+d1<-d1%>%group_by(spcol, Resample)%>%mutate(pred_norm=normalized(pred))%>%as.data.frame()
 
-png(paste0('C:/seabirds/data/modelling/plots/',k, '_hclust.png'),width = 6, height =12 , units ="in", res =300)
-par(mfrow=c(2,1))
-plot(hc_auc, main='AUC-derived clustering')
-plot(hc_tss, main='TSS-derived clustering')
-dev.off()
-par(mfrow=c(1,1))
+auc_mn<-indiv_aucz%>%filter(spcol!=Resample)%>%group_by(Resample)%>%
+  summarise_if(is.numeric ,mean)
+auc_mn$auc_norm<-(normalized(auc_mn$auc)+1)
+auc_mn$auc_int<-auc_mn$auc*10
+d2<-left_join(d1, auc_mn[,c(1,2,7,8)], by="Resample")
+
+ensem<-d2%>%filter(spcol!=Resample)%>%group_by(forbin, spcol, index)%>%
+  summarise(Resample='Ensemble',pred=sum(pred_norm*auc_int))%>%as.data.frame()
+
+indiv_auczENS<-ensem%>%group_by(spcol, Resample)%>%
+  summarise(auc=as.double(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'), direction="<")$auc),
+            thresh=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$threshold[1],
+            sens=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$sensitivity[1],
+            spec=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$specificity[1])
+indiv_auczENS$TSS=indiv_auczENS$sens+indiv_auczENS$spec-1
+
+indiv_aucz<-rbind(indiv_aucz, indiv_auczENS)
 
 # Visualising predicitve ability between colonies
+#pull in niave multicol model results
+all_col_tune<-read.csv(paste0('C:/seabirds/data/modelling/rf_tuning/',k, '_all_col_tune.csv'))
+all_col_tune<-na.omit(left_join(all_col_tune, filter(my_hyp, Resample=='MultiCol' & sp==k),
+                                by=c('mtry', 'min.node.size')))
 names(all_col_tune)[names(all_col_tune)=='Resample.x']<-'spcol'
 all_col_tune$sp<-NULL
 all_col_tune$Resample.y<-NULL
-aucz<-rbind(indiv_col_tune, data.frame(Resample='MultiCol', all_col_tune))
+aucz<-rbind(data.frame(indiv_aucz), data.frame(Resample='MultiCol', all_col_tune[,c(1,4:8)]))
 
-temp1<-aucz%>%group_by(Resample)%>%
-  filter(as.character(spcol)!=as.character(Resample))%>%summarise_if(is.numeric ,sum)
-aucz<-rbind(aucz,data.frame(temp1[,1], spcol='SUM', temp1[,2:8]))
+# remake and bind in MEAN 
+auc_mn<-aucz%>%filter(spcol!=Resample)%>%group_by(Resample)%>%
+  summarise_if(is.numeric ,mean)
+aucz<-rbind(aucz,data.frame(auc_mn[,1], spcol='MEAN', auc_mn[,2:6]))
 
-aucz$Resample_auc<-factor(aucz$Resample, levels=c("MultiCol",rev(hc_auc$labels[hc_auc$order])))
-aucz$spcol_auc<-factor(aucz$spcol,levels=c("SUM",rev(hc_auc$labels[hc_auc$order])))
-aucz$Resample_tss<-factor(aucz$Resample, levels=c("MultiCol",rev(hc_tss$labels[hc_tss$order])))
-aucz$spcol_tss<-factor(aucz$spcol,levels=c("SUM",rev(hc_tss$labels[hc_tss$order])))
-
+aucz$Resample_auc<-factor(aucz$Resample, levels=c("MultiCol","Ensemble",rev(hc_auc$labels[hc_auc$order])))
+aucz$spcol_auc<-factor(aucz$spcol,levels=c("MEAN",rev(hc_auc$labels[hc_auc$order])))
+aucz$Resample_tss<-factor(aucz$Resample, levels=c("MultiCol","Ensemble",rev(hc_tss$labels[hc_tss$order])))
+aucz$spcol_tss<-factor(aucz$spcol,levels=c("MEAN",rev(hc_tss$labels[hc_tss$order])))
 
 aucz$auctemp<-aucz$auc
-aucz[aucz$spcol=='SUM',]$auctemp<-NA
+aucz[aucz$spcol=='MEAN',]$auctemp<-NA
 aucz$auc_bin<-cut(aucz$auctemp, c(0, 0.6, 0.7, 0.8, 0.9, 1),include.lowest =T)
 aucz$auc_bin<-factor(aucz$auc_bin, levels = levels(addNA(aucz$auc_bin)),
                      labels = c("#cccccc", "#ffffb2", "#fecc5c", '#fd8d3c', '#f03b20', '#c6dbef'), exclude = NULL)
 
 aucz$tsstemp<-aucz$TSS
-aucz[aucz$spcol=='SUM',]$tsstemp<-NA
+aucz[aucz$spcol=='MEAN',]$tsstemp<-NA
 aucz$tss_bin<-cut(aucz$tsstemp, c(0, 0.2, 0.6, 1), include.lowest =T)
 aucz$tss_bin<-factor(aucz$tss_bin, levels = levels(addNA(aucz$tss_bin)),
                      labels = c("#cccccc", "#fecc5c", '#f03b20', '#c6dbef'), exclude = NULL)
-
-p_auc<-ggplot(aucz, aes(x = spcol_auc, y = Resample_auc)) + 
-  geom_raster(aes(fill=auc_bin)) +scale_fill_identity()+ 
-  geom_text(aes(label=round(auc, 2)), size=2)+
-  theme_bw() + theme(axis.text.x=element_text(size=9, angle=90, vjust=0.3),
-                     axis.text.y=element_text(size=9),
-                     plot.title=element_text(size=11))+ylab('Predictions from')+xlab('Predicting to')
-
-p_tss<-ggplot(aucz, aes(x = spcol_tss, y = Resample_tss)) + 
-  geom_raster(aes(fill=tss_bin)) +scale_fill_identity()+ 
-  geom_text(aes(label=round(TSS, 2)), size=2)+
-  theme_bw() + theme(axis.text.x=element_text(size=9, angle=90, vjust=0.3),
-                     axis.text.y=element_text(size=9),
-                     plot.title=element_text(size=11))+ylab('Predictions from')+xlab('Predicting to')
 
 # save outputs
 matx_out<-rbind(matx_out, data.frame(sp=k, matxdat)) # capture hclust for plotting
