@@ -127,7 +127,6 @@ for(k in sp_groups)
   }
 
 
-#gbr_valdat<-dat[dat$spcol %in% c('Swains', 'Raine', 'Heron'),] #gbr valdat when needed
 sp_store<-NULL
 var_imp<-NULL
 for( i in unique(dat$spcol))
@@ -138,7 +137,7 @@ for( i in unique(dat$spcol))
                 data=dat[dat$spcol==i,], num.trees=500, 
                 mtry=unique(filter(indiv_col_tune, Resample==i)$mtry), 
                 min.node.size=unique(filter(indiv_col_tune, Resample==i)$min.node.size),
-                splitrule = "gini",  importance='impurity',probability =T)  
+                splitrule = "gini",  importance='impurity',probability =T, seed=24)  
     
   # predict to other colonies 
   dat$p1<-predict(rf1, data=dat)$predictions[,1] # prob of foraging 0-1
@@ -188,7 +187,7 @@ for( i in unique(dat$spcol))
 #              data=coltemp_subs[coltemp_subs$clust==m,], num.trees=500, 
 #              mtry=unique(filter(indiv_col_tune, Resample==i)$mtry), 
 #              min.node.size=unique(filter(indiv_col_tune, Resample==i)$min.node.size),
-#              splitrule = "gini",  importance='impurity',probability =T)
+#              splitrule = "gini",  importance='impurity',probability =T, seed=24)
 #  
 #  subs_preds<-cbind(subs_preds, predict(rf1, data=dat)$predictions[,1])
 #  #print(head(subs_preds))
@@ -226,12 +225,12 @@ for( i in unique(dat$spcol))
 }
 
 # make full model and predict to GBR
-
+# check if adding case weights improves(https://github.com/imbs-hl/ranger/issues/167)
 rf1<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
             data=dat, num.trees=500,  
             mtry=unique(all_col_tune$mtry), 
             min.node.size=unique(all_col_tune$min.node.size),
-            splitrule = "gini",  importance='impurity',probability =T)
+            splitrule = "gini",  importance='impurity',probability =T, seed=24)
 
 gbr$MultiCol<-predict(rf1, data=gbr)$predictions[,1]
 names(gbr)[which(names(gbr)=='MultiCol')]<-paste(k, 'MultiCol', sep='_')
@@ -241,7 +240,7 @@ names(gbr)[which(names(gbr)=='MultiCol')]<-paste(k, 'MultiCol', sep='_')
 #            data=dat[dat$spcol!='Heron',], num.trees=500,  
 #            mtry=unique(all_col_tune$mtry), 
 #            min.node.size=unique(all_col_tune$min.node.size),
-#            splitrule = "gini",  importance='impurity',probability =T)
+#            splitrule = "gini",  importance='impurity',probability =T, seed=24)
 #gbr_valdat$p1<-predict(rf1, data=gbr_valdat)$predictions[,1]
 #names(gbr_valdat)[which(names(gbr_valdat)=='p1')]<-paste(k, 'MultiCol_Heron', sep='_')
 # Write out predictions for sp with GBR-local data for validation plots
@@ -260,7 +259,7 @@ for(j in 1:length(spdf@data))
 }
 
 #write.csv(sp_store, paste0('C:/seabirds/data/modelling/SPAC/',k,'_spac.csv'), quote=F, row.names = F)
-write.csv(var_imp, paste0('C:/seabirds/data/modelling/var_imp/',k,'_var_imp.csv'), quote=F, row.names = F)
+#write.csv(var_imp, paste0('C:/seabirds/data/modelling/var_imp/',k,'_var_imp.csv'), quote=F, row.names = F)
 
 # Clustering sites based on predictive ability
 if(k=='SOTE'){
@@ -343,35 +342,6 @@ p_tss<-ggplot(aucz, aes(x = spcol_tss, y = Resample_tss)) +
   theme_bw() + theme(axis.text.x=element_text(size=9, angle=90, vjust=0.3),
                      axis.text.y=element_text(size=9),
                      plot.title=element_text(size=11))+ylab('Predictions from')+xlab('Predicting to')
-
-png(paste0('C:/seabirds/data/modelling/plots/',k, '_pred_acc.png'),width = 6, height =12 , units ="in", res =600)
-grid.arrange(p_auc, p_tss)
-dev.off()
-
-# niche overlap
-enviro_std<-decostand(dat[,c(4:13)], method="standardize")
-enviro_rda<-rda(enviro_std, scale=T)
-screeplot(enviro_rda)
-enviro.sites.scores<-as.data.frame(scores(enviro_rda, choices=1:4, display='sites', scaling=1))
-enviro.sites.scores<-data.frame(enviro.sites.scores,dat[,c(1,2)])
-enviro.species.scores<-as.data.frame(scores(enviro_rda, display='species'))
-enviro.species.scores$Predictors<-colnames(enviro_std)
-enviro.species.scores$spcol='X-Predictors'
-enviro.species.scores$PC1<-enviro.species.scores$PC1/30
-enviro.species.scores$PC2<-enviro.species.scores$PC2/30
-enviro.sites.scores$forbin<-relevel(enviro.sites.scores$forbin, ref='PsuedoA')
-
-pniche<-ggplot(data=enviro.sites.scores, aes(x=PC1, y=PC2))+
-  geom_segment(data=enviro.species.scores, aes(y=0, x=0, yend=PC2, xend=PC1), arrow=arrow(length=unit(0.3,'lines')), colour='black')+
-  geom_text(data=enviro.species.scores, aes(y=PC2, x=PC1, label=Predictors), colour='red', size=2)+
-  geom_bin2d(aes(fill=forbin), alpha=0.6)+facet_wrap(~spcol)+theme_bw()+
-  scale_fill_manual('Area',values=c( "seagreen3","coral2"), labels=c('Accessible \nhabitat','Core \nforaging'))
-
-# Do hull and order sites by dendrogram or geometric distance
-
-png(paste0('C:/seabirds/data/modelling/plots/',k, '_niche.png'),width = 6, height =6 , units ="in", res =600)
-print(pniche)
-dev.off()
 
 # save outputs
 matx_out<-rbind(matx_out, data.frame(sp=k, matxdat)) # capture hclust for plotting
