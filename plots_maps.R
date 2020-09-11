@@ -13,6 +13,7 @@ library(vegan)
 library(sf)
 library(viridis)
 library(geodist)
+library(smoothr)
 
 
 ####~~~~ read in data ~~~~####
@@ -69,10 +70,18 @@ t_qual_ret<-t_qual[t_qual$complete=='complete trip',]
 t_tripmetric<-t_qual_ret%>%filter(duration<296.1)%>%group_by(sp_group, sp, coly)%>%
   summarise(max_for=max(max_dist), med_for=median(max_dist), breedstage=paste(unique(breedstage), collapse=' '))%>%as.data.frame()
 spcol_tab<-data.frame(spcol_tab, t_tripmetric[,c(4,5,6)])
+
+# keep ALL trips as nobody using satellite GPS ie all loggers recovered from colonies
+t_tripmetric2<-t_qual%>%filter(duration<296.1)%>%group_by(sp_group, sp, coly)%>%
+  summarise(max_for_allret=max(max_dist), med_for_allret=median(max_dist))%>%as.data.frame()
+spcol_tab<-data.frame(spcol_tab, t_tripmetric2[,c(4,5)])
 # tidy
 spcol_tab[spcol_tab$coly=='chick',]$coly<-'Rat' # edit to name
 spcol_tab[spcol_tab$sp_group=='WTST' | spcol_tab$sp_group=='WTLG',]$sp<-'WTSH'
 spcol_tab[spcol_tab$coly=='Adele' & spcol_tab$sp=='BRBO',]$max_for<-139.6  # manual edit
+spcol_tab[spcol_tab$coly=='Adele' & spcol_tab$sp=='BRBO',]$max_for_allret<-139.6  # manual edit
+spcol_tab[spcol_tab$coly=='Heron' & spcol_tab$sp_group=='WTLG',]$max_for_allret<-1150  # manual edit
+
 
 #write.csv(spcol_tab, 'C:/seabirds/data/sp_col_summary.csv', quote=F, row.names=F)
 
@@ -103,9 +112,9 @@ t_tripmetric<-t_qual_ret_day%>%group_by(sp_group, sp, coly, breedstage, day)%>%
 
 spcol_tab<-read.csv('C:/seabirds/data/sp_col_summary.csv')
 
-for_rang<-spcol_tab%>%group_by(Species.Group)%>%summarise(min.for=min(Max.roraging.range),
-                                                med.for=median(Max.roraging.range),
-                                                max.for=max(Max.roraging.range))
+for_rang<-spcol_tab%>%group_by(sp_group)%>%summarise(min.for=min(max_for_allret),
+                                                med.for=median(max_for_allret),
+                                                max.for=max(max_for_allret))
 
 sp_col_summr<-aucz_out%>%filter(as.character(spcol)!=as.character(Resample) & spcol!='SUM')%>%group_by(sp, Resample)%>%
   summarise(mean_auc=mean(auc), sd_auc=sd(auc), max_auc=max(auc),
@@ -153,6 +162,13 @@ gbr_short$mod_spgroup<-recode(gbr_short$species, brown_booby='BRBO',
                             redtailed_tropicbird = 'TRBD', wedgetailed_shearwater = 'WTST',
                             black_noddy='NODD', common_noddy='NODD',sooty_tern='SOTE',
                             caspian_tern='TERN', crested_tern='TERN', lessercrested_tern='TERN')
+
+#write.csv(gbr_short%>%group_by(designation_name)%>%summarise(type=first(designation_type),
+#                                                   site_names=paste(unique(site_name), collapse=' '),
+#                                                   species=paste(unique(species), collapse=' '),
+#                                                   spgroup=paste(unique(mod_spgroup), collapse=' ')),
+#          'C:/seabirds/data/sites_bioregion_summary.csv', quote=F, row.names = F)
+
 # filter and cols write as shapefile
 # make spatial
 #colz_sp<-gbr_short%>%st_as_sf(coords=c('Longitude', 'Latitude'), crs=4326)
@@ -263,25 +279,29 @@ for( i in unique(all_rad$md_spgr))
     col_sp<-filter(col, site_nm==j)%>%arrange(desc(Mx_rrg_))
     sp_ras<-crop(sp_ras1, extent(col_sp[1,]))
     
-    for(k in 1:nrow(col_sp))
-    {
-      inrad<-mask(sp_ras, as(col_sp[k,], 'Spatial'), updatevalue=0, updateNA=T)
-      ir2<-inrad
-      ir2[ir2==0]<-NA
-      q <- quantile(ir2, 0.8) # top 20%
-      toprad<-reclassify(inrad, c(-Inf, q, 0, q, Inf, 1))
-      if(k==1){sum_rad<-toprad}else{sum_rad<-sum_rad+toprad}
-      #plot(sum_rad)
-    }
+    # If long trip wtsh don't weight near colony as doesn't apply
+    if(i=='WTLG'){sum_rad<-mask(sp_ras, as(col_sp[1,], 'Spatial'), updatevalue=0, updateNA=T)}else
+      {
+      for(k in 1:nrow(col_sp))
+        {
+          inrad<-mask(sp_ras, as(col_sp[k,], 'Spatial'), updatevalue=0, updateNA=T)
+          ir2<-inrad
+          ir2[ir2==0]<-NA
+          q <- quantile(ir2, 0.7) # top xxx%
+          toprad<-reclassify(inrad, c(-Inf, q, 0, q, Inf, 1))
+          if(k==1){sum_rad<-toprad}else{sum_rad<-sum_rad+toprad}
+          #plot(sum_rad)
+        }
+      }# close WTLG if loop
     # need to incorporate population information
     
     if(which(j==unique(col$site_nm))==1){mos_ras<-sum_rad}else{
-      mos_ras <- mosaic(mos_ras, sum_rad, fun = mean)} # or max
+      mos_ras <- mosaic(mos_ras, sum_rad, fun = max)} # mean works badly when overlap =0
     
     sr2<-sum_rad
     sr2[sr2==0]<-NA
     q2 <- quantile(sr2, 0.8) # top 20%
-    hots<-reclassify(sum_rad, c(-Inf, q2, NA, q2, Inf, 1))
+    hots<-reclassify(sum_rad, c(-Inf, q2, NA, q2, Inf, 1), right=F)
     s1<-st_as_sf(rasterToPolygons(hots, dissolve = T)) 
     s2<-drop_crumbs(s1, threshold=12000000)
     s3<-fill_holes(s2, threshold=54000000)
