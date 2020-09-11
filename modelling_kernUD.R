@@ -107,36 +107,24 @@ for(k in sp_groups)
   dat<-read.csv(paste0('C:/seabirds/data/modelling/kernhull_pts_sample/', k, '_kernhull_sample.csv'))
   dat$X<-NULL
 
-  # Read in tuning results
-  indiv_col_tune<-read.csv(paste0('C:/seabirds/data/modelling/rf_tuning/',k, '_indiv_col_tune.csv'))
-  all_col_tune<-read.csv(paste0('C:/seabirds/data/modelling/rf_tuning/',k, '_all_col_tune.csv'))
-
   # lookup optimal vals
-  indiv_col_tune<-na.omit(left_join(indiv_col_tune, filter(my_hyp, sp==k),
-                                    by=c('Resample', 'mtry', 'min.node.size')))
-  indiv_col_tune$sp<-NULL
-  all_col_tune<-na.omit(left_join(all_col_tune, filter(my_hyp, Resample=='MultiCol' & sp==k),
-                            by=c('mtry', 'min.node.size')))
+  my.hyp.sp<-filter(my_hyp, sp==k)
   
-  if(k=='RFBO')
-  {
-    indiv_col_tune<-filter(indiv_col_tune, Resample!='Christmas') 
-    indiv_col_tune<-filter(indiv_col_tune, spcol!='Christmas') 
-    all_col_tune<-filter(all_col_tune, Resample.x!='Christmas') 
-    dat<-filter(dat, spcol!='Christmas') 
-  }
+  if(k=='RFBO'){dat<-filter(dat, spcol!='Christmas')}
+  if(k=='SOTE'){dat[dat$spcol=='chick',]$spcol<-'Rat'}
 
-
+#dat$MultiCol<-0
 sp_store<-NULL
 var_imp<-NULL
 for( i in unique(dat$spcol))
 {
   #pr1<-table(dat[dat$spcol==i,]$forbin)[1]/table(dat[dat$ID==i,]$forbin)[2]
 
+  #predict colony model to other colonies
   rf1<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp,
                 data=dat[dat$spcol==i,], num.trees=500, 
-                mtry=unique(filter(indiv_col_tune, Resample==i)$mtry), 
-                min.node.size=unique(filter(indiv_col_tune, Resample==i)$min.node.size),
+                mtry=filter(my.hyp.sp, Resample==i)$mtry, 
+                min.node.size=filter(my.hyp.sp, Resample==i)$min.node.size,
                 splitrule = "gini",  importance='impurity',probability =T, seed=24)  
     
   # predict to other colonies 
@@ -161,10 +149,6 @@ for( i in unique(dat$spcol))
   gbr$p1<-predict(rf1, data=gbr)$predictions[,1] # prob of foraging 0-1
   names(gbr)[which(names(gbr)=='p1')]<-paste(k, i, sep='_')
   
-  # predict to GBR training data for certain sp
-  #gbr_valdat$p1<-predict(rf1, data=gbr_valdat)$predictions[,1]
-  #names(gbr_valdat)[which(names(gbr_valdat)=='p1')]<-paste(k, i, sep='_')
-  
   # Internval cross validation for GBR models
   #coltemp<-dat[dat$spcol==i,]
   #coltempcore<-coltemp[coltemp$forbin=='Core',]
@@ -185,66 +169,40 @@ for( i in unique(dat$spcol))
 #  {
 #  rf1<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp,
 #              data=coltemp_subs[coltemp_subs$clust==m,], num.trees=500, 
-#              mtry=unique(filter(indiv_col_tune, Resample==i)$mtry), 
-#              min.node.size=unique(filter(indiv_col_tune, Resample==i)$min.node.size),
+#             mtry=filter(my.hyp.sp, Resample==i)$mtry, 
+#             min.node.size=filter(my.hyp.sp, Resample==i)$min.node.size,
 #              splitrule = "gini",  importance='impurity',probability =T, seed=24)
 #  
 #  subs_preds<-cbind(subs_preds, predict(rf1, data=dat)$predictions[,1])
 #  #print(head(subs_preds))
 #  print(m)
 #  }
-
-# predict to other colonies 
-#dat$p1<-rowSums(subs_preds) # prob of foraging 0-1
-#names(dat)[which(names(dat)=='p1')]<-paste(k, i, sep='_')  
-
-  # messing with stratified sampling
-#model2 = randomForest(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp, 
-#                                           data = coltemp_subs, 
-#                                          sampsize=rep(min(table(coltemp_subs$clust)),5),
-#                      strata=coltemp_subs$clust)
-#dat$p1<-predict(model2, newdata=dat, type='prob')[,1]
-#names(dat)[which(names(dat)=='p1')]<-paste(k, i, sep='_')  
-
   
-  #SPAC assessment
-  #wtdist<-max(dat[dat$spcol==i,]$weight)-100 # 100 km from col
-  #residz<-as.integer(as.character(dat[dat$spcol==i & dat$weight>wtdist,]$forbin))-
-  #  dat[dat$spcol==i & dat$weight>wtdist,i]
-  #sp1<-spline.correlog(dat[dat$spcol==i& dat$weight>wtdist,]$Longitude,
-  #                     dat[dat$spcol==i& dat$weight>wtdist,]$Latitude, residz,
-  #                     na.rm=T,latlon=T,resamp=10)
-  #plot(sp1)
-  #sp_store<-rbind(sp_store, data.frame(spcol=i, Dist=sp1$boot$boot.summary$predicted$x[1,],
-  #                     SPAC_025=sp1$boot$boot.summary$predicted$y[3,],
-  #                     SPAC_Ave=sp1$boot$boot.summary$predicted$y[6,],
-  #                     SPAC_95=sp1$boot$boot.summary$predicted$y[9,]))
+  #predict all colony model without col i to col i
+  # check if adding case weights improves(https://github.com/imbs-hl/ranger/issues/167)
+  #rf2<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
+  #            data=dat[dat$spcol!=i,], num.trees=500,  
+  #            mtry=filter(my.hyp.sp, Resample=='MultiCol')$mtry, 
+  #            min.node.size=filter(my.hyp.sp, Resample=='MultiCol')$min.node.size,
+  #            splitrule = "gini",  importance='impurity',probability =T, seed=24)
+  #dat[dat$spcol==i,]$MultiCol<-predict(rf2, data=dat[dat$spcol==i,])$predictions[,1]
+
   print(i)
   print(Sys.time()) 
   rm(rf1) # save space
 }
 
-# make full model and predict to GBR
-# check if adding case weights improves(https://github.com/imbs-hl/ranger/issues/167)
-rf1<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
-            data=dat, num.trees=500,  
-            mtry=unique(all_col_tune$mtry), 
-            min.node.size=unique(all_col_tune$min.node.size),
-            splitrule = "gini",  importance='impurity',probability =T, seed=24)
+# make full model NOT DOING as crap
 
-gbr$MultiCol<-predict(rf1, data=gbr)$predictions[,1]
-names(gbr)[which(names(gbr)=='MultiCol')]<-paste(k, 'MultiCol', sep='_')
-
-# predict to GBR training data for certain sp
-#rf1<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
-#            data=dat[dat$spcol!='Heron',], num.trees=500,  
+#rf2<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
+#            data=dat, num.trees=500,  
 #            mtry=unique(all_col_tune$mtry), 
 #            min.node.size=unique(all_col_tune$min.node.size),
 #            splitrule = "gini",  importance='impurity',probability =T, seed=24)
-#gbr_valdat$p1<-predict(rf1, data=gbr_valdat)$predictions[,1]
-#names(gbr_valdat)[which(names(gbr_valdat)=='p1')]<-paste(k, 'MultiCol_Heron', sep='_')
-# Write out predictions for sp with GBR-local data for validation plots
-#write.csv(gbr_valdat, 'C:/seabirds/data/modelling/GBR_validation/NODD_gbr_val.csv', quote=F, row.names = F)
+
+#predict to GBR
+#gbr$MultiCol<-predict(rf2, data=gbr)$predictions[,1]
+#names(gbr)[which(names(gbr)=='MultiCol')]<-paste(k, 'MultiCol', sep='_')
 
 
 # Write out spatial predictions
@@ -259,7 +217,7 @@ for(j in 1:length(spdf@data))
 }
 
 #write.csv(sp_store, paste0('C:/seabirds/data/modelling/SPAC/',k,'_spac.csv'), quote=F, row.names = F)
-#write.csv(var_imp, paste0('C:/seabirds/data/modelling/var_imp/',k,'_var_imp.csv'), quote=F, row.names = F)
+write.csv(var_imp, paste0('C:/seabirds/data/modelling/var_imp/',k,'_var_imp.csv'), quote=F, row.names = F)
 
 # Clustering sites based on predictive ability
 if(k=='SOTE'){
