@@ -379,10 +379,11 @@ for(k in sp_groups)
                               tuneGrid=tunegrid, trControl=train_control, verbose=T)
     
     intval_out<-rbind(intval_out,
-                      data.frame(sp=k, col=i, rf_intcol$rf_intcol[which.max(rf_allcol$rf_intcol$ROC),]))
+                      data.frame(sp=k, col=i, rf_intcol$results[which.max(rf_intcol$results$ROC),]))
   }
 print(intval_out)
 }
+write.csv(intval_out, 'C:/seabirds/data/GBR_tracking_representivity.csv', quote=F, row.names=F)
 ####~~~~*~~~~####
   
   
