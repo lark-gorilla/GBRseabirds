@@ -81,18 +81,14 @@ normalized<-function(x){(x-min(x))/(max(x)-min(x))} # normalise (0-1) function
 my_hyp<-read.csv('C:/seabirds/data/rf_optimal_hyp.csv')
 
 #read in GBR ocean data
-gbr<-read.csv('C:/seabirds/data/pred_area_modelready_2km.csv')
-#rename
+gbr<-read.csv('C:/seabirds/data/pred_area_large_modelready_2km.csv')
 names(gbr)<-c('x', 'y', 'sst', 'sst_sd', 'chl', 'chl_sd',
               'mfr', 'mfr_sd', 'pfr', 'pfr_sd', 'bth', 'slp')
-# and clean
-gbr[gbr$bth>0,]$bth<-0
-gbr$bth<-sqrt(gbr$bth^2)
-# Remember nearshore front values which ==0 should be NA
-
+gbr[gbr$bth>0,]$bth<-0 
+gbr$bth<-sqrt(gbr$bth^2)# Remember nearshore front values which ==0 should be NA
 
 # read in 2km rasterize template
-templ<-raster('C:/seabirds/data/GIS/pred_area_ras_template2km.tif')
+templ<-raster('C:/seabirds/data/GIS/pred_area_large_ras_template2km.tif')
 
 # read in data
 sp_groups <- c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST', 'WTLG',
