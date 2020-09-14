@@ -337,12 +337,11 @@ print(i)}
 ####~~~*~~~####
 
 ####~~~~ Internal Block Validation for GBR-local tracking ~~~~####
-# Read in optimal hyperparameters
-my_hyp<-read.csv('C:/seabirds/data/rf_optimal_hyp.csv')
 
 # read in data
 sp_groups <- c('BRBO', 'MABO', 'WTST', 'WTLG','NODD', 'TERN')
 
+intval_out<-NULL
 for(k in sp_groups)
 {
   
@@ -362,40 +361,27 @@ for(k in sp_groups)
   {
     # Internval cross validation for GBR models
     coltemp<-dat[dat$spcol==i,]
-    coltempcore<-coltemp[coltemp$forbin=='Core',]
-    coltempcore$clust<-kmeans(coltempcore[,14:15], 5)$cluster
+    coltemp$clust<-kmeans(coltemp[,14:15], 4)$cluster
+ 
+    plot(Latitude~Longitude, coltemp, col=coltemp$clust)
+    points(Latitude~Longitude, coltemp[coltemp$forbin=='Core',], pch=16, cex=0.4, col=6)
     
-    coltemp_subs<-NULL
-    for(h in 1:max(coltempcore$clust))
-    {
-    maxn<-nrow(coltemp[coltemp$forbin=='PsuedoA',])
-    PA_samp<-coltemp[coltemp$forbin=='PsuedoA',][sample(1:maxn, (nrow(coltempcore[coltempcore$clust==h,])*3), replace=F),]
-    PA_samp$clust<-h
-    coltemp_subs<-rbind(coltemp_subs, rbind(coltempcore[coltempcore$clust==h,], PA_samp))
-    }
-    plot(Latitude~Longitude, coltemp_subs, col=coltemp_subs$clust)
+    folds2 <- groupKFold(coltemp$clust)
+    tunegrid <- expand.grid(mtry=c(2:6),  splitrule = "gini", min.node.size = c(5,10,20,50))
     
-      for(m in 1:max(coltempcore$clust))
-      {
-      rf1<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp,
-                  data=coltemp_subs[coltemp_subs$clust==m,], num.trees=500, 
-                 mtry=filter(my.hyp.sp, Resample==i)$mtry, 
-                 min.node.size=filter(my.hyp.sp, Resample==i)$min.node.size,
-                  splitrule = "gini",  importance='impurity',probability =T, seed=24)
-      
-      coltemp_subs<-cbind(coltemp_subs,predict(rf1, data=coltemp_subs)$predictions[,1])
-      names(coltemp_subs)[ncol(coltemp_subs)]<-paste0('clust_', m)
-      }
-     
-     intrnl_aucz<-tidyr::gather(coltemp_subs[,c(1,16:ncol(coltemp_subs))], Resample, pred, -forbin, -clust)%>%
-       group_by(Resample, clust)%>%
-       summarise(auc=as.double(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'), direction="<")$auc),
-                 thresh=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$threshold[1],
-                 sens=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$sensitivity[1],
-                 spec=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$specificity[1])
-     intrnl_aucz$TSS=intrnl_aucz$sens+intrnl_aucz$spec-1
-     intrnl_aucz%>%mutate(rs2=as.integer(substr(Resample, 7,7)))%>%filter(clust!=rs2)%>%summarise(auc_mn=mean(auc), auc_sd=sd(auc))
-     
+    train_control <- trainControl( method="LGOCV",index=folds2,
+                                   classProbs = TRUE, savePredictions = TRUE,
+                                   summaryFunction = twoClassSummary, verboseIter = TRUE)
+    
+    rf_intcol <- caret::train(x=coltemp[,c('sst','sst_sd','chl','chl_sd','mfr_sd', 'pfr_sd',
+                                       'mfr','pfr','bth','slp')],
+                              y=coltemp[,'forbin'], method="ranger", num.trees=500, metric='ROC', 
+                              tuneGrid=tunegrid, trControl=train_control, verbose=T)
+    
+    intval_out<-rbind(intval_out,
+                      data.frame(sp=k, col=i, rf_intcol$rf_intcol[which.max(rf_allcol$rf_intcol$ROC),]))
+  }
+print(intval_out)
 }
 ####~~~~*~~~~####
   
