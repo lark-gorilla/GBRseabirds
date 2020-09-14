@@ -88,7 +88,7 @@ gbr[gbr$bth>0,]$bth<-0
 gbr$bth<-sqrt(gbr$bth^2)# Remember nearshore front values which ==0 should be NA
 
 # read in 2km rasterize template
-templ<-raster('C:/seabirds/data/GIS/pred_area_large_ras_template2km.tif')
+templ<-raster('C:/seabirds/data/GIS/pred_area_large_ras_template.tif')
 
 # read in data
 sp_groups <- c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST', 'WTLG',
@@ -334,55 +334,69 @@ writeRaster(sp_sum, paste0('C:/seabirds/data/modelling/GBR_preds/', i, '_indivSU
 writeRaster(thresh_sum, paste0('C:/seabirds/data/modelling/GBR_preds/', i, '_indivSUM_class.tif'),overwrite=T)
 print(i)}
  
+####~~~*~~~####
 
-#temp checking
-dat$spcol<-paste('BRBO', dat$spcol, sep='_')
-dat<-dat%>%group_by(spcol)%>%mutate(index=1:n())%>%as.data.frame()
-#dat$sum_mod<-rowSums(dat[,16:31])
-#dat$mean_mod<-rowMeans(dat[,16:31])
-#dat<-dat%>%group_by(spcol)%>%mutate(sum_mod_norm=normalized(sum_mod))%>%as.data.frame()
+####~~~~ Internal Block Validation for GBR-local tracking ~~~~####
+# Read in optimal hyperparameters
+my_hyp<-read.csv('C:/seabirds/data/rf_optimal_hyp.csv')
 
-d1<-dat[,c(1,2,16:32)]%>%tidyr::gather('predcol', 'pred', -spcol,-forbin,-index)
+# read in data
+sp_groups <- c('BRBO', 'MABO', 'WTST', 'WTLG','NODD', 'TERN')
 
-d1<-d1%>%group_by(spcol, predcol)%>%mutate(pred_norm=normalized(pred))%>%as.data.frame()
-
-d_sum<-d1%>%filter(spcol!=predcol)%>%group_by(forbin, spcol, index)%>%
-  summarise(predcol='SUM',pred=sum(pred))%>%as.data.frame()
-
-d_sum2<-d1%>%filter(spcol!=predcol)%>%group_by(forbin, spcol, index)%>%
-  summarise(predcol='SUM2',pred=sum(pred_norm))%>%as.data.frame()
-
-d3<-rbind(d1%>%select(-pred_norm), d_sum, d_sum2)
-
-indiv_aucz<-d3%>%group_by(spcol,predcol)%>%
-  summarise(auc=as.double(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'), direction="<")$auc),
-            thresh=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$threshold[1],
-            sens=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$sensitivity[1],
-            spec=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$specificity[1])
-indiv_aucz$TSS=indiv_aucz$sens+indiv_aucz$spec-1
-
-dt1<-indiv_aucz%>%filter(spcol!=predcol )%>%group_by(predcol)%>%summarise(mean(auc))
-dt1$auc_norm<-normalized(dt1$`mean(auc)`)
-d4<-left_join(d1, dt1, by="predcol")
-
-d_sum3<-d4%>%filter(spcol!=predcol)%>%group_by(forbin, spcol, index)%>%
-  summarise(predcol='SUM3',pred=sum(pred_norm*auc_norm))%>%as.data.frame()
-
-indiv_auczSUM<-d_sum3%>%group_by(spcol, predcol)%>%
-  summarise(auc=as.double(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'), direction="<")$auc),
-            thresh=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$threshold[1],
-            sens=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$sensitivity[1],
-            spec=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$specificity[1])
-indiv_aucz$TSS=indiv_aucz$sens+indiv_aucz$spec-1
-
-indiv_aucz2<-rbind(indiv_aucz, indiv_auczSUM)
-
-indiv_aucz2%>%filter(spcol!=predcol )%>%group_by(predcol)%>%summarise(mean(auc))
-
-ggplot(indiv_aucz2, aes(x = spcol, y = predcol)) + 
-       geom_raster(aes(fill=auc))+ 
-       geom_text(aes(label=round(auc, 2)), size=2)+
-       theme_bw() + theme(axis.text.x=element_text(size=9, angle=90, vjust=0.3),
-        axis.text.y=element_text(size=9),
-        plot.title=element_text(size=11))+ylab('Predictions from')+xlab('Predicting to')
-        
+for(k in sp_groups)
+{
+  
+  dat<-read.csv(paste0('C:/seabirds/data/modelling/kernhull_pts_sample/', k, '_kernhull_sample.csv'))
+  dat$X<-NULL
+  
+  # lookup optimal vals
+  my.hyp.sp<-filter(my_hyp, sp==k)
+  
+  if(k=='BRBO'){dcol<-c('Swains', 'Raine')}
+  if(k=='MABO'){dcol<-'Swains'}
+  if(k=='WTST'){dcol<-'Heron'}
+  if(k=='WTLG'){dcol<-'Heron'}
+  if(k=='NODD'){dcol<-'Heron'}
+  
+  for( i in dcol)
+  {
+    # Internval cross validation for GBR models
+    coltemp<-dat[dat$spcol==i,]
+    coltempcore<-coltemp[coltemp$forbin=='Core',]
+    coltempcore$clust<-kmeans(coltempcore[,14:15], 5)$cluster
+    
+    coltemp_subs<-NULL
+    for(h in 1:max(coltempcore$clust))
+    {
+    maxn<-nrow(coltemp[coltemp$forbin=='PsuedoA',])
+    PA_samp<-coltemp[coltemp$forbin=='PsuedoA',][sample(1:maxn, (nrow(coltempcore[coltempcore$clust==h,])*3), replace=F),]
+    PA_samp$clust<-h
+    coltemp_subs<-rbind(coltemp_subs, rbind(coltempcore[coltempcore$clust==h,], PA_samp))
+    }
+    plot(Latitude~Longitude, coltemp_subs, col=coltemp_subs$clust)
+    
+      for(m in 1:max(coltempcore$clust))
+      {
+      rf1<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp,
+                  data=coltemp_subs[coltemp_subs$clust==m,], num.trees=500, 
+                 mtry=filter(my.hyp.sp, Resample==i)$mtry, 
+                 min.node.size=filter(my.hyp.sp, Resample==i)$min.node.size,
+                  splitrule = "gini",  importance='impurity',probability =T, seed=24)
+      
+      coltemp_subs<-cbind(coltemp_subs,predict(rf1, data=coltemp_subs)$predictions[,1])
+      names(coltemp_subs)[ncol(coltemp_subs)]<-paste0('clust_', m)
+      }
+     
+     intrnl_aucz<-tidyr::gather(coltemp_subs[,c(1,16:ncol(coltemp_subs))], Resample, pred, -forbin, -clust)%>%
+       group_by(Resample, clust)%>%
+       summarise(auc=as.double(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'), direction="<")$auc),
+                 thresh=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$threshold[1],
+                 sens=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$sensitivity[1],
+                 spec=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$specificity[1])
+     intrnl_aucz$TSS=intrnl_aucz$sens+intrnl_aucz$spec-1
+     intrnl_aucz%>%mutate(rs2=as.integer(substr(Resample, 7,7)))%>%filter(clust!=rs2)%>%summarise(auc_mn=mean(auc), auc_sd=sd(auc))
+     
+}
+####~~~~*~~~~####
+  
+  
