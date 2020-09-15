@@ -657,13 +657,13 @@ mkVal<-function(my.sp='BRBO', my.metric='AUC', calc.niche=T)
   
   if(my.metric=='AUC')
   {  
-  d1<-with(my.matx[my.matx$Resample!=my.matx$spcol,c(10,11,5)], 
+  d1<-with(my.matx[my.matx$Resample!=my.matx$spcol,c(8,9,3)], 
            structure(auc, Size = length(unique(my.matx$Resample)),
                      Labels = unique(my.matx$Resample),
                      Diag = F, Upper = FALSE,method = "user", class = "dist"))}
   if(my.metric=='TSS')
     {
-    d1<-with(my.matx[my.matx$Resample!=my.matx$spcol,c(10,11,9)], 
+    d1<-with(my.matx[my.matx$Resample!=my.matx$spcol,c(8,9,7)], 
              structure(TSS, Size = length(unique(my.matx$Resample)),
                        Labels = unique(my.matx$Resample),
                        Diag = F, Upper = FALSE,method = "user", class = "dist"))}
@@ -674,14 +674,13 @@ mkVal<-function(my.sp='BRBO', my.metric='AUC', calc.niche=T)
   
   # make sum/ave vals
   my.aucz<-my.aucz[,c(1:10, 16, 18)]
-  my.aucz<-filter(my.aucz, spcol!='SUM')
   my.aucz$spcol<-factor(my.aucz$spcol)
   
   temp1<-my.aucz%>%group_by(Resample)%>%
     filter(as.character(spcol)!=as.character(Resample))%>%summarise_if(is.numeric ,mean)
   my.aucz<-rbind(my.aucz,data.frame(sp=my.sp,temp1[,1], spcol='MEAN', temp1[,2:8], auc_bin='#c6dbef', tss_bin='#c6dbef'))
 
-  my.aucz$Resample<-factor(my.aucz$Resample, levels=c("MultiCol", paste(hc1$labels[hc1$order])))
+  my.aucz$Resample<-factor(my.aucz$Resample, levels=c("MultiCol", "Ensemble", paste(hc1$labels[hc1$order])))
   my.aucz$spcol<-factor(my.aucz$spcol,levels=c("MEAN", paste(hc1$labels[hc1$order])))
   
   if(my.metric=='AUC')

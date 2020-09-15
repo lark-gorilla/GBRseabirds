@@ -501,4 +501,4 @@ write.csv(out4, 'C:/seabirds/data/pred_area_large_modelready_2km.csv', quote=F, 
 
 
 # clip bathy to pred area extent as template for rasterize later on
-#crop(bathy, pred_a, filename='C:/seabirds/data/GIS/pred_area_large ras_template.tif')
+#crop(bathy, pred_a, filename='C:/seabirds/data/GIS/pred_area_large_ras_template.tif')
