@@ -484,7 +484,26 @@ fronts<-stack('C:/seabirds/sourced_data/oceano_modelready/mfront_mn.tif',
 bathy<-raster('C:/seabirds/sourced_data/oceano_modelready/bathy.tif')
 slope<-raster('C:/seabirds/sourced_data/oceano_modelready/slope.tif')
 
-# give pred_a pixel size of finest raster (bathy)
+#stacks for wtsh Dec-Mar
+
+# sst
+sst_list<-list.files('C:/seabirds/sourced_data/terra_sst_month_clim', full.names=T)
+sst_stack<-stack(sst_list[1:4], varname='sst4') 
+#chl
+chl_list<-list.files('C:/seabirds/sourced_data/terra_chl_month_clim', full.names=T)
+chl_stack<-stack(chl_list[1:4], varname='chl_ocx')
+chl_stack<-log(chl_stack) # log it
+
+# front strength
+mfront_stack<-stack('C:/seabirds/sourced_data/pml_fronts/pml_CCI_SST_front-step3-sst_L3_tropics_1M_climatology_2006-2016.nc',
+                    varname='fronts_mean')
+mfront_stack<-subset(mfront_stack, 1:4)
+# front probability
+pfront_stack<-stack('C:/seabirds/sourced_data/pml_fronts/pml_CCI_SST_front-step3-sst_L3_tropics_1M_climatology_2006-2016.nc',
+                    varname='pfront')
+pfront_stack<-subset(pfront_stack, 1:4)
+
+# give pred_a pixel size of finest raster (2km)
 pred_ras<-rasterize(pred_a, tmpl2km, field=1) # using 2 km rather than bathy
 pred_pts<-rasterToPoints(pred_ras, spatial=T)
 
@@ -499,6 +518,16 @@ out3<-data.frame(pred_pts@coords, ex_sst, ex_chl, ex_front, ex_bathy, ex_slope)
 out4<-na.omit(out3) # cut out land
 write.csv(out4, 'C:/seabirds/data/pred_area_large_modelready_2km.csv', quote=F, row.names=F)
 
+#extract for wtsh only dyn_varibs
+pt2<-SpatialPoints(out4[,c(1,2)], proj4string = CRS(projection(tmpl2km)))
+ex_sst<-rowMeans(extract(sst_stack, pt2), na.rm=T)
+ex_chl<-rowMeans(extract(chl_stack, pt2), na.rm=T)
+ex_mfr<-rowMeans(extract(mfront_stack, pt2), na.rm=T)
+ex_pfr<-rowMeans(extract(pfront_stack, pt2), na.rm=T)
 
-# clip bathy to pred area extent as template for rasterize later on
-#crop(bathy, pred_a, filename='C:/seabirds/data/GIS/pred_area_large_ras_template.tif')
+out5<-data.frame(pt2@coords, ex_sst, ex_chl, ex_mfr, ex_pfr)
+
+write.csv(out5, 'C:/seabirds/data/pred_area_large_modelready_2km_WTSHsummer.csv', quote=F, row.names=F)
+
+# clip 2km pred_ras to pred area extent as template for rasterize later on
+#crop(pred_ras, pred_a, filename='C:/seabirds/data/GIS/pred_area_large_ras_template.tif', overwrite=T)
