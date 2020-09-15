@@ -24,6 +24,20 @@ for_rad$spcol<-recode(for_rad$md_spgr, "BRBO"='#8dd3c7','MABO'='#ffffb3','RFBO'=
 colz<-read_sf('C:/seabirds/data/GIS/parks_gbr_cols.shp')
 colz<-colz%>%group_by(dsgntn_n, site_nm)%>%summarise(species=paste(unique(species), collapse=', '))
 
+# core areas
+for(i in c("BRBO", 'MABO', 'RFBO', 'FRBD', 'TRBD', 'WTST', "WTLG", "SOTE" , 'NODD', 'TERN'))
+{
+if(i=='BRBO'){s1<-read_sf(paste0('C:/seabirds/data/GIS/col_radii_core_hotspots_', i, '.shp'))
+s1<-s1[,-1]}else{
+  s2<-read_sf(paste0('C:/seabirds/data/GIS/col_radii_core_hotspots_', i, '.shp'))
+  s2<-s2[,-1]
+  s1<-rbind(s1,s2)}
+}
+s1<-s1%>%group_by(md_spgr)%>%st_buffer(0)%>%summarize(geometry = st_union(geometry))
+
+#gbr_reef<-read_sf('C:/seabirds/sourced_data/GBRMPA_Data #Export/Great_Barrier_Reef_Features.shp')
+#gbr_reef<-filter(gbr_reef, FEAT_NAME=='Reef')
+
 pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds', full.names=T)
 pred_list<-pred_list[grep('indivSUM.tif', pred_list)]
 mod_pred<-stack(pred_list)
@@ -59,7 +73,7 @@ tern_ras<-(tern_ras-min(values(tern_ras), na.rm=T))/(max(values(tern_ras), na.rm
 ```
 
 
-```{r, echo=FALSE, warning=F, message=F}
+```{r, echo=FALSE, warning=F, message=F, fig.width=10, fig.height=6}
 pal <- colorBin(rev(c('#9e0142','#d53e4f','#f46d43','#fdae61','#fee08b','#e6f598','#abdda4','#66c2a5','#3288bd','#5e4fa2')), bins=10, c(NA, seq(0, 1, 0.1)), na.color = "transparent")
 
  m <- leaflet() %>%
@@ -80,23 +94,37 @@ pal <- colorBin(rev(c('#9e0142','#d53e4f','#f46d43','#fdae61','#fee08b','#e6f598
    addLegend(pal = pal, values = c(NA, seq(0, 1, 0.1)),
     title = "Likely foraging habitat") %>%
    
-   addPolygons(data=filter(rad_diss, md_spgr=='BRBO'), fill=F, group='BRBO')%>%
-   addPolygons(data=filter(rad_diss, md_spgr=='MABO'), fill=F, group='MABO')%>%
-   addPolygons(data=filter(rad_diss, md_spgr=='RFBO'), fill=F, group='RFBO')%>%
-   addPolygons(data=filter(rad_diss, md_spgr=='FRBD'), fill=F, group='FRBD')%>%
-   addPolygons(data=filter(rad_diss, md_spgr=='TRBD'), fill=F, group='TRBD')%>%
-   addPolygons(data=filter(rad_diss, md_spgr=='WTST'), fill=F, group='WTST')%>%
-   addPolygons(data=filter(rad_diss, md_spgr=='WTLG'), fill=F, group='WTLG')%>%
-   addPolygons(data=filter(rad_diss, md_spgr=='SOTE'), fill=F, group='SOTE')%>%
-   addPolygons(data=filter(rad_diss, md_spgr=='NODD'), fill=F, group='NODD')%>%
-   addPolygons(data=filter(rad_diss, md_spgr=='TERN'), fill=F, group='TERN')%>%
+   addPolygons(data=filter(rad_diss, md_spgr=='BRBO'), fill=F,group='BRBO', weight=3, color='black')%>%
+   addPolygons(data=filter(rad_diss, md_spgr=='MABO'), fill=F, group='MABO', weight=3, color='black')%>%
+   addPolygons(data=filter(rad_diss, md_spgr=='RFBO'), fill=F, group='RFBO', weight=3, color='black')%>%
+   addPolygons(data=filter(rad_diss, md_spgr=='FRBD'), fill=F, group='FRBD', weight=3, color='black')%>%
+   addPolygons(data=filter(rad_diss, md_spgr=='TRBD'), fill=F, group='TRBD', weight=3, color='black')%>%
+   addPolygons(data=filter(rad_diss, md_spgr=='WTST'), fill=F, group='WTST', weight=3, color='black')%>%
+   addPolygons(data=filter(rad_diss, md_spgr=='WTLG'), fill=F, group='WTLG', weight=3, color='black')%>%
+   addPolygons(data=filter(rad_diss, md_spgr=='SOTE'), fill=F, group='SOTE', weight=3, color='black')%>%
+   addPolygons(data=filter(rad_diss, md_spgr=='NODD'), fill=F, group='NODD', weight=3, color='black')%>%
+   addPolygons(data=filter(rad_diss, md_spgr=='TERN'), fill=F, group='TERN', weight=3, color='black')%>%
+   
+   addPolygons(data=filter(s1, md_spgr=='BRBO'), fill=F, color='red', weight=3, group='BRBO')%>%
+   addPolygons(data=filter(s1, md_spgr=='MABO'),  fill=F, color='red', weight=3, group='MABO')%>%
+   addPolygons(data=filter(s1, md_spgr=='RFBO'), fill=F, color='red', weight=3, group='RFBO')%>%
+   addPolygons(data=filter(s1, md_spgr=='FRBD'), fill=F, color='red', weight=3, group='FRBD')%>%
+   addPolygons(data=filter(s1, md_spgr=='TRBD'), fill=F, color='red', weight=3, group='TRBD')%>%
+   addPolygons(data=filter(s1, md_spgr=='WTST'), fill=F, color='red', weight=3, group='WTST')%>%
+   addPolygons(data=filter(s1, md_spgr=='WTLG'), fill=F, color='red', weight=3, group='WTLG')%>%
+   addPolygons(data=filter(s1, md_spgr=='SOTE'), fill=F, color='red', weight=3, group='SOTE')%>%
+   addPolygons(data=filter(s1, md_spgr=='NODD'), fill=F, color='red', weight=3, group='NODD')%>%
+   addPolygons(data=filter(s1, md_spgr=='TERN'), fill=F, color='red', weight=3, group='TERN')%>%
+   
+   #addPolygons(data=gbr_reef, fill=F, group='Reef', weight=1)%>%
    
     addCircleMarkers(data=colz, popup= paste("Site:", colz$dsgntn_n , "<br>", 
-                                             "Colony:", colz$site_nm,"<br>", "Species:", colz$species), stroke=F, radius=6, fillOpacity = 0.5)%>%
+                                             "Colony:", colz$site_nm,"<br>", "Species:", colz$species), stroke=F, radius=6, fillOpacity =1)%>%
    
      addLayersControl(overlayGroups = c('BRBO', 'MABO', 'RFBO', 'FRBD', 'TRBD', 'WTST', 'WTLG',
                                         'SOTE', 'NODD', 'TERN', 'Hotspots'), options=layersControlOptions(collapsed=F))
    
-m
+m%>%hideGroup(c('BRBO', 'MABO', 'RFBO', 'FRBD', 'TRBD', 'WTST', 'WTLG',
+                                        'SOTE', 'NODD', 'TERN', 'Hotspots'))
 ```
 
