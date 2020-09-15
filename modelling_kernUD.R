@@ -107,7 +107,8 @@ for(k in sp_groups)
   my.hyp.sp<-filter(my_hyp, sp==k)
   
   if(k=='RFBO'){dat<-filter(dat, spcol!='Christmas')}
-  if(k=='SOTE'){dat[dat$spcol=='chick',]$spcol<-'Rat'}
+  if(k=='SOTE'){dat$spcol<-as.character(dat$spcol)
+  dat[dat$spcol=='chick',]$spcol<-'Rat'}
 
 #dat$MultiCol<-0
 sp_store<-NULL
@@ -126,17 +127,6 @@ for( i in unique(dat$spcol))
   # predict to other colonies 
   dat$p1<-predict(rf1, data=dat)$predictions[,1] # prob of foraging 0-1
   names(dat)[which(names(dat)=='p1')]<-i
-  
-  # predict to training and add to validation data.frame
-  p1<-predict(rf1, data=dat[dat$spcol==i,])$predictions[,1] # prob of foraging 0-1 Note column 1 == Core
-  auc1<-pROC::roc(dat[dat$spcol==i,]$forbin, p1, levels=c('PsuedoA', 'Core'), direction="<")
-  co1<-coords(pROC::roc(dat[dat$spcol==i,]$forbin, p1, levels=c('PsuedoA', 'Core'), direction="<"),'best', best.method='youden', transpose=F)
-  
-  indiv_col_tune<-rbind(indiv_col_tune, 
-  data.frame(Resample=i, spcol=i,  mtry=rf1$mtry, min.node.size=rf1$min.node.size, auc=as.double(auc1$auc), 
-             thresh=co1$threshold[1], sens=co1$sensitivity[1], spec=co1$specificity[1],
-             TSS=co1$sensitivity[1]+co1$specificity[1]-1))
-
  
   #varib importance
   var_imp<-rbind(var_imp, data.frame(spcol=i, t(ranger::importance(rf1)/max(ranger::importance(rf1)))))
@@ -144,44 +134,6 @@ for( i in unique(dat$spcol))
   # predict to GBR
   gbr$p1<-predict(rf1, data=gbr)$predictions[,1] # prob of foraging 0-1
   names(gbr)[which(names(gbr)=='p1')]<-paste(k, i, sep='_')
-  
-  # Internval cross validation for GBR models
-  #coltemp<-dat[dat$spcol==i,]
-  #coltempcore<-coltemp[coltemp$forbin=='Core',]
-  #coltempcore$clust<-kmeans(coltempcore[,14:15], 5)$cluster
-  
-  #coltemp_subs<-NULL
-  #for(h in 1:max(coltempcore$clust))
-  #{
-  #maxn<-nrow(coltemp[coltemp$forbin=='PsuedoA',])
-  #PA_samp<-coltemp[coltemp$forbin=='PsuedoA',][sample(1:maxn, (nrow(coltempcore[coltempcore$clust==h,])*3), replace=F),]
-  #PA_samp$clust<-h
-  #coltemp_subs<-rbind(coltemp_subs, rbind(coltempcore[coltempcore$clust==h,], PA_samp))
-  #}
-# output sample so it is fixed 
-
-# subs_preds<-NULL
-#  for(m in 1:max(coltempcore$clust))
-#  {
-#  rf1<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp,
-#              data=coltemp_subs[coltemp_subs$clust==m,], num.trees=500, 
-#             mtry=filter(my.hyp.sp, Resample==i)$mtry, 
-#             min.node.size=filter(my.hyp.sp, Resample==i)$min.node.size,
-#              splitrule = "gini",  importance='impurity',probability =T, seed=24)
-#  
-#  subs_preds<-cbind(subs_preds, predict(rf1, data=dat)$predictions[,1])
-#  #print(head(subs_preds))
-#  print(m)
-#  }
-  
-  #predict all colony model without col i to col i
-  # check if adding case weights improves(https://github.com/imbs-hl/ranger/issues/167)
-  #rf2<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
-  #            data=dat[dat$spcol!=i,], num.trees=500,  
-  #            mtry=filter(my.hyp.sp, Resample=='MultiCol')$mtry, 
-  #            min.node.size=filter(my.hyp.sp, Resample=='MultiCol')$min.node.size,
-  #            splitrule = "gini",  importance='impurity',probability =T, seed=24)
-  #dat[dat$spcol==i,]$MultiCol<-predict(rf2, data=dat[dat$spcol==i,])$predictions[,1]
 
   print(i)
   print(Sys.time()) 
@@ -189,7 +141,7 @@ for( i in unique(dat$spcol))
 }
 
 # make full model NOT DOING as crap
-
+# check if adding case weights improves(https://github.com/imbs-hl/ranger/issues/167)
 #rf2<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
 #            data=dat, num.trees=500,  
 #            mtry=unique(all_col_tune$mtry), 
@@ -273,11 +225,6 @@ aucz<-rbind(data.frame(indiv_aucz), data.frame(Resample='MultiCol', all_col_tune
 auc_mn<-aucz%>%filter(spcol!=Resample)%>%group_by(Resample)%>%
   summarise_if(is.numeric ,mean)
 aucz<-rbind(aucz,data.frame(auc_mn[,1], spcol='MEAN', auc_mn[,2:6]))
-
-aucz$Resample_auc<-factor(aucz$Resample, levels=c("MultiCol","Ensemble",rev(hc_auc$labels[hc_auc$order])))
-aucz$spcol_auc<-factor(aucz$spcol,levels=c("MEAN",rev(hc_auc$labels[hc_auc$order])))
-aucz$Resample_tss<-factor(aucz$Resample, levels=c("MultiCol","Ensemble",rev(hc_tss$labels[hc_tss$order])))
-aucz$spcol_tss<-factor(aucz$spcol,levels=c("MEAN",rev(hc_tss$labels[hc_tss$order])))
 
 aucz$auctemp<-aucz$auc
 aucz[aucz$spcol=='MEAN',]$auctemp<-NA
