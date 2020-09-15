@@ -649,7 +649,7 @@ p1<-ggplot(data=densdat, aes(x=value, stat(scaled), colour=variable))+
 #### ~~~~ **** ~~~~ ####
 
 ####~~~~ return cluster and heatmap validation plot function ~~~~####
-mkVal<-function(my.sp='BRBO', my.metric='AUC', calc.niche=T)
+mkVal<-function(my.sp='BRBO', my.metric='AUC', calc.niche=F)
 {
   #https://jcoliver.github.io/learn-r/008-ggplot-dendrograms-and-heatmaps.html
   my.matx<-matx_out[matx_out$sp==my.sp,]
@@ -672,14 +672,7 @@ mkVal<-function(my.sp='BRBO', my.metric='AUC', calc.niche=T)
   hc1<-hclust(d1, method='average')
   hc_dend<-ggdendrogram(data = as.dendrogram(hc1), rotate = T)
   
-  # make sum/ave vals
-  my.aucz<-my.aucz[,c(1:10, 16, 18)]
   my.aucz$spcol<-factor(my.aucz$spcol)
-  
-  temp1<-my.aucz%>%group_by(Resample)%>%
-    filter(as.character(spcol)!=as.character(Resample))%>%summarise_if(is.numeric ,mean)
-  my.aucz<-rbind(my.aucz,data.frame(sp=my.sp,temp1[,1], spcol='MEAN', temp1[,2:8], auc_bin='#c6dbef', tss_bin='#c6dbef'))
-
   my.aucz$Resample<-factor(my.aucz$Resample, levels=c("MultiCol", "Ensemble", paste(hc1$labels[hc1$order])))
   my.aucz$spcol<-factor(my.aucz$spcol,levels=c("MEAN", paste(hc1$labels[hc1$order])))
   
@@ -861,7 +854,7 @@ grid.newpage()
 print(brbo_auc[[2]], vp = viewport(x = 0.4, y = 0.5, width = 0.8, height = 1.0))
 print(brbo_auc[[1]], vp = viewport(x = 0.90, y = 0.58, width = 0.2, height = 0.82))
 dev.off()
-
+#### ~~~~ *** ~~~~ ####
 
 
 
@@ -1013,4 +1006,39 @@ print(mklocada('TERN', my.metric='AUC'))
 dev.off()
 
 
+#### ~~~~ *** ~~~~ ####
+
+#### ~~~~ Get env core/hull summary values ~~~~ ####
+all_env<-NULL
+for(i in c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST', 'WTLG',
+           'FRBD', 'TRBD', 'NODD', 'TERN'))
+{
+dat<-read.csv(paste0('C:/seabirds/data/modelling/kernhull_pts_sample/', i, '_kernhull_sample.csv'))
+dat$X<-NULL
+dat$sp=i
+all_env<-rbind(all_env, dat)
+}
+
+env_sum<-all_env%>%dplyr::select(-weight)%>%group_by(sp, spcol, forbin)%>%summarise_all(mean)
+write.csv(env_sum, 'C:/seabirds/data/env_varib_mean_vals.csv', quote=F, row.names=F)
+
+env_sum<-all_env%>%filter(forbin=='PsuedoA')%>%dplyr::select(-weight, -Longitude, -Latitude)%>%
+  group_by(sp, spcol, forbin)%>%summarise(mn_sst=min(sst), mx_sst=max(sst),mn_chl=min(chl),
+                                          mx_chl=max(chl),mn_mfr=min(mfr), mx_mfr=max(mfr),
+                                          mn_pfr=min(pfr), mx_pfr=max(pfr),mn_chlsd=min(chl_sd),
+                                          mx_chlsd=max(chl_sd),mn_sstsd=min(sst_sd), mx_sstsd=max(sst_sd),
+                                          mn_mfrsd=min(mfr_sd), mx_mfrsd=max(mfr_sd),mn_pfrsd=min(pfr_sd),
+                                          mx_pfrsd=max(pfr_sd),mn_bth=min(bth), mx_bth=max(bth),
+                                          mn_slp=min(slp), mx_slp=max(slp))
+
+plotdat<-all_env%>%filter(forbin=='PsuedoA')%>%dplyr::select(-weight, -Longitude, -Latitude, -forbin)%>%
+  tidyr::gather('val', 'dat',-sp, -spcol)
+for(i in c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST', 'WTLG','FRBD', 'TRBD', 'NODD', 'TERN'))
+{
+  png(paste0('C:/seabirds/plots/env_varib_col_diffs_',i,'.png'),width = 10, height =5 , units ="in", res =300)
+p1<-qplot(data=filter(plotdat, sp==i), y=dat, x=spcol, geom='boxplot')+
+  facet_wrap(~val, scales='free', nrow=2)+theme_bw()+theme(axis.text.x=element_text(angle=45,hjust=1),
+                    axis.title.x=element_blank(),axis.title.y=element_blank())
+print(p1)
+dev.off()}
 #### ~~~~ *** ~~~~ ####
