@@ -109,6 +109,14 @@ for(k in sp_groups)
   if(k=='RFBO'){dat<-filter(dat, spcol!='Christmas')}
   if(k=='SOTE'){dat$spcol<-as.character(dat$spcol)
   dat[dat$spcol=='chick',]$spcol<-'Rat'}
+  if(k=='WTST'| k=='WTLG'){
+    gtemp<-read.csv('C:/seabirds/data/pred_area_large_modelready_2km_WTSHsummer.csv')
+    gbr2<-gbr
+    gbr2$sst<-gtemp$ex_sst
+    gbr2$chl<-gtemp$ex_chl
+    gbr2$mfr<-gtemp$ex_mfr
+    gbr2$pfr<-gtemp$ex_pfr
+    rm(gtemp)}else{gbr2<-gbr}
 
 #dat$MultiCol<-0
 sp_store<-NULL
@@ -132,8 +140,8 @@ for( i in unique(dat$spcol))
   var_imp<-rbind(var_imp, data.frame(spcol=i, t(ranger::importance(rf1)/max(ranger::importance(rf1)))))
   
   # predict to GBR
-  gbr$p1<-predict(rf1, data=gbr)$predictions[,1] # prob of foraging 0-1
-  names(gbr)[which(names(gbr)=='p1')]<-paste(k, i, sep='_')
+  gbr2$p1<-predict(rf1, data=gbr2)$predictions[,1] # prob of foraging 0-1
+  names(gbr2)[which(names(gbr2)=='p1')]<-paste(k, i, sep='_')
 
   print(i)
   print(Sys.time()) 
@@ -149,13 +157,13 @@ for( i in unique(dat$spcol))
 #            splitrule = "gini",  importance='impurity',probability =T, seed=24)
 
 #predict to GBR
-#gbr$MultiCol<-predict(rf2, data=gbr)$predictions[,1]
-#names(gbr)[which(names(gbr)=='MultiCol')]<-paste(k, 'MultiCol', sep='_')
+#gbr2$MultiCol<-predict(rf2, data=gbr2)$predictions[,1]
+#names(gbr2)[which(names(gbr2)=='MultiCol')]<-paste(k, 'MultiCol', sep='_')
 
 
 # Write out spatial predictions
-spdf<-SpatialPointsDataFrame(SpatialPoints(gbr[,1:2], proj4string = CRS(projection(templ))),
-                             data=gbr[,grep(k, names(gbr))])
+spdf<-SpatialPointsDataFrame(SpatialPoints(gbr2[,1:2], proj4string = CRS(projection(templ))),
+                             data=gbr2[,grep(k, names(gbr2))])
 
 for(j in 1:length(spdf@data))
 {
@@ -219,6 +227,7 @@ all_col_tune<-na.omit(left_join(all_col_tune, filter(my_hyp, Resample=='MultiCol
 names(all_col_tune)[names(all_col_tune)=='Resample.x']<-'spcol'
 all_col_tune$sp<-NULL
 all_col_tune$Resample.y<-NULL
+if(k=='RFBO'){all_col_tune<-filter(all_col_tune, spcol!='Christmas')}
 aucz<-rbind(data.frame(indiv_aucz), data.frame(Resample='MultiCol', all_col_tune[,c(1,4:8)]))
 
 # remake and bind in MEAN 
