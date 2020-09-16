@@ -159,13 +159,20 @@ samp_tree_func<-function(my.spcol='Rudi', my.dat=dat, colrep=3){
   s2<-data.frame(id=s1)%>%group_by(id)%>%summarise(count=n())%>%as.data.frame()
   ib1[which(my.spcol==my.dat$spcol)]<-s2$count
   return(ib1)}
+
+aucz_out<-NULL
+for(m in sp_groups)
+{
+  
+  dat<-read.csv(paste0('C:/seabirds/data/modelling/kernhull_pts_sample/', m, '_kernhull_sample.csv'))
+  dat$X<-NULL
   
 for(h in unique(dat$spcol))
 {
   tempdat<-dat[dat$spcol!=h,] # subset data to train colonies
   
   ncol<-length(unique(tempdat$spcol))
-  repz<-rep(round(500/ncol), ncol)
+  repz<-rep(ceiling(500/ncol), ncol)
   if(sum(repz)>500){repz[ncol]<-repz[ncol]-(sum(repz)-500)} # setup trees per colony, sum tp 500 
   
   # create inbag: limit sampling (with replacement) of values for each tree to within each colony 
@@ -201,6 +208,12 @@ indiv_aucz<-tidyr::gather(dat[,c(1,2,16:ncol(dat))], Resample, pred, -forbin, -s
             sens=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$sensitivity[1],
             spec=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$specificity[1])
 indiv_aucz$TSS=indiv_aucz$sens+indiv_aucz$spec-1
+
+indiv_aucz$sp<-m
+
+aucz_out<-rbind(aucz_out, indiv_aucz)
+print(m)
+}
 
 indiv_aucz%>%filter(substr(Resample, 9, nchar(Resample))==spcol)
 
