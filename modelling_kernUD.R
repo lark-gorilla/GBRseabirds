@@ -148,6 +148,63 @@ for( i in unique(dat$spcol))
   rm(rf1) # save space
 }
 
+#full model inbag stratified sampling
+#https://github.com/imbs-hl/ranger/issues/142
+#https://github.com/imbs-hl/ranger/issues/515
+
+samp_tree_func<-function(my.spcol='Rudi', my.dat=dat, colrep=3){
+  ib1<-rep(0, nrow(my.dat))
+  colsize<-length(which(my.spcol==my.dat$spcol))
+  s1<-c(1:colsize, sample(1:colsize, size=colsize*colrep, replace=T))
+  s2<-data.frame(id=s1)%>%group_by(id)%>%summarise(count=n())%>%as.data.frame()
+  ib1[which(my.spcol==my.dat$spcol)]<-s2$count
+  return(ib1)}
+  
+for(h in unique(dat$spcol))
+{
+  tempdat<-dat[dat$spcol!=h,] # subset data to train colonies
+  
+  ncol<-length(unique(tempdat$spcol))
+  repz<-rep(round(500/ncol), ncol)
+  if(sum(repz)>500){repz[ncol]<-repz[ncol]-(sum(repz)-500)} # setup trees per colony, sum tp 500 
+  
+  # create inbag: limit sampling (with replacement) of values for each tree to within each colony 
+  inbag_list<-NULL
+  for(k in unique(tempdat$spcol))
+  {
+  r1<- replicate(repz[which(k==unique(tempdat$spcol))], 
+                 samp_tree_func(my.spcol = k, my.dat=tempdat, colrep=3), simplify = FALSE)
+  inbag_list<-c(inbag_list, r1)
+  }
+  
+  #fit rfs
+  rf_strat<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
+                          data=tempdat, num.trees=500,  keep.inbag = T, inbag = inbag_list,
+                          splitrule = "gini",  importance='impurity',probability =T, seed=24)
+  
+  rf_simp<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
+                   data=tempdat, num.trees=500, 
+                   splitrule = "gini",  importance='impurity',probability =T, seed=24)
+  
+  # predict to dat
+  dat$p1<-predict(rf_strat, data=dat)$predictions[,1]
+  dat$p2<-predict(rf_simp, data=dat)$predictions[,1]
+  names(dat)[which(names(dat)=='p1')]<-paste0('stratWO_',h)
+  names(dat)[which(names(dat)=='p2')]<-paste0('simplWO_',h)
+  print(h)
+}
+
+indiv_aucz<-tidyr::gather(dat[,c(1,2,16:ncol(dat))], Resample, pred, -forbin, -spcol)%>%
+  group_by(Resample, spcol)%>%
+  summarise(auc=as.double(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'), direction="<")$auc),
+            thresh=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$threshold[1],
+            sens=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$sensitivity[1],
+            spec=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$specificity[1])
+indiv_aucz$TSS=indiv_aucz$sens+indiv_aucz$spec-1
+
+indiv_aucz%>%filter(substr(Resample, 9, nchar(Resample))==spcol)
+
+
 # make full model NOT DOING as crap
 # check if adding case weights improves(https://github.com/imbs-hl/ranger/issues/167)
 #rf2<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
@@ -208,7 +265,7 @@ auc_mn$auc_int<-auc_mn$auc*10
 d2<-left_join(d1, auc_mn[,c(1,2,7,8)], by="Resample")
 
 ensem<-d2%>%filter(spcol!=Resample)%>%group_by(forbin, spcol, index)%>%
-  summarise(Resample='Ensemble',pred=sum(pred_norm*auc_int))%>%as.data.frame()
+  summarise(Resample='Ensemble',pred=sum(pred_norm*auc_norm))%>%as.data.frame()
 
 indiv_auczENS<-ensem%>%group_by(spcol, Resample)%>%
   summarise(auc=as.double(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'), direction="<")$auc),
