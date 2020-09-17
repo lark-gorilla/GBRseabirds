@@ -18,6 +18,7 @@ normalized<-function(x){(x-min(x))/(max(x)-min(x))} # normalise (0-1) function
 #sp_groups <- c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST', 'WTLG','FRBD', 'TRBD', 'NODD', 'TERN')
 #for(k in sp_groups)
 #{
+#  for(m in 2:5){
 #  dat<-read.csv(paste0('C:/seabirds/data/modelling/kernhull_pts/', k, '_kernhull.csv'))
 #  names(dat)[names(dat)=='layer']<-'forbin'
 #  dat$forbin<-as.factor(dat$forbin)
@@ -33,7 +34,7 @@ normalized<-function(x){(x-min(x))/(max(x)-min(x))} # normalise (0-1) function
 #  if(k %in% c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST', 'WTLG',
 #              'TRBD', 'NODD')){dat$spcol<-substr(dat$spcol, 6, nchar(as.character(dat$spcol)))}
 #  dat$spcol<-factor(dat$spcol)
-  #dat%>%group_by(spcol)%>%summarise(nP=length(which(forbin=='Core')),nA=length(which(forbin=="PsuedoA"))) # don't need
+#  dat%>%group_by(spcol)%>%summarise(nP=length(which(forbin=='Core')),nA=length(which(forbin=="PsuedoA"))) # don't need
 #    dat<-dat%>%group_by(spcol)%>%mutate(npres=length(which(forbin=='Core')))
 
     # 3:1 Pa to A, sampled wothout replacement, over normalised inv coldist surface
@@ -42,8 +43,9 @@ normalized<-function(x){(x-min(x))/(max(x)-min(x))} # normalise (0-1) function
 #               sample_n(size=(unique(npres)*3), replace=F, weight=w2))%>%as.data.frame() 
 #  dat$npres<-NULL
 #  dat$w2<-NULL
-#  write.csv(dat,paste0('C:/seabirds/data/modelling/kernhull_pts_sample/', k, '_kernhull_sample.csv'), row.names=F, quote=F)
+#  write.csv(dat,paste0('C:/seabirds/data/modelling/kernhull_pts_sample/', k, '_kernhull_sample', m, '.csv'), row.names=F, quote=F)
 #  print(k)
+#  }
 #}
 ####~~~ * ~~~####
 
@@ -206,16 +208,17 @@ auc_mn<-indiv_aucz%>%filter(spcol!=Resample)%>%group_by(Resample)%>%
   summarise_if(is.numeric ,mean)
 auc_mn$auc_norm<-(normalized(auc_mn$auc)+1)
 auc_mn$auc_int<-auc_mn$auc*10
-d2<-left_join(d1, auc_mn[,c(1,2,7,8)], by="Resample")
+auc_mn$auc_cube<-(auc_mn$auc+1)^3
+d2<-left_join(d1, auc_mn[,c(1,2,7,8, 9)], by="Resample")
 
 ensem<-d2%>%filter(spcol!=Resample)%>%group_by(forbin, spcol, index)%>%
-  summarise(Resample='Ensemble',pred=sum(pred_norm*auc_norm))%>%as.data.frame()
+  summarise(Resample='Ensemble',pred2=sum(pred_norm*auc_norm))%>%as.data.frame()
 
 indiv_auczENS<-ensem%>%group_by(spcol, Resample)%>%
-  summarise(auc=as.double(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'), direction="<")$auc),
-            thresh=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$threshold[1],
-            sens=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$sensitivity[1],
-            spec=coords(pROC::roc(forbin, pred, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$specificity[1])
+  summarise(auc=as.double(pROC::roc(forbin, pred2, levels=c('PsuedoA', 'Core'), direction="<")$auc),
+            thresh=coords(pROC::roc(forbin, pred2, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$threshold[1],
+            sens=coords(pROC::roc(forbin, pred2, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$sensitivity[1],
+            spec=coords(pROC::roc(forbin, pred2, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$specificity[1])
 indiv_auczENS$TSS=indiv_auczENS$sens+indiv_auczENS$spec-1
 
 indiv_aucz<-rbind(indiv_aucz, indiv_auczENS)
