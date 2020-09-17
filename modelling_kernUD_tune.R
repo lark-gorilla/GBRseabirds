@@ -12,7 +12,9 @@ set.seed(24) # so that random samples and random forest models can be reproduced
 sp_groups <- c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST', 'WTLG','FRBD', 'TRBD', 'NODD', 'TERN')
 for(k in sp_groups)
 {
-  dat<-read.csv(paste0('kernhull_pts_sample/', k, '_kernhull_sample.csv'))
+  for(j in 1:5)
+  {  
+  dat<-read.csv(paste0('kernhull_pts_sample/', k, '_kernhull_sample', j, '.csv'))
   dat$X<-NULL
   
   ## Tune individual colony models
@@ -27,9 +29,10 @@ for(k in sp_groups)
   
   tunegrid <- expand.grid(mtry=c(2:6),  splitrule = "gini", min.node.size = c(5,10,20,50))
   
+  
   rf2 <- caret::train(x=dat[,c('sst','sst_sd','chl','chl_sd','mfr_sd', 'pfr_sd',
                                'mfr','pfr','bth','slp')],
-                      y=dat[,'forbin'], method="ranger", num.trees=500, metric='ROC', 
+                      y=dat[,'forbin'], method="ranger", num.trees=500, seed=24, metric='ROC', 
                       tuneGrid=tunegrid, trControl=train_control, verbose = TRUE)
   print(rf2)
   # add column to output predictions with colony for TEST partition
@@ -42,7 +45,7 @@ for(k in sp_groups)
               spec=coords(pROC::roc(obs, Core, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$specificity[1])
   indiv_aucz$TSS=indiv_aucz$sens+indiv_aucz$spec-1
   
-  write.csv(indiv_aucz, paste0('col_tune/', k, '_indiv_col_tune.csv'), row.names=F, quote=F)
+  write.csv(indiv_aucz, paste0('col_tune/', k, '_indiv_col_tune', j, '.csv'), row.names=F, quote=F)
   rm(rf2)
   
   ## All colony niave model
@@ -56,7 +59,7 @@ for(k in sp_groups)
   
   rf_allcol <- caret::train(x=dat[,c('sst','sst_sd','chl','chl_sd','mfr_sd', 'pfr_sd',
                                       'mfr','pfr','bth','slp')],
-                             y=dat[,'forbin'], method="ranger", num.trees=500, metric='ROC', 
+                             y=dat[,'forbin'], method="ranger", num.trees=500, seed=24, metric='ROC', 
                              tuneGrid=tunegrid, trControl=train_control, verbose=T)
   # same tunegrid as indiv col models
   
@@ -69,7 +72,7 @@ for(k in sp_groups)
               spec=coords(pROC::roc(obs, Core, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$specificity[1])
   allcol_aucz$TSS=allcol_aucz$sens+allcol_aucz$spec-1
   
-  write.csv(allcol_aucz, paste0('col_tune/', k, '_all_col_tune.csv'), row.names=F, quote=F)
+  write.csv(allcol_aucz, paste0('col_tune/', k, '_all_col_tune', j,'.csv'), row.names=F, quote=F)
   rm(rf_allcol)
-  
+  }
 }
