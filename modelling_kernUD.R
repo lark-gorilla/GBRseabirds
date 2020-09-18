@@ -224,7 +224,7 @@ indiv_aucz$TSS=indiv_aucz$sens+indiv_aucz$spec-1
 # Clustering sites based on predictive ability
 
 indiv_aucz$id<-apply(as.data.frame(indiv_aucz), 1, FUN=function(x){paste(sort(c(as.character(x[1]), as.character(x[2]))), sep='.', collapse='.')})
-matxdat<-indiv_aucz%>%group_by(id)%>%summarise_if(is.numeric, sum)
+matxdat<-indiv_aucz%>%filter(Resample!='MultiCol')%>%group_by(id)%>%summarise_if(is.numeric, sum)
 indiv_aucz$id<-NULL
 matxdat$Resample<-unlist(lapply(strsplit(matxdat$id, '\\.'), function(x){x[1]}))
 matxdat$spcol<-unlist(lapply(strsplit(matxdat$id, '\\.'), function(x){x[2]}))
@@ -235,7 +235,7 @@ dat<-dat%>%group_by(spcol)%>%mutate(index=1:n())%>%as.data.frame()
 
 d1<-dat[,c(1,2,16:ncol(dat))]%>%tidyr::gather('Resample', 'pred', -spcol,-forbin,-index)
 
-d1<-d1%>%group_by(spcol, Resample)%>%mutate(pred_norm=normalized(pred))%>%as.data.frame()
+d1<-d1%>%filter(Resample!='MultiCol')%>%group_by(spcol, Resample)%>%mutate(pred_norm=normalized(pred))%>%as.data.frame()
 
 auc_mn<-indiv_aucz%>%filter(spcol!=Resample)%>%group_by(Resample)%>%
   summarise_if(is.numeric ,mean)
@@ -245,7 +245,7 @@ auc_mn$auc_cube<-(auc_mn$auc+1)^3
 d2<-left_join(d1, auc_mn[,c(1,2,7,8, 9)], by="Resample")
 
 ensem<-d2%>%filter(spcol!=Resample)%>%group_by(forbin, spcol, index)%>%
-  summarise(Resample='Ensemble',pred2=sum(pred_norm*auc_norm))%>%as.data.frame()
+  summarise(Resample='EnsembleNrm',pred2=sum(pred_norm*auc_norm), pred3=sum(pred*auc_norm))%>%as.data.frame()
 
 indiv_auczENS<-ensem%>%group_by(spcol, Resample)%>%
   summarise(auc=as.double(pROC::roc(forbin, pred2, levels=c('PsuedoA', 'Core'), direction="<")$auc),
@@ -254,23 +254,20 @@ indiv_auczENS<-ensem%>%group_by(spcol, Resample)%>%
             spec=coords(pROC::roc(forbin, pred2, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$specificity[1])
 indiv_auczENS$TSS=indiv_auczENS$sens+indiv_auczENS$spec-1
 
-indiv_aucz<-rbind(indiv_aucz, indiv_auczENS)
+indiv_auczENS2<-ensem%>%group_by(spcol, Resample)%>%
+  summarise(auc=as.double(pROC::roc(forbin, pred3, levels=c('PsuedoA', 'Core'), direction="<")$auc),
+            thresh=coords(pROC::roc(forbin, pred3, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$threshold[1],
+            sens=coords(pROC::roc(forbin, pred3, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$sensitivity[1],
+            spec=coords(pROC::roc(forbin, pred3, levels=c('PsuedoA', 'Core'),direction="<"),'best', best.method='youden', transpose=F)$specificity[1])
+indiv_auczENS2$TSS=indiv_auczENS2$sens+indiv_auczENS2$spec-1
+indiv_auczENS2$Resample<-'EnsembleRaw'
 
-# Visualising predicitve ability between colonies
-#pull in niave multicol model results
-all_col_tune<-read.csv(paste0('C:/seabirds/data/modelling/rf_tuning/',k, '_all_col_tune.csv'))
-all_col_tune<-na.omit(left_join(all_col_tune, filter(my_hyp, Resample=='MultiCol' & sp==k),
-                                by=c('mtry', 'min.node.size')))
-names(all_col_tune)[names(all_col_tune)=='Resample.x']<-'spcol'
-all_col_tune$sp<-NULL
-all_col_tune$Resample.y<-NULL
-if(k=='RFBO'){all_col_tune<-filter(all_col_tune, spcol!='Christmas')}
-aucz<-rbind(data.frame(indiv_aucz), data.frame(Resample='MultiCol', all_col_tune[,c(1,4:8)]))
+aucz<-rbind(indiv_aucz, indiv_auczENS, indiv_auczENS2)
 
 # remake and bind in MEAN 
 auc_mn<-aucz%>%filter(spcol!=Resample)%>%group_by(Resample)%>%
   summarise_if(is.numeric ,mean)
-aucz<-rbind(aucz,data.frame(auc_mn[,1], spcol='MEAN', auc_mn[,2:6]))
+aucz<-rbind(as.data.frame(aucz),data.frame(auc_mn[,1], spcol='MEAN', auc_mn[,2:6]))
 
 aucz$auctemp<-aucz$auc
 aucz[aucz$spcol=='MEAN',]$auctemp<-NA
