@@ -673,7 +673,7 @@ mkVal<-function(my.sp='BRBO', my.metric='AUC', calc.niche=F)
   hc_dend<-ggdendrogram(data = as.dendrogram(hc1), rotate = T)
   
   my.aucz$spcol<-factor(my.aucz$spcol)
-  my.aucz$Resample<-factor(my.aucz$Resample, levels=c("MultiCol", "Ensemble", paste(hc1$labels[hc1$order])))
+  my.aucz$Resample<-factor(my.aucz$Resample, levels=c("MultiCol", "EnsembleRaw", "EnsembleNrm",paste(hc1$labels[hc1$order])))
   my.aucz$spcol<-factor(my.aucz$spcol,levels=c("MEAN", paste(hc1$labels[hc1$order])))
   
   if(my.metric=='AUC')
@@ -1013,7 +1013,7 @@ all_env<-NULL
 for(i in c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST', 'WTLG',
            'FRBD', 'TRBD', 'NODD', 'TERN'))
 {
-dat<-read.csv(paste0('C:/seabirds/data/modelling/kernhull_pts_sample/', i, '_kernhull_sample.csv'))
+dat<-read.csv(paste0('C:/seabirds/data/modelling/kernhull_pts_sample/', i, '_kernhull_sample1.csv'))
 dat$X<-NULL
 dat$sp=i
 all_env<-rbind(all_env, dat)
@@ -1033,9 +1033,11 @@ env_sum<-all_env%>%filter(forbin=='PsuedoA')%>%dplyr::select(-weight, -Longitude
 
 plotdat<-all_env%>%filter(forbin=='PsuedoA')%>%dplyr::select(-weight, -Longitude, -Latitude, -forbin)%>%
   tidyr::gather('val', 'dat',-sp, -spcol)
+# add GBR local data bounds: for each sp extract vals from GBR pred rasters that are within foraging range
+
 for(i in c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST', 'WTLG','FRBD', 'TRBD', 'NODD', 'TERN'))
 {
-  png(paste0('C:/seabirds/plots/env_varib_col_diffs_',i,'.png'),width = 10, height =5 , units ="in", res =300)
+  png(paste0('C:/seabirds/plots/env_varib_col_diffs_',i,'.png'),width = 11, height =6 , units ="in", res =300)
 p1<-qplot(data=filter(plotdat, sp==i), y=dat, x=spcol, geom='boxplot')+
   facet_wrap(~val, scales='free', nrow=2)+theme_bw()+theme(axis.text.x=element_text(angle=45,hjust=1),
                     axis.title.x=element_blank(),axis.title.y=element_blank())
