@@ -2,14 +2,9 @@
 
 library(dplyr)
 library(ggplot2)
-#library(GGally)
 library(ranger)
-library(caret)
 library(pROC)
-library(vegan)
 library(raster)
-library(ncf)
-library(gridExtra)
 
 set.seed(24) # so that random samples and random forest models can be reproduced
 normalized<-function(x){(x-min(x))/(max(x)-min(x))} # normalise (0-1) function
@@ -101,12 +96,13 @@ aucz_out<-NULL # capture validation for plotting
 
 for(k in sp_groups)
 {
-  
-  dat<-read.csv(paste0('C:/seabirds/data/modelling/kernhull_pts_sample/', k, '_kernhull_sample.csv'))
+  # Using the first resampled dataset as the baseline for AUC validation 
+  dat<-read.csv(paste0('C:/seabirds/data/modelling/kernhull_pts_sample/', k, '_kernhull_sample1.csv'))
   dat$X<-NULL
 
   # lookup optimal vals
   my.hyp.sp<-filter(my_hyp, sp==k)
+  my.hyp.sp$Resample<-as.character(my.hyp.sp$Resample)
   
   if(k=='RFBO'){dat<-filter(dat, spcol!='Christmas')}
   if(k=='SOTE'){dat$spcol<-as.character(dat$spcol)
@@ -120,49 +116,86 @@ for(k in sp_groups)
     gbr2$pfr<-gtemp$ex_pfr
     rm(gtemp)}else{gbr2<-gbr}
 
-#dat$MultiCol<-0
-sp_store<-NULL
+dat$MultiCol<-0 # filled for each LGOCV in loop  
+rep_preds<-data.frame(ID=1:nrow(dat))  
+rep_GBRpreds<-data.frame(ID=1:nrow(gbr2))
 var_imp<-NULL
-for( i in unique(dat$spcol))
+for(h in 1:5) # loop through 5 resamples of PsuedoAbs data and evrage mode predictions
 {
-  #pr1<-table(dat[dat$spcol==i,]$forbin)[1]/table(dat[dat$ID==i,]$forbin)[2]
-
-  #predict colony model to other colonies
-  rf1<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp,
-                data=dat[dat$spcol==i,], num.trees=500, 
-                mtry=filter(my.hyp.sp, Resample==i)$mtry, 
-                min.node.size=filter(my.hyp.sp, Resample==i)$min.node.size,
-                splitrule = "gini",  importance='impurity',probability =T, seed=24)  
+  if(h==1){repdat<-dat}else{
+    repdat<-read.csv(paste0('C:/seabirds/data/modelling/kernhull_pts_sample/', k, '_kernhull_sample', h,'.csv'))
+  } 
+  for( i in unique(repdat$spcol))
+  {
+      
+    #predict colony model to other colonies
+    rf1<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp,
+                  data=repdat[repdat$spcol==i,], num.trees=500, 
+                  mtry=filter(my.hyp.sp, Resample=='MultiCol')$mtry, 
+                  min.node.size=filter(my.hyp.sp, Resample=='MultiCol')$min.node.size,
+                  splitrule = "gini",  importance='impurity',probability =T, seed=24)  
+      
+    # predict to other colonies 
+    rep_preds$p1<-predict(rf1, data=dat)$predictions[,1] # prob of foraging 0-1
+    names(rep_preds)[which(names(rep_preds)=='p1')]<-paste(i, h, sep='_')
     
-  # predict to other colonies 
-  dat$p1<-predict(rf1, data=dat)$predictions[,1] # prob of foraging 0-1
-  names(dat)[which(names(dat)=='p1')]<-i
- 
-  #varib importance
-  var_imp<-rbind(var_imp, data.frame(spcol=i, t(ranger::importance(rf1)/max(ranger::importance(rf1)))))
-  
-  # predict to GBR
-  gbr2$p1<-predict(rf1, data=gbr2)$predictions[,1] # prob of foraging 0-1
-  names(gbr2)[which(names(gbr2)=='p1')]<-paste(k, i, sep='_')
+    # predict to GBR
+    rep_GBRpreds$p1<-predict(rf1, data=gbr2)$predictions[,1] # prob of foraging 0-1
+    names(rep_GBRpreds)[which(names(rep_GBRpreds)=='p1')]<-paste(i, h, sep='_')
+   
+    #varib importance
+    var_imp<-rbind(var_imp, data.frame(spcol=i, rep=h, t(ranger::importance(rf1)/max(ranger::importance(rf1)))))
+    
+    # make leave-one-out multicolony model
+    rf2<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
+                data=repdat[repdat$spcol!=i,], num.trees=500,  
+                mtry=filter(my.hyp.sp, Resample=='MultiCol')$mtry, 
+                min.node.size=filter(my.hyp.sp, Resample=='MultiCol')$min.node.size,
+                splitrule = "gini",  importance='impurity',probability =T, seed=24)
+    
+    # predict to other colonies 
+    rep_preds$MultiCol<-predict(rf2, data=dat)$predictions[,1] # prob of foraging 0-1
+    names(rep_preds)[which(names(rep_preds)=='MultiCol')]<-paste('MultiCol',i, h, sep='_')
+    
+    #averageing 1:5 predictions for model validation and GBR pred
+    if(h==5)
+        {
+        # mod val
+        dat$p3<-rowMeans(rep_preds[paste(i, 1:5, sep='_')])
+        names(dat)[which(names(dat)=='p3')]<-i
+        dat[dat$spcol==i,]$MultiCol<-rowMeans(rep_preds[paste('MultiCol',i,1:5,sep='_')])[which(dat$spcol==i)]
+        #spcol gbr pred
+        gbr2$p3<-rowMeans(rep_GBRpreds[paste(i, 1:5, sep='_')])
+        names(gbr2)[which(names(gbr2)=='p3')]<-i
+        }
+    print(i)
+    rm(rf1) # save space
+    rm(rf2)
+    print(head(rep_preds))  
+  }
 
-  print(i)
-  print(Sys.time()) 
-  rm(rf1) # save space
+# make full (all cols) multicolony model for prediction to Reef
+  rf3<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
+              data=repdat, num.trees=500,  
+              mtry=filter(my.hyp.sp, Resample=='MultiCol')$mtry, 
+              min.node.size=filter(my.hyp.sp, Resample=='MultiCol')$min.node.size,
+              splitrule = "gini",  importance='impurity',probability =T, seed=24)
+ 
+  #predict to GBR
+  rep_GBRpreds$MultiCol<-predict(rf3, data=gbr2)$predictions[,1]
+  names(rep_GBRpreds)[which(names(rep_GBRpreds)=='MultiCol')]<-paste('MultiCol', h, sep='_')
+  
+  if(h==5) # ave 1:5 multicol model preds to GBR
+  {gbr2$MultiCol<-rowMeans(rep_GBRpreds[paste('MultiCol', 1:5, sep='_')])}
+    
+  rm(rf2)
+  print(h)
+  print(Sys.time())
 }
 
-# make full model NOT DOING as crap
-
-#rf2<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
-#            data=dat, num.trees=500,  
-#            mtry=unique(all_col_tune$mtry), 
-#            min.node.size=unique(all_col_tune$min.node.size),
-#            splitrule = "gini",  importance='impurity',probability =T, seed=24)
-
-#predict to GBR
-#gbr2$MultiCol<-predict(rf2, data=gbr2)$predictions[,1]
-#names(gbr2)[which(names(gbr2)=='MultiCol')]<-paste(k, 'MultiCol', sep='_')
-
-
+#Average 1:5 predictions
+for(m in unique(dat$spcol))
+indiv_aucz<-tidyr::gather(rep_preds, Resample, pred, -ID)
 
 # Write out spatial predictions
 spdf<-SpatialPointsDataFrame(SpatialPoints(gbr2[,1:2], proj4string = CRS(projection(templ))),
