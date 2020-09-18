@@ -9,7 +9,7 @@ library(pROC)
 set.seed(24) # so that random samples and random forest models can be reproduced
 
 ####~~ Tune hyperparameters of individual colony models and niave (all col) model ~~~####
-sp_groups <- c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST', 'WTLG','FRBD', 'TRBD', 'NODD', 'TERN')
+sp_groups <- c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST',  'NODD', 'TERN','TRBD','WTLG','FRBD')
 for(k in sp_groups)
 {
   for(j in 1:5)
