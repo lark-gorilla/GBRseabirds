@@ -50,26 +50,32 @@ normalized<-function(x){(x-min(x))/(max(x)-min(x))} # normalise (0-1) function
 #lsf<-list.files('C:/seabirds/data/modelling/rf_tuning')
 #indiv_tune<-NULL; for(i in lsf[grep('indiv',lsf)])
 #{indiv_tune<-rbind(indiv_tune, data.frame(read.csv(
-#  paste0('C:/seabirds/data/modelling/rf_tuning/', i)), sp=substr(i, 1,4)))}
+#  paste0('C:/seabirds/data/modelling/rf_tuning/', i)), sp=substr(i, 1,4), run=substr(i, 20,20)))}
 #all_tune<-NULL; for(i in lsf[grep('all',lsf)])
 #{all_tune<-rbind(all_tune, data.frame(read.csv(
-#  paste0('C:/seabirds/data/modelling/rf_tuning/', i)), sp=substr(i, 1,4)))}
+#  paste0('C:/seabirds/data/modelling/rf_tuning/', i)), sp=substr(i, 1,4), run=substr(i, 18,18)))}
 #sp_groups <- c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST', 'WTLG', 'FRBD', 'TRBD', 'NODD', 'TERN')
 #for(i in sp_groups)
 #{
-#  p1<-ggplot(data=filter(all_tune, sp==i), aes(x=mtry, colour=factor(min.node.size)))+
+#  for(k in 1:5)
+#  {
+#    atsubs<-all_tune[all_tune$run==k,]
+#    insubs<-indiv_tune[indiv_tune$run==k,]
+#    
+#  p1<-ggplot(data=filter(atsubs, sp==i), aes(x=mtry, colour=factor(min.node.size)))+
 #    geom_line(aes(y=auc))+geom_line(aes(y=TSS),linetype='dashed')+
 #    geom_point(aes(y=auc), shape=1)+geom_point(aes(y=TSS), shape=2)+facet_wrap(~Resample)+theme(legend.position = "none")  
-#  png(paste0('C:/seabirds/data/modelling/rf_tuning/plots/',i, '_all_col.png'),width = 6, height =6 , units ="in", res =600)
+#  png(paste0('C:/seabirds/data/modelling/rf_tuning/plots/',i, '_all_col','_run_', k,'.png'),width = 6, height =6 , units ="in", res =600)
 #  print(p1)
 #  dev.off()
-#  for(j in unique(filter(indiv_tune, sp==i)$Resample)){
-#    p2<-ggplot(data=filter(indiv_tune, sp==i & Resample==j), aes(x=mtry, colour=factor(min.node.size)))+
+#  for(j in unique(filter(insubs, sp==i)$Resample)){
+#    p2<-ggplot(data=filter(insubs, sp==i & Resample==j), aes(x=mtry, colour=factor(min.node.size)))+
 #    geom_line(aes(y=auc))+geom_line(aes(y=TSS),linetype='dashed')+
 #    geom_point(aes(y=auc), shape=1)+geom_point(aes(y=TSS), shape=2)+facet_wrap(~spcol)+theme(legend.position = "none")  
-#    png(paste0('C:/seabirds/data/modelling/rf_tuning/plots/',i, 'indiv_', j,'.png'),width = 6, height =6 , units ="in", res =600)
+#    png(paste0('C:/seabirds/data/modelling/rf_tuning/plots/',i,'indiv_', j,'_run_', k,'.png'),width = 6, height =6 , units ="in", res =600)
 #    print(p2)
 #    dev.off()}
+#  }
 #  print(i)
 #}
 ####~~~ * ~~~####
@@ -115,83 +121,92 @@ for(k in sp_groups)
     gbr2$mfr<-gtemp$ex_mfr
     gbr2$pfr<-gtemp$ex_pfr
     rm(gtemp)}else{gbr2<-gbr}
+  
+  #subset gbr predictions to within max 
 
-dat$MultiCol<-0 # filled for each LGOCV in loop  
-rep_preds<-data.frame(ID=1:nrow(dat))  
-rep_GBRpreds<-data.frame(ID=1:nrow(gbr2))
-var_imp<-NULL
-for(h in 1:5) # loop through 5 resamples of PsuedoAbs data and evrage mode predictions
-{
-  if(h==1){repdat<-dat}else{
-    repdat<-read.csv(paste0('C:/seabirds/data/modelling/kernhull_pts_sample/', k, '_kernhull_sample', h,'.csv'))
-  } 
-  for( i in unique(repdat$spcol))
+  dat$MultiCol<-0 # filled for each LGOCV in loop  
+  rep_preds<-data.frame(ID=1:nrow(dat))  
+  rep_GBRpreds<-data.frame(ID=1:nrow(gbr2))
+  var_imp<-NULL
+  for(h in 1:5) # loop through 5 resamples of PsuedoAbs data and evrage mode predictions
   {
+    if(h==1){repdat<-dat}else{
+      repdat<-read.csv(paste0('C:/seabirds/data/modelling/kernhull_pts_sample/', k, '_kernhull_sample', h,'.csv'))
+    } 
+    for( i in unique(repdat$spcol))
+    {
+     
+      # Get detailed hyperparameters for GBR local datasets
+      if(nrow(filter(my.hyp.sp, Resample==i)>1)){
+        ind_col_mtry<-filter(my.hyp.sp, Resample==i & run==h)$mtry
+        ind_col_node<-filter(my.hyp.sp, Resample==i & run==h)$min.node.size}else{
+          ind_col_mtry<-filter(my.hyp.sp, Resample==i)$mtry
+          ind_col_node<-filter(my.hyp.sp, Resample==i)$min.node.size}
+        
+      #predict colony model to other colonies
+      rf1<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp,
+                    data=repdat[repdat$spcol==i,], num.trees=500, 
+                    mtry=ind_col_mtry, 
+                    min.node.size=ind_col_node,
+                    splitrule = "gini",  importance='impurity',probability =T, seed=24)  
+        
+      # predict to other colonies 
+      rep_preds$p1<-predict(rf1, data=dat)$predictions[,1] # prob of foraging 0-1
+      names(rep_preds)[which(names(rep_preds)=='p1')]<-paste(i, h, sep='_')
       
-    #predict colony model to other colonies
-    rf1<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp,
-                  data=repdat[repdat$spcol==i,], num.trees=500, 
+      # predict to GBR
+      rep_GBRpreds$p1<-predict(rf1, data=gbr2)$predictions[,1] # prob of foraging 0-1
+      names(rep_GBRpreds)[which(names(rep_GBRpreds)=='p1')]<-paste(i, h, sep='_')
+     
+      #varib importance
+      var_imp<-rbind(var_imp, data.frame(spcol=i, rep=h, t(ranger::importance(rf1)/max(ranger::importance(rf1)))))
+      
+      # make leave-one-out multicolony model
+      rf2<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
+                  data=repdat[repdat$spcol!=i,], num.trees=500,  
                   mtry=filter(my.hyp.sp, Resample=='MultiCol')$mtry, 
                   min.node.size=filter(my.hyp.sp, Resample=='MultiCol')$min.node.size,
-                  splitrule = "gini",  importance='impurity',probability =T, seed=24)  
+                  splitrule = "gini",  importance='impurity',probability =T, seed=24)
       
-    # predict to other colonies 
-    rep_preds$p1<-predict(rf1, data=dat)$predictions[,1] # prob of foraging 0-1
-    names(rep_preds)[which(names(rep_preds)=='p1')]<-paste(i, h, sep='_')
-    
-    # predict to GBR
-    rep_GBRpreds$p1<-predict(rf1, data=gbr2)$predictions[,1] # prob of foraging 0-1
-    names(rep_GBRpreds)[which(names(rep_GBRpreds)=='p1')]<-paste(i, h, sep='_')
-   
-    #varib importance
-    var_imp<-rbind(var_imp, data.frame(spcol=i, rep=h, t(ranger::importance(rf1)/max(ranger::importance(rf1)))))
-    
-    # make leave-one-out multicolony model
-    rf2<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
-                data=repdat[repdat$spcol!=i,], num.trees=500,  
+      # predict to other colonies 
+      rep_preds$MultiCol<-predict(rf2, data=dat)$predictions[,1] # prob of foraging 0-1
+      names(rep_preds)[which(names(rep_preds)=='MultiCol')]<-paste('MultiCol',i, h, sep='_')
+      
+      #averageing 1:5 predictions for model validation and GBR pred
+      if(h==5)
+          {
+          # mod val
+          dat$p3<-rowMeans(rep_preds[paste(i, 1:5, sep='_')])
+          names(dat)[which(names(dat)=='p3')]<-i
+          dat[dat$spcol==i,]$MultiCol<-rowMeans(rep_preds[paste('MultiCol',i,1:5,sep='_')])[which(dat$spcol==i)]
+          #spcol gbr pred
+          gbr2$p3<-rowMeans(rep_GBRpreds[paste(i, 1:5, sep='_')])
+          names(gbr2)[which(names(gbr2)=='p3')]<-i
+          }
+      print(i)
+      rm(rf1) # save space
+      rm(rf2)
+      print(head(rep_preds))  
+    }
+  
+  # make full (all cols) multicolony model for prediction to Reef
+    rf3<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
+                data=repdat, num.trees=500,  
                 mtry=filter(my.hyp.sp, Resample=='MultiCol')$mtry, 
                 min.node.size=filter(my.hyp.sp, Resample=='MultiCol')$min.node.size,
                 splitrule = "gini",  importance='impurity',probability =T, seed=24)
+   
+    #predict to GBR
+    rep_GBRpreds$MultiCol<-predict(rf3, data=gbr2)$predictions[,1]
+    names(rep_GBRpreds)[which(names(rep_GBRpreds)=='MultiCol')]<-paste('MultiCol', h, sep='_')
     
-    # predict to other colonies 
-    rep_preds$MultiCol<-predict(rf2, data=dat)$predictions[,1] # prob of foraging 0-1
-    names(rep_preds)[which(names(rep_preds)=='MultiCol')]<-paste('MultiCol',i, h, sep='_')
-    
-    #averageing 1:5 predictions for model validation and GBR pred
-    if(h==5)
-        {
-        # mod val
-        dat$p3<-rowMeans(rep_preds[paste(i, 1:5, sep='_')])
-        names(dat)[which(names(dat)=='p3')]<-i
-        dat[dat$spcol==i,]$MultiCol<-rowMeans(rep_preds[paste('MultiCol',i,1:5,sep='_')])[which(dat$spcol==i)]
-        #spcol gbr pred
-        gbr2$p3<-rowMeans(rep_GBRpreds[paste(i, 1:5, sep='_')])
-        names(gbr2)[which(names(gbr2)=='p3')]<-i
-        }
-    print(i)
-    rm(rf1) # save space
+    if(h==5) # ave 1:5 multicol model preds to GBR
+    {gbr2$MultiCol<-rowMeans(rep_GBRpreds[paste('MultiCol', 1:5, sep='_')])}
+      
     rm(rf2)
-    print(head(rep_preds))  
+    print(h)
+    print(Sys.time())
   }
-
-# make full (all cols) multicolony model for prediction to Reef
-  rf3<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
-              data=repdat, num.trees=500,  
-              mtry=filter(my.hyp.sp, Resample=='MultiCol')$mtry, 
-              min.node.size=filter(my.hyp.sp, Resample=='MultiCol')$min.node.size,
-              splitrule = "gini",  importance='impurity',probability =T, seed=24)
- 
-  #predict to GBR
-  rep_GBRpreds$MultiCol<-predict(rf3, data=gbr2)$predictions[,1]
-  names(rep_GBRpreds)[which(names(rep_GBRpreds)=='MultiCol')]<-paste('MultiCol', h, sep='_')
-  
-  if(h==5) # ave 1:5 multicol model preds to GBR
-  {gbr2$MultiCol<-rowMeans(rep_GBRpreds[paste('MultiCol', 1:5, sep='_')])}
-    
-  rm(rf2)
-  print(h)
-  print(Sys.time())
-}
 
 #Average 1:5 predictions
 for(m in unique(dat$spcol))
@@ -327,51 +342,57 @@ print(i)}
 ####~~~*~~~####
 
 ####~~~~ Internal Block Validation for GBR-local tracking ~~~~####
-
+library(caret)
 # read in data
-sp_groups <- c('BRBO', 'MABO', 'WTST', 'WTLG','NODD', 'TERN')
+sp_groups <- c('BRBO', 'MABO', 'WTST','NODD', 'WTLG')
 
 intval_out<-NULL
 for(k in sp_groups)
 {
-  
-  dat<-read.csv(paste0('C:/seabirds/data/modelling/kernhull_pts_sample/', k, '_kernhull_sample.csv'))
-  dat$X<-NULL
-  
-  # lookup optimal vals
-  my.hyp.sp<-filter(my_hyp, sp==k)
-  
-  if(k=='BRBO'){dcol<-c('Swains', 'Raine')}
-  if(k=='MABO'){dcol<-'Swains'}
-  if(k=='WTST'){dcol<-'Heron'}
-  if(k=='WTLG'){dcol<-'Heron'}
-  if(k=='NODD'){dcol<-'Heron'}
-  
-  for( i in dcol)
+  for(h in 1:5)
   {
-    # Internval cross validation for GBR models
-    coltemp<-dat[dat$spcol==i,]
-    coltemp$clust<-kmeans(coltemp[,14:15], 4)$cluster
- 
-    plot(Latitude~Longitude, coltemp, col=coltemp$clust)
-    points(Latitude~Longitude, coltemp[coltemp$forbin=='Core',], pch=16, cex=0.4, col=6)
+    dat<-read.csv(paste0('C:/seabirds/data/modelling/kernhull_pts_sample/', k, '_kernhull_sample', h, '.csv'))
+    dat$X<-NULL
     
-    folds2 <- groupKFold(coltemp$clust)
-    tunegrid <- expand.grid(mtry=c(2:6),  splitrule = "gini", min.node.size = c(5,10,20,50))
+    if(k=='BRBO'){dcol<-c('Swains', 'Raine')}
+    if(k=='MABO'){dcol<-'Swains'}
+    if(k=='WTST'){dcol<-'Heron'}
+    if(k=='WTLG'){dcol<-'Heron'}
+    if(k=='NODD'){dcol<-'Heron'}
     
-    train_control <- trainControl( method="LGOCV",index=folds2,
-                                   classProbs = TRUE, savePredictions = TRUE,
-                                   summaryFunction = twoClassSummary, verboseIter = TRUE)
-    
-    rf_intcol <- caret::train(x=coltemp[,c('sst','sst_sd','chl','chl_sd','mfr_sd', 'pfr_sd',
-                                       'mfr','pfr','bth','slp')],
-                              y=coltemp[,'forbin'], method="ranger", num.trees=500, metric='ROC', 
-                              tuneGrid=tunegrid, trControl=train_control, verbose=T)
-    
-    intval_out<-rbind(intval_out,
-                      data.frame(sp=k, col=i, rf_intcol$results[which.max(rf_intcol$results$ROC),]))
-  }
+    for( i in dcol)
+    {
+      # Internval cross validation for GBR models
+      coltemp<-dat[dat$spcol==i,]
+      coltemp$clust<-kmeans(coltemp[,14:15], 4)$cluster
+   
+      plot(Latitude~Longitude, coltemp, col=coltemp$clust)
+      points(Latitude~Longitude, coltemp[coltemp$forbin=='Core',], pch=16, cex=0.4, col=6)
+      
+      folds2 <- groupKFold(coltemp$clust)
+      tunegrid <- expand.grid(mtry=c(2:6),  splitrule = "gini", min.node.size = c(5,10,20,50))
+      
+      train_control <- trainControl( method="LGOCV",index=folds2,
+                                     classProbs = TRUE, savePredictions = TRUE,
+                                     summaryFunction = twoClassSummary, verboseIter = TRUE)
+      
+      rf_intcol <- caret::train(x=coltemp[,c('sst','sst_sd','chl','chl_sd','mfr_sd', 'pfr_sd',
+                                         'mfr','pfr','bth','slp')],
+                                y=coltemp[,'forbin'], method="ranger", num.trees=500, seed=24, metric='ROC', 
+                                tuneGrid=tunegrid, trControl=train_control, verbose=T)
+      
+      intval_out<-rbind(intval_out,
+                        data.frame(sp=k, col=i, run=h, rf_intcol$results))
+      
+      
+    }
 print(intval_out)
+  } # h 1:5 loop
+  p2<-ggplot(data=filter(intval_out, sp==k), aes(x=mtry, colour=factor(min.node.size)))+
+      geom_point(aes(y=ROC))+geom_line(aes(y=ROC),linetype='dashed')+theme(legend.position = "none")+facet_wrap(~col+run) 
+      png(paste0('C:/seabirds/data/modelling/rf_tuning/plots/GBR_local_', k,'.png'),width = 6, height =6 , units ="in", res =600)
+      print(p2)
+      dev.off()
 }
 write.csv(intval_out, 'C:/seabirds/data/GBR_tracking_representivity.csv', quote=F, row.names=F)
 ####~~~~*~~~~####
