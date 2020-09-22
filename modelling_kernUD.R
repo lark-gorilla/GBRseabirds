@@ -135,9 +135,10 @@ for(k in sp_groups)
     } 
     for( i in unique(repdat$spcol))
     {
+      if(i=='Christmas'){next}# skip RFBO dataset
      
       # Get detailed hyperparameters for GBR local datasets
-      if(nrow(filter(my.hyp.sp, Resample==i)>1)){
+      if(nrow(filter(my.hyp.sp, Resample==i))>1){
         ind_col_mtry<-filter(my.hyp.sp, Resample==i & run==h)$mtry
         ind_col_node<-filter(my.hyp.sp, Resample==i & run==h)$min.node.size}else{
           ind_col_mtry<-filter(my.hyp.sp, Resample==i)$mtry
@@ -203,23 +204,19 @@ for(k in sp_groups)
     if(h==5) # ave 1:5 multicol model preds to GBR
     {gbr2$MultiCol<-rowMeans(rep_GBRpreds[paste('MultiCol', 1:5, sep='_')])}
       
-    rm(rf2)
+    rm(rf3)
     print(h)
     print(Sys.time())
   }
 
-#Average 1:5 predictions
-for(m in unique(dat$spcol))
-indiv_aucz<-tidyr::gather(rep_preds, Resample, pred, -ID)
-
 # Write out spatial predictions
 spdf<-SpatialPointsDataFrame(SpatialPoints(gbr2[,1:2], proj4string = CRS(projection(templ))),
-                             data=gbr2[,grep(k, names(gbr2))])
+                             data=gbr2[,13:ncol(gbr2)])
 
 for(j in 1:length(spdf@data))
 {
   p1<-rasterize(spdf, templ, field=names(spdf@data)[j])
-  writeRaster(p1, paste0('C:/seabirds/data/modelling/GBR_preds/', gsub(' ', '_', names(spdf@data)[j]), '.tif'), overwrite=T)
+  writeRaster(p1, paste0('C:/seabirds/data/modelling/GBR_preds/',k, '_', gsub(' ', '_', names(spdf@data)[j]), '.tif'), overwrite=T)
   #if(i==1){ps<-p1}else{ps<-stack(ps, p1)}
 }
 
@@ -299,12 +296,13 @@ aucz$tss_bin<-factor(aucz$tss_bin, levels = levels(addNA(aucz$tss_bin)),
 # save outputs
 matx_out<-rbind(matx_out, data.frame(sp=k, matxdat)) # capture hclust for plotting
 aucz_out<-rbind(aucz_out, data.frame(sp=k, aucz)) # capture validation for plotting
-
-}# close loop
-
-# write out saved auc and hclust data
+# write out saved auc and hclust data - within loop now
 write.csv(aucz_out, 'C:/seabirds/data/mod_validation_vals.csv', quote=F, row.names=F)
 write.csv(matx_out, 'C:/seabirds/data/mod_clustering_vals.csv', quote=F, row.names=F)
+
+}# close sp loop
+
+
 
 ####~~ Individual colony model overlap ~~####
 pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds', full.names=T)
