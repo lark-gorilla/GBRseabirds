@@ -672,8 +672,14 @@ mkVal<-function(my.sp='BRBO', my.metric='AUC', calc.niche=F)
   hc1<-hclust(d1, method='average')
   hc_dend<-ggdendrogram(data = as.dendrogram(hc1), rotate = T)
   
+  
+  my.aucz$Resample<-as.character(my.aucz$Resample)
+  my.aucz<-my.aucz[my.aucz$Resample!='EnsembleNrm',]
+  my.aucz[my.aucz$Resample=='EnsembleRaw',]$Resample<-'Ensemble'
+  my.aucz[my.aucz$Resample=='MultiCol',]$Resample<-'Multi-colony'
+  my.aucz$Resample<-factor(my.aucz$Resample) 
   my.aucz$spcol<-factor(my.aucz$spcol)
-  my.aucz$Resample<-factor(my.aucz$Resample, levels=c("MultiCol", "EnsembleRaw", "EnsembleNrm",paste(hc1$labels[hc1$order])))
+  my.aucz$Resample<-factor(my.aucz$Resample, levels=c("Multi-colony", "Ensemble",paste(hc1$labels[hc1$order])))
   my.aucz$spcol<-factor(my.aucz$spcol,levels=c("MEAN", paste(hc1$labels[hc1$order])))
   
   if(my.metric=='AUC')
@@ -725,125 +731,113 @@ mkVal<-function(my.sp='BRBO', my.metric='AUC', calc.niche=F)
 #### ~~~~ AUC/TSS matrix and hclust plots ~~~~####
 #https://cran.r-project.org/web/packages/ggplotify/vignettes/ggplotify.html
 
-# BRBO
-sp_auc<-mkVal('BRBO', 'AUC', calc.niche = T)
-sp_tss<-mkVal('BRBO', 'TSS', calc.niche = F)
-
-p1<-ggdendrogram(data = as.dendrogram(sp_auc[[1]]), rotate = T)
-p2<-ggdendrogram(data = as.dendrogram(sp_tss[[1]]), rotate = T)
-
-png(paste0('C:/seabirds/data/modelling/plots/BRBO_val.png'),width = 7, height =10 , units ="in", res =300)
-(sp_auc[[2]]+ggtitle('A)'))+p1+(sp_tss[[2]]+ggtitle('B)'))+p2+
-    plot_layout(ncol=2, nrow=2, widths=c(3,1))
-dev.off()
-
+# BRBO 
+brbo_auc<-mkVal('BRBO', 'AUC', calc.niche = F)
+brbo_tss<-mkVal('BRBO', 'TSS', calc.niche = F)
+brbo_auc_dend<-ggdendrogram(data = as.dendrogram(brbo_auc[[1]]), rotate = T)
+brbo_tss_dend<-ggdendrogram(data = as.dendrogram(mabo_tss[[1]]), rotate = T)
 # MABO
-sp_auc<-mkVal('MABO', 'AUC', calc.niche = T)
-sp_tss<-mkVal('MABO', 'TSS', calc.niche = F)
-
-p1<-ggdendrogram(data = as.dendrogram(sp_auc[[1]]), rotate = T)
-p2<-ggdendrogram(data = as.dendrogram(sp_tss[[1]]), rotate = T)
-
-png(paste0('C:/seabirds/data/modelling/plots/MABO_val.png'),width = 7, height =10 , units ="in", res =300)
-(sp_auc[[2]]+ggtitle('A)'))+p1+(sp_tss[[2]]+ggtitle('B)'))+p2+
-  plot_layout(ncol=2, nrow=2, widths=c(3,1))
-dev.off()
-
+mabo_auc<-mkVal('MABO', 'AUC', calc.niche = F)
+mabo_tss<-mkVal('MABO', 'TSS', calc.niche = F)
+mabo_auc_dend<-ggdendrogram(data = as.dendrogram(brbo_auc[[1]]), rotate = T)
+mabo_tss_dend<-ggdendrogram(data = as.dendrogram(mabo_tss[[1]]), rotate = T)
 # RFBO
-sp_auc<-mkVal('RFBO', 'AUC', calc.niche = T)
-sp_tss<-mkVal('RFBO', 'TSS', calc.niche = F)
-
-p1<-ggdendrogram(data = as.dendrogram(sp_auc[[1]]), rotate = T)
-p2<-ggdendrogram(data = as.dendrogram(sp_tss[[1]]), rotate = T)
-
-png(paste0('C:/seabirds/data/modelling/plots/RFBO_val.png'),width = 7, height =10 , units ="in", res =300)
-(sp_auc[[2]]+ggtitle('A)'))+p1+(sp_tss[[2]]+ggtitle('B)'))+p2+
-  plot_layout(ncol=2, nrow=2, widths=c(3,1))
-dev.off()
-
+rfbo_auc<-mkVal('RFBO', 'AUC', calc.niche = F)
+rfbo_tss<-mkVal('RFBO', 'TSS', calc.niche = F)
+rfbo_auc_dend<-ggdendrogram(data = as.dendrogram(rfbo_auc[[1]]), rotate = T)
+rfbo_tss_dend<-ggdendrogram(data = as.dendrogram(rfbo_tss[[1]]), rotate = T)
 # FRBD
-sp_auc<-mkVal('FRBD', 'AUC', calc.niche = T)
-sp_tss<-mkVal('FRBD', 'TSS', calc.niche = F)
-
-p1<-ggdendrogram(data = as.dendrogram(sp_auc[[1]]), rotate = T)
-p2<-ggdendrogram(data = as.dendrogram(sp_tss[[1]]), rotate = T)
-
-png(paste0('C:/seabirds/data/modelling/plots/FRBD_val.png'),width = 7, height =10 , units ="in", res =300)
-(sp_auc[[2]]+ggtitle('A)'))+p1+(sp_tss[[2]]+ggtitle('B)'))+p2+
-  plot_layout(ncol=2, nrow=2, widths=c(3,1))
-dev.off()
-
+frbd_auc<-mkVal('FRBD', 'AUC', calc.niche = F)
+frbd_tss<-mkVal('FRBD', 'TSS', calc.niche = F)
+frbd_auc_dend<-ggdendrogram(data = as.dendrogram(frbd_auc[[1]]), rotate = T)
+frbd_tss_dend<-ggdendrogram(data = as.dendrogram(frbd_tss[[1]]), rotate = T)
 # TRBD
-sp_auc<-mkVal('TRBD', 'AUC', calc.niche = T)
-sp_tss<-mkVal('TRBD', 'TSS', calc.niche = F)
-
-p1<-ggdendrogram(data = as.dendrogram(sp_auc[[1]]), rotate = T)
-p2<-ggdendrogram(data = as.dendrogram(sp_tss[[1]]), rotate = T)
-
-png(paste0('C:/seabirds/data/modelling/plots/TRBD_val.png'),width = 7, height =10 , units ="in", res =300)
-(sp_auc[[2]]+ggtitle('A)'))+p1+(sp_tss[[2]]+ggtitle('B)'))+p2+
-  plot_layout(ncol=2, nrow=2, widths=c(3,1))
-dev.off()
-
+trbd_auc<-mkVal('TRBD', 'AUC', calc.niche = F)
+trbd_tss<-mkVal('TRBD', 'TSS', calc.niche = F)
+trbd_auc_dend<-ggdendrogram(data = as.dendrogram(trbd_auc[[1]]), rotate = T)
+trbd_tss_dend<-ggdendrogram(data = as.dendrogram(trbd_tss[[1]]), rotate = T)
 # WTST
-sp_auc<-mkVal('WTST', 'AUC', calc.niche = T)
-sp_tss<-mkVal('WTST', 'TSS', calc.niche = F)
-
-p1<-ggdendrogram(data = as.dendrogram(sp_auc[[1]]), rotate = T)
-p2<-ggdendrogram(data = as.dendrogram(sp_tss[[1]]), rotate = T)
-
-png(paste0('C:/seabirds/data/modelling/plots/WTST_val.png'),width = 7, height =10 , units ="in", res =300)
-(sp_auc[[2]]+ggtitle('A)'))+p1+(sp_tss[[2]]+ggtitle('B)'))+p2+
-  plot_layout(ncol=2, nrow=2, widths=c(3,1))
-dev.off()
-
+wtst_auc<-mkVal('WTST', 'AUC', calc.niche = F)
+wtst_tss<-mkVal('WTST', 'TSS', calc.niche = F)
+wtst_auc_dend<-ggdendrogram(data = as.dendrogram(wtst_auc[[1]]), rotate = T)
+wtst_tss_dend<-ggdendrogram(data = as.dendrogram(wtst_tss[[1]]), rotate = T)
 # WTLG
-sp_auc<-mkVal('WTLG', 'AUC', calc.niche = T)
-sp_tss<-mkVal('WTLG', 'TSS', calc.niche = F)
-
-p1<-ggdendrogram(data = as.dendrogram(sp_auc[[1]]), rotate = T)
-p2<-ggdendrogram(data = as.dendrogram(sp_tss[[1]]), rotate = T)
-
-png(paste0('C:/seabirds/data/modelling/plots/WTLG_val.png'),width = 7, height =10 , units ="in", res =300)
-(sp_auc[[2]]+ggtitle('A)'))+p1+(sp_tss[[2]]+ggtitle('B)'))+p2+
-  plot_layout(ncol=2, nrow=2, widths=c(3,1))
-dev.off()
-
+wtlg_auc<-mkVal('WTLG', 'AUC', calc.niche = F)
+wtlg_tss<-mkVal('WTLG', 'TSS', calc.niche = F)
+wtlg_auc_dend<-ggdendrogram(data = as.dendrogram(wtlg_auc[[1]]), rotate = T)
+wtlg_tss_dend<-ggdendrogram(data = as.dendrogram(wtlg_tss[[1]]), rotate = T)
 # NODD
-sp_auc<-mkVal('NODD', 'AUC', calc.niche = T)
-sp_tss<-mkVal('NODD', 'TSS', calc.niche = F)
-
-p1<-ggdendrogram(data = as.dendrogram(sp_auc[[1]]), rotate = T)
-p2<-ggdendrogram(data = as.dendrogram(sp_tss[[1]]), rotate = T)
-
-png(paste0('C:/seabirds/data/modelling/plots/NODD_val.png'),width = 7, height =10 , units ="in", res =300)
-(sp_auc[[2]]+ggtitle('A)'))+p1+(sp_tss[[2]]+ggtitle('B)'))+p2+
-  plot_layout(ncol=2, nrow=2, widths=c(3,1))
-dev.off()
-
+nodd_auc<-mkVal('NODD', 'AUC', calc.niche = )
+nodd_tss<-mkVal('NODD', 'TSS', calc.niche = F)
+nodd_auc_dend<-ggdendrogram(data = as.dendrogram(nodd_auc[[1]]), rotate = T)
+nodd_tss_dend<-ggdendrogram(data = as.dendrogram(nodd_tss[[1]]), rotate = T)
 # SOTE
-sp_auc<-mkVal('SOTE', 'AUC', calc.niche = T)
-sp_tss<-mkVal('SOTE', 'TSS', calc.niche = F)
-
-p1<-ggdendrogram(data = as.dendrogram(sp_auc[[1]]), rotate = T)
-p2<-ggdendrogram(data = as.dendrogram(sp_tss[[1]]), rotate = T)
-
-png(paste0('C:/seabirds/data/modelling/plots/SOTE_val.png'),width = 7, height =10 , units ="in", res =300)
-(sp_auc[[2]]+ggtitle('A)'))+p1+(sp_tss[[2]]+ggtitle('B)'))+p2+
-  plot_layout(ncol=2, nrow=2, widths=c(3,1))
-dev.off()
-
+sote_auc<-mkVal('SOTE', 'AUC', calc.niche = F)
+sote_tss<-mkVal('SOTE', 'TSS', calc.niche = F)
+sote_auc_dend<-ggdendrogram(data = as.dendrogram(sote_auc[[1]]), rotate = T)
+sote_tss_dend<-ggdendrogram(data = as.dendrogram(sote_tss[[1]]), rotate = T)
 # TERN
-sp_auc<-mkVal('TERN', 'AUC', calc.niche = T)
-sp_tss<-mkVal('TERN', 'TSS', calc.niche = F)
+tern_auc<-mkVal('TERN', 'AUC', calc.niche = F)
+tern_tss<-mkVal('TERN', 'TSS', calc.niche = F)
+tern_auc_dend<-ggdendrogram(data = as.dendrogram(tern_auc[[1]]), rotate = T)
+tern_tss_dend<-ggdendrogram(data = as.dendrogram(tern_tss[[1]]), rotate = T)
 
-p1<-ggdendrogram(data = as.dendrogram(sp_auc[[1]]), rotate = T)
-p2<-ggdendrogram(data = as.dendrogram(sp_tss[[1]]), rotate = T)
+# AUC plots
 
-png(paste0('C:/seabirds/data/modelling/plots/TERN_val.png'),width = 7, height =10 , units ="in", res =300)
-(sp_auc[[2]]+ggtitle('A)'))+p1+(sp_tss[[2]]+ggtitle('B)'))+p2+
+brbomabo<-(brbo_auc[[2]]+ggtitle('A) Brown Booby'))+brbo_auc_dend+
+  plot_layout(ncol=2, nrow=1, widths=c(3,1))
+ggsave(plot=brbomabo, filename='C:/seabirds/data/modelling/plots/BRBO.png',width = 7, height =5)
+
+maborfbo<-(rfbo_auc[[2]]+ggtitle('A) Masked Booby'))+mabo_auc_dend+(rfbo_auc[[2]]+ggtitle('B) Red-footed Booby'))+rfbo_auc_dend+
   plot_layout(ncol=2, nrow=2, widths=c(3,1))
-dev.off()
+ggsave(plot=maborfbo, filename='C:/seabirds/data/modelling/plots/MABO_RFBO.png',width = 7, height =10)
+
+frbdtrbd<-(frbd_auc[[2]]+ggtitle('A) Frigatebirds'))+frbd_auc_dend+(trbd_auc[[2]]+ggtitle('B) Tropicbirds'))+trbd_auc_dend+
+  plot_layout(ncol=2, nrow=2, widths=c(3,1))
+ggsave(plot=frbdtrbd, filename='C:/seabirds/data/modelling/plots/FRBD_TRBD.png',width = 7, height =10)
+
+wtstwtlg<-(wtst_auc[[2]]+ggtitle('A) Wedge-tailed Shearwater short trips'))+wtst_auc_dend+(wtlg_auc[[2]]+ggtitle('B) Wedge-tailed Shearwater long trips'))+wtlg_auc_dend+
+  plot_layout(ncol=2, nrow=2, widths=c(3,1))
+ggsave(plot=wtstwtlg, filename='C:/seabirds/data/modelling/plots/WTST_WTLG.png',width = 7, height =10)
+
+noddsotetern<-(nodd_auc[[2]]+ggtitle('B) Noddies'))+nodd_auc_dend+
+  (sote_auc[[2]]+ggtitle('B) Sooty Tern'))+sote_auc_dend+(tern_auc[[2]]+ggtitle('C) Terns'))+tern_auc_dend+
+  plot_layout(ncol=2, nrow=3, widths=c(3,1))
+ggsave(plot=noddsotetern, filename='C:/seabirds/data/modelling/plots/NODD_SOTE_TERN.png',width = 7, height =12)
+
+
+# same for tss
+
+brbomabo<-(brbo_tss[[2]]+ggtitle('A) Brown Booby'))+brbo_tss_dend+
+  plot_layout(ncol=2, nrow=1, widths=c(3,1))
+ggsave(plot=brbomabo, filename='C:/seabirds/data/modelling/plots/BRBO_tss.png',width = 7, height =5)
+
+maborfbo<-(rfbo_tss[[2]]+ggtitle('A) Masked Booby'))+mabo_tss_dend+(rfbo_tss[[2]]+ggtitle('B) Red-footed Booby'))+rfbo_tss_dend+
+  plot_layout(ncol=2, nrow=2, widths=c(3,1))
+ggsave(plot=maborfbo, filename='C:/seabirds/data/modelling/plots/MABO_RFBO_tss.png',width = 7, height =10)
+
+frbdtrbd<-(frbd_tss[[2]]+ggtitle('A) Frigatebirds'))+frbd_tss_dend+(trbd_tss[[2]]+ggtitle('B) Tropicbirds'))+trbd_tss_dend+
+  plot_layout(ncol=2, nrow=2, widths=c(3,1))
+ggsave(plot=frbdtrbd, filename='C:/seabirds/data/modelling/plots/FRBD_TRBD_tss.png',width = 7, height =10)
+
+wtstwtlg<-(wtst_tss[[2]]+ggtitle('A) Wedge-tailed Shearwater short trips'))+wtst_tss_dend+(wtlg_tss[[2]]+ggtitle('B) Wedge-tailed Shearwater long trips'))+wtlg_tss_dend+
+  plot_layout(ncol=2, nrow=2, widths=c(3,1))
+ggsave(plot=wtstwtlg, filename='C:/seabirds/data/modelling/plots/WTST_WTLG_tss.png',width = 7, height =10)
+
+noddsotetern<-(nodd_tss[[2]]+ggtitle('B) Noddies'))+nodd_tss_dend+
+  (sote_tss[[2]]+ggtitle('B) Sooty Tern'))+sote_tss_dend+(tern_tss[[2]]+ggtitle('C) Terns'))+tern_tss_dend+
+  plot_layout(ncol=2, nrow=3, widths=c(3,1))
+ggsave(plot=noddsotetern, filename='C:/seabirds/data/modelling/plots/NODD_SOTE_TERN_tss.png',width = 7, height =12)
+
+
+
+# If time
+#library(rvg)
+#library(officer)
+#read_pptx('C:/coral_fish/outputs/portrait_template.pptx') %>%
+#  add_slide(layout = "Title and Content", master = "Office Theme") %>%
+#  ph_with(dml(ggobj=pw), location = ph_location_fullsize()) %>% 
+#  print(target = 'C:/seabirds/temp/trial.pptx')
 
 
 
