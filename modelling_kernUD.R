@@ -131,8 +131,11 @@ for(k in sp_groups)
   for(h in 1:5) # loop through 5 resamples of PsuedoAbs data and evrage mode predictions
   {
     if(h==1){repdat<-dat}else{
-      repdat<-read.csv(paste0('C:/seabirds/data/modelling/kernhull_pts_sample/', k, '_kernhull_sample', h,'.csv'))
-    } 
+      repdat<-read.csv(paste0('C:/seabirds/data/modelling/kernhull_pts_sample/', k, '_kernhull_sample', h,'.csv'))}
+    if(k=='SOTE' & h>1){
+      repdat$spcol<-as.character(repdat$spcol)
+      repdat[repdat$spcol=='chick',]$spcol<-'Rat'}
+    
     for( i in unique(repdat$spcol))
     {
       if(i=='Christmas'){next}# skip RFBO dataset
