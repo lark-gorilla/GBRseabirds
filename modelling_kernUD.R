@@ -310,36 +310,83 @@ write.csv(matx_out, 'C:/seabirds/data/mod_clustering_vals.csv', quote=F, row.nam
 ####~~ Individual colony model overlap ~~####
 pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds', full.names=T)
 pred_list<-pred_list[-grep('MultiCol', pred_list)]
-pred_list<-pred_list[-grep('indiv', pred_list)]
+#pred_list<-pred_list[-grep('indiv', pred_list)]
+
+aucz_out<-read.csv('C:/seabirds/data/mod_validation_vals.csv')
+allcol_auc<-aucz_out%>%filter(spcol=='MEAN' & !Resample%in%c('MultiCol', 'EnsembleRaw' , 'EnsembleNrm'))%>%
+  group_by(sp)%>%mutate(auc_norm=(normalized(auc)+1))
+allcol_auc$id<-paste(allcol_auc$sp, gsub(' ', '_', allcol_auc$Resample), sep='_')
+
 sp_groups <- c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST', 'WTLG', 'FRBD', 'TRBD', 'NODD', 'TERN')
 for(i in sp_groups){
 sp_stack<-stack(pred_list[grep(i, pred_list)])
-#sp_norm<-normalized(sp_stack)
-sp_sum<-calc(sp_stack, sum)
-
-# Read in tuning results
-indiv_col_tune<-read.csv(paste0('C:/seabirds/data/modelling/rf_tuning/',i, '_indiv_col_tune.csv'))
-# lookup optimal vals
-indiv_col_tune<-na.omit(left_join(indiv_col_tune, filter(my_hyp, sp==i),
-                                  by=c('Resample', 'mtry', 'min.node.size')))
-
-ict_med<-indiv_col_tune%>%group_by(Resample)%>%summarise(thresh=median(thresh, ra.rm=T))
 
 for(k in 1:nlayers(sp_stack))
 {
  r1<-subset(sp_stack, k)
- med_lookup<-ict_med[ict_med$Resample==gsub('_', ' ',substr(names(r1), 6,nchar(names(r1)))),]$thresh
- r1<-reclassify(r1, c(-Inf, med_lookup, 0, med_lookup,Inf,1))
- if(k==1){thresh_stack<-r1}else{thresh_stack<-stack(thresh_stack, r1)}
+ auc_lookup<-filter(allcol_auc,id==names(r1))$auc_norm
+ r2<-r1*auc_lookup
+ if(k==1){thresh_stack<-r2}else{thresh_stack<-stack(thresh_stack, r2)}
 }
 
 thresh_sum<-calc(thresh_stack, sum)
 
-#sp_norm_sum<-calc(sp_norm, sum)
-writeRaster(sp_sum, paste0('C:/seabirds/data/modelling/GBR_preds/', i, '_indivSUM.tif'),overwrite=T )
-writeRaster(thresh_sum, paste0('C:/seabirds/data/modelling/GBR_preds/', i, '_indivSUM_class.tif'),overwrite=T)
+png(paste0('C:/seabirds/data/modelling/plots/',i,'_col_preds.png'),width = 10, height =10 , units ="in", res =600)
+plot(thresh_stack)
+dev.off()
+
+writeRaster(thresh_sum, paste0('C:/seabirds/data/modelling/GBR_preds/', i, '_ensemble.tif'),overwrite=T )
 print(i)}
- 
+
+# Unique weighted preds for GBR-local tracking
+
+allcol_auc<-bind_rows(aucz_out%>%filter(sp=='BRBO' & spcol%in%c('Swains', 'Raine') & !Resample%in%c('MultiCol', 'EnsembleRaw' , 'EnsembleNrm')),
+                      aucz_out%>%filter(sp=='MABO' & spcol=='Swains' & !Resample%in%c('MultiCol', 'EnsembleRaw' , 'EnsembleNrm')),
+                      aucz_out%>%filter(sp=='NODD' & spcol=='Heron' & !Resample%in%c('MultiCol', 'EnsembleRaw' , 'EnsembleNrm')),
+                      aucz_out%>%filter(sp=='WTLG' & spcol=='Heron' & !Resample%in%c('MultiCol', 'EnsembleRaw' , 'EnsembleNrm')))
+                      
+allcol_auc<-allcol_auc%>%group_by(sp, spcol)%>%mutate(auc_norm=(normalized(auc)+1))
+allcol_auc$id<-paste(allcol_auc$sp, gsub(' ', '_', allcol_auc$Resample),  sep='_')
+
+allcol_auc_raine<-filter(allcol_auc, spcol=='Raine')
+allcol_auc<-filter(allcol_auc, spcol!='Raine')
+
+sp_groups <- c('BRBO', 'MABO', 'WTLG', 'NODD')
+for(i in sp_groups){
+  sp_stack<-stack(pred_list[grep(i, pred_list)])
+  
+  for(k in 1:nlayers(sp_stack))
+  {
+    r1<-subset(sp_stack, k)
+    auc_lookup<-filter(allcol_auc,id==names(r1))$auc_norm
+    r2<-r1*auc_lookup
+    if(k==1){thresh_stack<-r2}else{thresh_stack<-stack(thresh_stack, r2)}
+  }
+  
+  thresh_sum<-calc(thresh_stack, sum)
+
+  writeRaster(thresh_sum, paste0('C:/seabirds/data/modelling/GBR_preds/', i, '_ensemble',
+              unique(allcol_auc[allcol_auc$sp==i,]$spcol), '.tif'),overwrite=T )
+  print(i)}
+
+# and Raine
+  sp_stack<-stack(pred_list[grep('BRBO', pred_list)])
+  
+  for(k in 1:nlayers(sp_stack))
+  {
+    r1<-subset(sp_stack, k)
+    auc_lookup<-filter(allcol_auc_raine,id==names(r1))$auc_norm
+    r2<-r1*auc_lookup
+    if(k==1){thresh_stack<-r2}else{thresh_stack<-stack(thresh_stack, r2)}
+  }
+thresh_sum<-calc(thresh_stack, sum)
+writeRaster(thresh_sum, 'C:/seabirds/data/modelling/GBR_preds/BRBO_ensembleRaine.tif',overwrite=T)
+
+
+repres<-read.csv('C:/seabirds/data/GBR_tracking_representivity.csv')
+best_runs<-repres%>%group_by(sp, col, run)%>%filter(ROC==max(ROC))%>%ungroup()
+best_runs%>%group_by(sp, col)%>%summarise(auc=mean(ROC), auc_sd=mean(ROCSD))
+
 ####~~~*~~~####
 
 ####~~~~ Internal Block Validation for GBR-local tracking ~~~~####
