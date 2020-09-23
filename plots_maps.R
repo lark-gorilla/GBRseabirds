@@ -116,26 +116,29 @@ for_rang<-spcol_tab%>%group_by(sp_group)%>%summarise(min.for=min(max_for_allret)
                                                 med.for=median(max_for_allret),
                                                 max.for=max(max_for_allret))
 
-sp_col_summr<-aucz_out%>%filter(as.character(spcol)!=as.character(Resample) & spcol!='SUM')%>%group_by(sp, Resample)%>%
+sp_col_summr<-aucz_out%>%filter(as.character(spcol)!=as.character(Resample) & spcol!='MEAN')%>%
+  group_by(sp, Resample)%>%
   summarise(mean_auc=mean(auc), sd_auc=sd(auc), max_auc=max(auc),
             mean_tss=mean(TSS), sd_tss=sd(TSS),max_tss=max(TSS))
 
 sp_col_summr<-sp_col_summr%>%ungroup()%>%
   group_by(sp)%>%mutate(auc_rank=rank(-mean_auc, 'first'),tss_rank=rank(-mean_tss, 'first'))
 
-mean_valz<-sp_col_summr%>%ungroup()%>%filter(Resample!='MultiCol')%>%group_by(sp)%>%
+mean_valz<-sp_col_summr%>%ungroup()%>%filter(!Resample %in% c('MultiCol', 'EnsembleRaw' , 'EnsembleNrm'))%>%
+  group_by(sp)%>%
   summarise(mn_auc=mean(mean_auc), sd_auc=sd(mean_auc),
             mn_max_auc=mean(max_auc), sd_max_auc=sd(max_auc),
             mn_tss=mean(mean_tss), sd_tss=sd(mean_tss),
             mn_max_tss=mean(max_tss), sd_max_tss=sd(max_tss))
 
 multi_rank<-sp_col_summr%>%filter(Resample=='MultiCol')%>%select(auc_rank, tss_rank)
+ensemble_rank<-sp_col_summr%>%filter(Resample=='EnsembleRaw')%>%select(auc_rank, tss_rank)
 
 #GBR pred
 aucz_out%>%filter(as.character(spcol)!=as.character(Resample) & spcol%in%c('Raine', 'Swains', 'Heron')& auc>0.69)%>%group_by(sp, Resample)
 GBR_pred<-sp_col_summr%>%ungroup()%>%filter(Resample!='MultiCol')%>%group_by(sp)
 
-bind_out<-bind_cols(mean_valz, multi_rank, for_rang)
+bind_out<-bind_cols(mean_valz, multi_rank, ensemble_rank,for_rang)
 
 bind_out$mn_sumr<-paste0(round(bind_out$mn_auc, 2),'±', round(bind_out$sd_auc, 2))
 bind_out$mx_sumr<-paste0(round(bind_out$mn_max_auc, 2),'±', round(bind_out$sd_max_auc, 2))
@@ -143,7 +146,7 @@ bind_out$mn_sumr_ts<-paste0(round(bind_out$mn_tss, 2),'±', round(bind_out$sd_ts
 bind_out$mx_sumr_ts<-paste0(round(bind_out$mn_max_tss, 2),'±', round(bind_out$sd_max_tss, 2))
 
 
-bind_out2<-bind_out%>%select(sp, mn_sumr, mx_sumr, mn_sumr_ts, mx_sumr_ts, auc_rank, tss_rank, min.for, med.for, max.for)
+bind_out2<-bind_out%>%select(sp, mn_sumr, mx_sumr, mn_sumr_ts, mx_sumr_ts, auc_rank, tss_rank, auc_rank1, tss_rank1, min.for, med.for, max.for)
 #write.csv(bind_out2, 'C:/seabirds/data/sp_main_summary.csv', quote=F, row.names=F)
 
 #### ~~~~ **** ~~~~ ####
@@ -626,7 +629,8 @@ print(mkGBRval(my.sp='WTLG', pred_col='Heron')) ;dev.off()
 
 ####~~~~ AUC/TSS density plot ~~~~####
 
-densdat<-aucz_out%>%filter(as.character(spcol)!=as.character(Resample) & spcol!='SUM')%>%
+densdat<-aucz_out%>%filter(as.character(spcol)!=as.character(Resample) & spcol!='MEAN' &
+                             !Resample %in% c('MultiCol', 'EnsembleRaw' , 'EnsembleNrm'))%>%
   select(sp, auc, TSS)%>%gather(variable, value, -sp)
 
 densdat$sp<-factor(densdat$sp, levels=c('BRBO','MABO','RFBO','FRBD','TRBD','WTST','WTLG',
