@@ -310,7 +310,7 @@ write.csv(matx_out, 'C:/seabirds/data/mod_clustering_vals.csv', quote=F, row.nam
 ####~~ Individual colony model overlap ~~####
 pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds', full.names=T)
 pred_list<-pred_list[-grep('MultiCol', pred_list)]
-#pred_list<-pred_list[-grep('indiv', pred_list)]
+pred_list<-pred_list[-grep('ensemble', pred_list)]
 
 aucz_out<-read.csv('C:/seabirds/data/mod_validation_vals.csv')
 allcol_auc<-aucz_out%>%filter(spcol=='MEAN' & !Resample%in%c('MultiCol', 'EnsembleRaw' , 'EnsembleNrm'))%>%
@@ -343,15 +343,17 @@ print(i)}
 allcol_auc<-bind_rows(aucz_out%>%filter(sp=='BRBO' & spcol%in%c('Swains', 'Raine') & !Resample%in%c('MultiCol', 'EnsembleRaw' , 'EnsembleNrm')),
                       aucz_out%>%filter(sp=='MABO' & spcol=='Swains' & !Resample%in%c('MultiCol', 'EnsembleRaw' , 'EnsembleNrm')),
                       aucz_out%>%filter(sp=='NODD' & spcol=='Heron' & !Resample%in%c('MultiCol', 'EnsembleRaw' , 'EnsembleNrm')),
-                      aucz_out%>%filter(sp=='WTLG' & spcol=='Heron' & !Resample%in%c('MultiCol', 'EnsembleRaw' , 'EnsembleNrm')))
+                      aucz_out%>%filter(sp=='WTLG' & spcol=='Heron' & !Resample%in%c('MultiCol', 'EnsembleRaw' , 'EnsembleNrm')),
+                      aucz_out%>%filter(sp=='WTST' & spcol=='Heron' & !Resample%in%c('MultiCol', 'EnsembleRaw' , 'EnsembleNrm')))
                       
 allcol_auc<-allcol_auc%>%group_by(sp, spcol)%>%mutate(auc_norm=(normalized(auc)+1))
 allcol_auc$id<-paste(allcol_auc$sp, gsub(' ', '_', allcol_auc$Resample),  sep='_')
+allcol_auc[allcol_auc$auc_norm==2,]$auc_norm<-3 # boost importance of tracked colony
 
 allcol_auc_raine<-filter(allcol_auc, spcol=='Raine')
 allcol_auc<-filter(allcol_auc, spcol!='Raine')
 
-sp_groups <- c('BRBO', 'MABO', 'WTLG', 'NODD')
+sp_groups <- c('BRBO', 'MABO', 'WTLG', 'NODD', 'WTST')
 for(i in sp_groups){
   sp_stack<-stack(pred_list[grep(i, pred_list)])
   
