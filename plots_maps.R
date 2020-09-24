@@ -386,38 +386,47 @@ land<-read_sf('C:/coral_fish/sourced_data/country_borders/TM_WORLD_BORDERS-0.3.s
 gbr_reef<-read_sf('C:/seabirds/sourced_data/GBRMPA_Data Export/Great_Barrier_Reef_Features.shp')
 gbrmp<-read_sf('C:/seabirds/sourced_data/GBRMPA_Data Export/GBRMP_BOUNDS.shp') 
 colz<-read_sf('C:/seabirds/data/GIS/parks_gbr_cols.shp')
-pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds', full.names=T)
-pred_list<-pred_list[grep('indivSUM.tif', pred_list)]
+pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds/selected_preds', full.names=T)
 mod_pred<-stack(pred_list)
 hotspots<-raster('C:/seabirds/data/modelling/GBR_preds/hotspots.tif')
 # merge colz by md_spgr and rd_class for gbr-wide plots
 rad_diss<-for_rad%>%group_by(md_spgr, rd_clss)%>%summarize(geometry = st_union(geometry))
 
 #### ~~~~ GBR plot function ~~~~ ####
-mk_gbrplot<-function(spg='TERN'){
-  ext<-unlist(raster::extract(subset(mod_pred, paste0(spg,'_indivSUM')),
-  as(filter(rad_diss, md_spgr==spg & rd_clss=='max'), 'Spatial')))
+mk_gbrplot<-function(spg='TERN_MultiCol'){
+  ext<-unlist(raster::extract(subset(mod_pred, spg),
+  as(filter(rad_diss, md_spgr==substr(spg, 1, 4) & rd_clss=='max'), 'Spatial')))
   mn<-min(ext, na.rm=T)
   mx<-max(ext, na.rm=T)
   
-  r1<-subset(mod_pred, paste0(spg,'_indivSUM'))
+  r1<-subset(mod_pred, spg)
   r1[values(r1)>mx]<-mx
   r1[values(r1)<mn]<-mn
   
-  col_sp<-spg
-  if(spg=='WTLG'){col_sp<-'WTST'} 
+  col_sp<-substr(spg, 1, 4)
+  if(col_sp=='WTLG'){col_sp<-'WTST'} 
+  
+  sp.rad<-filter(rad_diss, md_spgr==substr(spg, 1, 4) &
+                   rd_clss %in% c('max', 'med', 'min'))
+  #beeb<-st_bbox(sp.rad)
+  
+  xl<-c(142, 156)
+  yl<-c(-29, -7)
+  if(substr(spg, 1, 4) %in%c('WTLG', 'TRBD', 'FRBD', 'SOTE')){
+    xl<-c(142, 161)  
+    yl<-c(-29, -6)}
 
   p1<-ggplot() +
   layer_spatial(data=r1) +
   geom_sf(data=filter(colz, md_spgr==col_sp), shape = 23, fill = "darkred") +
-  geom_sf(data=filter(rad_diss, md_spgr==spg), aes(colour=rd_clss), fill='NA') +
+  geom_sf(data=sp.rad, aes(colour=rd_clss), fill='NA') +
   geom_sf(data=gbrmp, col='white', fill='NA') +
   geom_sf(data=land, col='black', fill='grey') +
   theme_bw()+
   annotation_scale(location = "bl")+  
   annotation_north_arrow(location = "tr", which_north = "true")+
   labs(x='Longitude', y='Latitude')+
-  coord_sf(xlim = c(142, 158), ylim = c(-29, -7), expand = FALSE)+
+  coord_sf(xlim = xl, ylim =yl, expand = FALSE)+
   scale_colour_manual('Forgaing radii', values=c('#00FFFF','#66FFCC', '#00FF66' ), labels=c(
     'Maximum', 'Median', 'Minimum'))+
   scale_fill_viridis('Likely\nforaging\nhabitat', limits=c(mn, mx), breaks=c(mn, mx), labels=c('low', 'high'),
@@ -433,31 +442,31 @@ mk_gbrplot<-function(spg='TERN'){
 #### ~~~~ **** ~~~~ #####
 
 #### ~~~~ Make GBR-wide plots ~~~~ ####
-p_brbo<-mk_gbrplot(spg='BRBO')
-p_mabo<-mk_gbrplot(spg='MABO')
-p_rfbo<-mk_gbrplot(spg='RFBO')
-p_frbd<-mk_gbrplot(spg='FRBD')
-p_trbd<-mk_gbrplot(spg='TRBD')
-p_wtst<-mk_gbrplot(spg='WTST')
-p_wtlg<-mk_gbrplot(spg='WTLG')
-p_sote<-mk_gbrplot(spg='SOTE')
-p_nodd<-mk_gbrplot(spg='NODD')
-p_tern<-mk_gbrplot(spg='TERN')
+p_brbo<-mk_gbrplot(spg='BRBO_ensemble')
+p_mabo<-mk_gbrplot(spg='MABO_ensemble')
+p_rfbo<-mk_gbrplot(spg='RFBO_MultiCol')
+p_frbd<-mk_gbrplot(spg='FRBD_MultiCol')
+p_trbd<-mk_gbrplot(spg='TRBD_ensemble')
+p_wtst<-mk_gbrplot(spg='WTST_ensemble')
+p_wtlg<-mk_gbrplot(spg='WTLG_MultiCol')
+p_sote<-mk_gbrplot(spg='SOTE_MultiCol')
+p_nodd<-mk_gbrplot(spg='NODD_ensemble')
+p_tern<-mk_gbrplot(spg='TERN_MultiCol')
 
-png(paste0('C:/seabirds/outputs/maps/gbr_wide/boobies2frigate.png'),width = 8.3, height =11.7 , units ="in", res =600)
+png(paste0('C:/seabirds/outputs/maps/gbr_wide/boobies2wtst.png'),width = 8.3, height =11.7 , units ="in", res =300)
 p_brbo+ggtitle('A) Brown Booby')+p_mabo+ggtitle('B) Masked Booby')+
- p_rfbo+ggtitle('C) Red-footed Booby')+p_frbd+ggtitle('D) Frigatebird species-group')+
+ p_rfbo+ggtitle('C) Red-footed Booby')+p_wtst+ggtitle('D) Wedge-tailed Shearwater short trips')+
   plot_layout(ncol=2, nrow=2, guides = 'collect')&theme(legend.position = 'bottom')
 dev.off()
 
-png(paste0('C:/seabirds/outputs/maps/gbr_wide/tropbd2wtsh2sote.png'),width = 8.3, height =11.7 , units ="in", res =600)
-p_trbd+ggtitle('E) Tropicbird species-group')+p_wtst+ggtitle('F) Wedge-tailed Shearwater short trips')+
-    p_wtlg+ggtitle('G) Wedge-tailed Shearwater long trips')+p_sote+ggtitle('H) Sooty Tern')+
+png(paste0('C:/seabirds/outputs/maps/gbr_wide/tropbd2frbd2wtlg2sote.png'),width = 8.3, height =11.7 , units ="in", res =300)
+p_wtlg+ggtitle('E) Wedge-tailed Shearwater long trips')+p_frbd+ggtitle('F) Frigatebirds')+
+    p_trbd+ggtitle('G) Tropicbirds')+p_sote+ggtitle('H) Sooty Tern')+
     plot_layout(ncol=2, nrow=2, guides = 'collect')&theme(legend.position = 'bottom')
 dev.off()
 
-png(paste0('C:/seabirds/outputs/maps/gbr_wide/nodd2tern.png'),width = 8.3, height =5.85 , units ="in", res =600)
-p_nodd+ggtitle('I) Noddy species-group')+p_tern+ggtitle('J) Tern species-group')+
+png(paste0('C:/seabirds/outputs/maps/gbr_wide/nodd2tern.png'),width = 8.3, height =5.85 , units ="in", res =300)
+p_nodd+ggtitle('I) Noddies')+p_tern+ggtitle('J) Terns')+
     plot_layout(ncol=2, guides = 'collect')&theme(legend.position = 'bottom')
 dev.off()
 #### ~~~~ **** ~~~~ #####
