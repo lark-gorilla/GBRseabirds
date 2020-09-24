@@ -188,11 +188,28 @@ wtlong$mod_spgroup<-'WTLG'
 gbr_rep<-bind_rows(gbr_rep, wtlong)%>%arrange(designation_name, site_name, mod_spgroup, species)
 
 #do dist lookup
-spgroup_dists<-spgroup_summ%>%select(Speces.group, Min.foraging.range, Median.foraging.range, Max.foraging.range)%>%
-  gather(rad_class, dist, -Speces.group)
-spgroup_dists$rad_class<-recode(spgroup_dists$rad_class,  Min.foraging.range='min',
-                                Median.foraging.range ='med',  Max.foraging.range='max')
-gbr_rep<-left_join(gbr_rep, spgroup_dists, by=c('mod_spgroup'='Speces.group', 'rad_class'))
+spgroup_dists<-spgroup_summ%>%select(sp, min.for, med.for, max.for)%>%
+  gather(rad_class, dist, -sp)
+spgroup_dists$rad_class<-recode(spgroup_dists$rad_class,  min.for='min',
+                                med.for ='med',  max.for='max')
+gbr_rep<-left_join(gbr_rep, spgroup_dists, by=c('mod_spgroup'='sp', 'rad_class'))
+
+# add in actual values for GBR tracking datasets
+a1<-filter(gbr_rep, designation_name=='Capricornia Cays KBA' & mod_spgroup=='NODD' & rad_class=='min')
+a1$rad_class<-'obs'; a1$dist=129.3
+a2<-filter(gbr_rep, designation_name=='Capricornia Cays KBA' & mod_spgroup=='WTST' & rad_class=='min')
+a2$rad_class<-'obs'; a2$dist=280
+a3<-filter(gbr_rep, designation_name=='Capricornia Cays KBA' & mod_spgroup=='WTLG' & rad_class=='min')
+a3$rad_class<-'obs'; a3$dist=1150
+a4<-filter(gbr_rep, designation_name=='Swain Reefs KBA ' & mod_spgroup=='MABO' & rad_class=='min')
+a4$rad_class<-'obs'; a4$dist=150.1
+a5<-filter(gbr_rep, designation_name=='Swain Reefs KBA ' & mod_spgroup=='BRBO' & rad_class=='min')
+a5$rad_class<-'obs'; a5$dist=45.3
+a6<-filter(gbr_rep, designation_name=='Raine Island, Moulter and MacLennan cays KBA' & mod_spgroup=='BRBO' & rad_class=='min')
+a6$rad_class<-'obs'; a6$dist=111.9
+
+gbr_rep<-rbind(gbr_rep, a1, a2, a3, a4, a5, a6)
+
 # make spatial
 gbr_rep<-gbr_rep%>%st_as_sf(coords=c('Longitude', 'Latitude'), crs=4326)
 
@@ -208,7 +225,7 @@ for(i in unique(gbr_rep$site_name))
   print(i)
 }
 
-#write_sf(buf_out, 'C:/seabirds/data/GIS/foraging_radii.shp')
+write_sf(buf_out, 'C:/seabirds/data/GIS/foraging_radii.shp', delete_layer=T)
 
 # not pred
 # herald_petrel, silver_gull, australian_pelican, bridled_tern,
@@ -261,7 +278,7 @@ for(i in unique(gbr_rep$site_name))
   print(i)
 }
 
-#write_sf(buf_out, 'C:/seabirds/data/GIS/foraging_radii_all_rad.shp')
+#write_sf(buf_out, 'C:/seabirds/data/GIS/foraging_radii_all_rad.shp', delete_layer=T)
 
 #### ~~~~ **** ~~~~ ####
 
@@ -743,7 +760,7 @@ brbo_tss_dend<-ggdendrogram(data = as.dendrogram(mabo_tss[[1]]), rotate = T)
 # MABO
 mabo_auc<-mkVal('MABO', 'AUC', calc.niche = F)
 mabo_tss<-mkVal('MABO', 'TSS', calc.niche = F)
-mabo_auc_dend<-ggdendrogram(data = as.dendrogram(brbo_auc[[1]]), rotate = T)
+mabo_auc_dend<-ggdendrogram(data = as.dendrogram(mabo_auc[[1]]), rotate = T)
 mabo_tss_dend<-ggdendrogram(data = as.dendrogram(mabo_tss[[1]]), rotate = T)
 # RFBO
 rfbo_auc<-mkVal('RFBO', 'AUC', calc.niche = F)
@@ -788,11 +805,11 @@ tern_tss_dend<-ggdendrogram(data = as.dendrogram(tern_tss[[1]]), rotate = T)
 
 # AUC plots
 
-brbomabo<-(brbo_auc[[2]]+ggtitle('A) Brown Booby'))+brbo_auc_dend+
+brbo<-(brbo_auc[[2]]+ggtitle('A) Brown Booby'))+brbo_auc_dend+
   plot_layout(ncol=2, nrow=1, widths=c(3,1))
-ggsave(plot=brbomabo, filename='C:/seabirds/data/modelling/plots/BRBO.png',width = 7, height =5)
+ggsave(plot=brbo, filename='C:/seabirds/data/modelling/plots/BRBO.png',width = 7, height =5)
 
-maborfbo<-(rfbo_auc[[2]]+ggtitle('A) Masked Booby'))+mabo_auc_dend+(rfbo_auc[[2]]+ggtitle('B) Red-footed Booby'))+rfbo_auc_dend+
+maborfbo<-(mabo_auc[[2]]+ggtitle('A) Masked Booby'))+mabo_auc_dend+(rfbo_auc[[2]]+ggtitle('B) Red-footed Booby'))+rfbo_auc_dend+
   plot_layout(ncol=2, nrow=2, widths=c(3,1))
 ggsave(plot=maborfbo, filename='C:/seabirds/data/modelling/plots/MABO_RFBO.png',width = 7, height =10)
 
@@ -812,11 +829,11 @@ ggsave(plot=noddsotetern, filename='C:/seabirds/data/modelling/plots/NODD_SOTE_T
 
 # same for tss
 
-brbomabo<-(brbo_tss[[2]]+ggtitle('A) Brown Booby'))+brbo_tss_dend+
+brbo<-(brbo_tss[[2]]+ggtitle('A) Brown Booby'))+brbo_tss_dend+
   plot_layout(ncol=2, nrow=1, widths=c(3,1))
-ggsave(plot=brbomabo, filename='C:/seabirds/data/modelling/plots/BRBO_tss.png',width = 7, height =5)
+ggsave(plot=brbo, filename='C:/seabirds/data/modelling/plots/BRBO_tss.png',width = 7, height =5)
 
-maborfbo<-(rfbo_tss[[2]]+ggtitle('A) Masked Booby'))+mabo_tss_dend+(rfbo_tss[[2]]+ggtitle('B) Red-footed Booby'))+rfbo_tss_dend+
+maborfbo<-(mabo_tss[[2]]+ggtitle('A) Masked Booby'))+mabo_tss_dend+(rfbo_tss[[2]]+ggtitle('B) Red-footed Booby'))+rfbo_tss_dend+
   plot_layout(ncol=2, nrow=2, widths=c(3,1))
 ggsave(plot=maborfbo, filename='C:/seabirds/data/modelling/plots/MABO_RFBO_tss.png',width = 7, height =10)
 
