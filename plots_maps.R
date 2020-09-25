@@ -349,29 +349,31 @@ print(i)
 
 
 #### ~~~~ Make foraging hotspot layer ~~~~ ####
-pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds', full.names=T)
-pred_list<-pred_list[grep('indivSUM.tif', pred_list)]
-mod_pred<-stack(pred_list)
+pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds/selected_preds', full.names=T)
+p1<-pred_list[grep('ensemble.tif', pred_list)]
+p2<-pred_list[grep('MultiCol', pred_list)]
+mod_pred<-stack(c(p1, p2))
 
 for_rad<-read_sf('C:/seabirds/data/GIS/foraging_radii.shp')
 rad_diss<-for_rad%>%group_by(md_spgr, rd_clss)%>%summarize(geometry = st_union(geometry))
 
-for(i in unique(for_rad$md_spgr))
+looplist<-substr(c(p1, p2), 53, 65)
+for(i in looplist)
 {
-ext<-unlist(raster::extract(subset(mod_pred, paste0(i,'_indivSUM')),
-                            as(filter(rad_diss, md_spgr==i & rd_clss=='max'), 'Spatial')))
+ext<-unlist(raster::extract(subset(mod_pred, i),
+                            as(filter(rad_diss, md_spgr==substr(i, 1, 4) & rd_clss=='max'), 'Spatial')))
 mn<-min(ext, na.rm=T)
 mx<-max(ext, na.rm=T)
 
-r1<-subset(mod_pred, paste0(i,'_indivSUM'))
+r1<-subset(mod_pred, i)
 r1[values(r1)>mx]<-mx
 r1[values(r1)<mn]<-mn
 
 r2<-(r1-mn)/(mx-mn)# normalise (0-1)
 #r3<-reclassify(r2, c(-Inf, 0.5, 0, 0.5,Inf,1))
-if(i=='BRBO'){hotsp<-r2}else{hotsp<-hotsp+r2}
+if(i=='BRBO_ensemble'){hotsp<-r2}else{hotsp<-hotsp+r2}
 }
-#writeRaster(hotsp, 'C:/seabirds/data/modelling/GBR_preds/hotspots.tif')
+writeRaster(hotsp, 'C:/seabirds/data/modelling/GBR_preds/hotspots.tif')
 
 #### ~~~~ **** ~~~~ ####
 
@@ -490,7 +492,7 @@ p1<-ggplot() +
   scale_fill_viridis_b('Likely\nseabird\nforaging\nhabitat', option='magma',
                      breaks=c(seq(0.1, 0.9, 0.1)),labels=c('low', rep('', 7), 'high'), na.value = NA)
 
-png(paste0('C:/seabirds/outputs/maps/gbr_wide/hotspots.png'),width = 8.3, height =5.85 , units ="in", res =600)
+png(paste0('C:/seabirds/outputs/maps/gbr_wide/hotspots.png'),width = 8.3, height =5.85 , units ="in", res =300)
 p1
 dev.off()
 #### ~~~~ **** ~~~~ #####
