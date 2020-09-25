@@ -283,37 +283,40 @@ for(i in unique(gbr_rep$site_name))
 #### ~~~~ **** ~~~~ ####
 
 #### ~~~~ Make spgroup-colony foraging hotspots ~~~~ ####
-all_rad<-read_sf('C:/seabirds/data/GIS/foraging_radii_all_rad.shp')
+for_rad<-read_sf('C:/seabirds/data/GIS/foraging_radii.shp')
 
-pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds', full.names=T)
-pred_list<-pred_list[grep('indivSUM.tif', pred_list)]
+pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds/selected_preds', full.names=T)
 mod_pred<-stack(pred_list)
-
-for( i in unique(all_rad$md_spgr))
+r_sp<-substr(pred_list[nchar(pred_list)==69], 53, 65)
+for( i in r_sp)
 {
-  col<-all_rad[all_rad$md_spgr==i,]
-  sp_ras1<-subset(mod_pred, paste0(i,'_indivSUM'))
+  spkey=substr(i, 1, 4)
+  col<-filter(for_rad, md_spgr==spkey & rd_clss %in% c('med', 'obs'))
   
   for(j in unique(col$site_nm))
   {
-    col_sp<-filter(col, site_nm==j)%>%arrange(desc(Mx_rrg_))
-    sp_ras<-crop(sp_ras1, extent(col_sp[1,]))
+    sp_ras1<-subset(mod_pred, i)
+    col_sp<-filter(col, site_nm==j)
     
-    # If long trip wtsh don't weight near colony as doesn't apply
-    if(i=='WTLG'){sum_rad<-mask(sp_ras, as(col_sp[1,], 'Spatial'), updatevalue=0, updateNA=T)}else
+    if('obs' %in% col_sp$rd_clss)
       {
-      for(k in 1:nrow(col_sp))
-        {
-          inrad<-mask(sp_ras, as(col_sp[k,], 'Spatial'), updatevalue=0, updateNA=T)
-          ir2<-inrad
-          ir2[ir2==0]<-NA
-          q <- quantile(ir2, 0.7) # top xxx%
-          toprad<-reclassify(inrad, c(-Inf, q, 0, q, Inf, 1))
-          if(k==1){sum_rad<-toprad}else{sum_rad<-sum_rad+toprad}
-          #plot(sum_rad)
-        }
-      }# close WTLG if loop
-    # need to incorporate population information
+      col_sp<-filter(col_sp, rd_clss=='obs')
+      if(spkey=='BRBO' & col_sp$dsgntn_n=='Raine Island, Moulter and MacLennan cays KBA'){
+        sp_ras1<-subset(mod_pred, 'BRBO_ensembleRaine');print(col_sp);print(sp_ras1)}
+      if(spkey=='BRBO' & col_sp$dsgntn_n=='Swain Reefs KBA'){
+        sp_ras1<-subset(mod_pred, 'BRBO_ensembleSwains');print(col_sp);print(sp_ras1)}
+      if(spkey=='MABO' & col_sp$dsgntn_n=='Swain Reefs KBA'){
+        sp_ras1<-subset(mod_pred, 'MABO_ensembleSwains');print(col_sp);print(sp_ras1)}
+      if(spkey=='WTST' & col_sp$dsgntn_n=='Capricornia Cays KBA'){
+        sp_ras1<-subset(mod_pred, 'WTST_Heron');print(col_sp);print(sp_ras1)}
+      if(spkey=='NODD' & col_sp$dsgntn_n=='Capricornia Cays KBA'){
+        sp_ras1<-subset(mod_pred, 'NODD_ensembleHeron');print(col_sp);print(sp_ras1)}
+      # Not for WTLG Heron as good already
+      }
+      
+    sp_ras<-crop(sp_ras1, extent(col_sp)) # drop size
+    
+    sum_rad<-mask(sp_ras, as(col_sp, 'Spatial'), updatevalue=0, updateNA=T)
     
     if(which(j==unique(col$site_nm))==1){mos_ras<-sum_rad}else{
       mos_ras <- mosaic(mos_ras, sum_rad, fun = max)} # mean works badly when overlap =0
@@ -323,6 +326,7 @@ for( i in unique(all_rad$md_spgr))
     q2 <- quantile(sr2, 0.8) # top 20%
     hots<-reclassify(sum_rad, c(-Inf, q2, NA, q2, Inf, 1), right=F)
     s1<-st_as_sf(rasterToPolygons(hots, dissolve = T)) 
+    names(s1)[1]<-'mod'
     s2<-drop_crumbs(s1, threshold=12000000)
     s3<-fill_holes(s2, threshold=54000000)
     #s4 <- smoothr::smooth(s3, method = "ksmooth", smoothness = 2)
@@ -332,16 +336,19 @@ for( i in unique(all_rad$md_spgr))
     s3$md_spgr<-col_sp$md_spgr[1]
     s3$species<-col_sp$species[1]
     s3$trigger<-col_sp$trigger[1]
+    s3$conf<-'Low'
+    if(col_sp$rd_clss=='obs'){s3$conf<-'Medium'}
+    if(col_sp$rd_clss=='obs' & col_sp$md_spgr=='WTST'){s3$conf<-'High'}
     
     if(which(j==unique(col$site_nm))==1){core_pols<-s3}else{
       core_pols <- rbind(core_pols, s3)}
     
-    plot(mos_ras)
+    plot(mos_ras) 
     plot(core_pols, add=T)
     
   }
-writeRaster(mos_ras, paste0('C:/seabirds/data/modelling/GBR_preds/col_radii_hotspots_', i, '.tif'), overwrite=T)
-write_sf(core_pols, paste0('C:/seabirds/data/GIS/col_radii_core_hotspots_', i, '.shp'), delete_layer = T)
+writeRaster(mos_ras, paste0('C:/seabirds/data/modelling/GBR_preds/col_radii_hotspots_', spkey, '.tif'), overwrite=T)
+write_sf(core_pols, paste0('C:/seabirds/data/GIS/col_radii_core_hotspots_', spkey, '.shp'), delete_layer = T)
 print(i)  
 }
 
@@ -470,7 +477,7 @@ p_wtlg+ggtitle('E) Wedge-tailed Shearwater long trips')+p_frbd+ggtitle('F) Friga
     plot_layout(ncol=2, nrow=2, guides = 'collect')&theme(legend.position = 'bottom')
 dev.off()
 
-png(paste0('C:/seabirds/outputs/maps/gbr_wide/nodd2tern_class.png'),width = 8.3, height =5.85 , units ="in", res =300)
+png(paste0('C:/seabirds/outputs/maps/gbr_wide/nodd2tern_class.png'),width = 8.3, height =6.85 , units ="in", res =300)
 p_nodd+ggtitle('I) Noddies')+p_tern+ggtitle('J) Terns')+
     plot_layout(ncol=2, guides = 'collect')&theme(legend.position = 'bottom')
 dev.off()
