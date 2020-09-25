@@ -404,6 +404,7 @@ mk_gbrplot<-function(spg='TERN_MultiCol'){
   r1<-subset(mod_pred, spg)
   r1[values(r1)>mx]<-mx
   r1[values(r1)<mn]<-mn
+  r1<-(r1-mn)/(mx-mn)# normalise (0-1)
   
   col_sp<-substr(spg, 1, 4)
   if(col_sp=='WTLG'){col_sp<-'WTST'} 
@@ -431,8 +432,10 @@ mk_gbrplot<-function(spg='TERN_MultiCol'){
   coord_sf(xlim = xl, ylim =yl, expand = FALSE)+
   scale_colour_manual('Forgaing radii', values=c('#00FFFF','#66FFCC', '#00FF66' ), labels=c(
     'Maximum', 'Median', 'Minimum'))+
-  scale_fill_viridis('Likely\nforaging\nhabitat', limits=c(mn, mx), breaks=c(mn, mx), labels=c('low', 'high'),
-                     option='magma', na.value = NA)
+    scale_fill_viridis_b('Likely\nseabird\nforaging\nhabitat', option='magma',
+                         breaks=c(seq(0.1, 0.9, 0.1)),labels=c('low', rep('', 7), 'high'), na.value = NA)
+  #scale_fill_viridis('Likely\nforaging\nhabitat', limits=c(mn, mx), breaks=c(mn, mx), labels=c('low', 'high'),
+   #                  option='magma', na.value = NA)
 
   return(p1)}
 
@@ -455,19 +458,19 @@ p_sote<-mk_gbrplot(spg='SOTE_MultiCol')
 p_nodd<-mk_gbrplot(spg='NODD_ensemble')
 p_tern<-mk_gbrplot(spg='TERN_MultiCol')
 
-png(paste0('C:/seabirds/outputs/maps/gbr_wide/boobies2wtst.png'),width = 8.3, height =11.7 , units ="in", res =300)
+png(paste0('C:/seabirds/outputs/maps/gbr_wide/boobies2wtst_class.png'),width = 8.3, height =11.7 , units ="in", res =300)
 p_brbo+ggtitle('A) Brown Booby')+p_mabo+ggtitle('B) Masked Booby')+
  p_rfbo+ggtitle('C) Red-footed Booby')+p_wtst+ggtitle('D) Wedge-tailed Shearwater short trips')+
   plot_layout(ncol=2, nrow=2, guides = 'collect')&theme(legend.position = 'bottom')
 dev.off()
 
-png(paste0('C:/seabirds/outputs/maps/gbr_wide/tropbd2frbd2wtlg2sote.png'),width = 8.3, height =11.7 , units ="in", res =300)
+png(paste0('C:/seabirds/outputs/maps/gbr_wide/tropbd2frbd2wtlg2sote_class.png'),width = 8.3, height =11.7 , units ="in", res =300)
 p_wtlg+ggtitle('E) Wedge-tailed Shearwater long trips')+p_frbd+ggtitle('F) Frigatebirds')+
     p_trbd+ggtitle('G) Tropicbirds')+p_sote+ggtitle('H) Sooty Tern')+
     plot_layout(ncol=2, nrow=2, guides = 'collect')&theme(legend.position = 'bottom')
 dev.off()
 
-png(paste0('C:/seabirds/outputs/maps/gbr_wide/nodd2tern.png'),width = 8.3, height =5.85 , units ="in", res =300)
+png(paste0('C:/seabirds/outputs/maps/gbr_wide/nodd2tern_class.png'),width = 8.3, height =5.85 , units ="in", res =300)
 p_nodd+ggtitle('I) Noddies')+p_tern+ggtitle('J) Terns')+
     plot_layout(ncol=2, guides = 'collect')&theme(legend.position = 'bottom')
 dev.off()
