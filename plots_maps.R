@@ -302,15 +302,17 @@ for( i in r_sp)
       {
       col_sp<-filter(col_sp, rd_clss=='obs')
       if(spkey=='BRBO' & col_sp$dsgntn_n=='Raine Island, Moulter and MacLennan cays KBA'){
-        sp_ras1<-subset(mod_pred, 'BRBO_ensembleRaine');print(col_sp);print(sp_ras1)}
+        sp_ras1<-subset(mod_pred, 'BRBO_Raine');print(col_sp);print(sp_ras1)}
       if(spkey=='BRBO' & col_sp$dsgntn_n=='Swain Reefs KBA'){
-        sp_ras1<-subset(mod_pred, 'BRBO_ensembleSwains');print(col_sp);print(sp_ras1)}
+        sp_ras1<-subset(mod_pred, 'BRBO_Swains');print(col_sp);print(sp_ras1)}
       if(spkey=='MABO' & col_sp$dsgntn_n=='Swain Reefs KBA'){
-        sp_ras1<-subset(mod_pred, 'MABO_ensembleSwains');print(col_sp);print(sp_ras1)}
+        sp_ras1<-subset(mod_pred, 'MABO_Swains');print(col_sp);print(sp_ras1)}
       if(spkey=='WTST' & col_sp$dsgntn_n=='Capricornia Cays KBA'){
         sp_ras1<-subset(mod_pred, 'WTST_Heron');print(col_sp);print(sp_ras1)}
+      if(spkey=='WTLG' & col_sp$dsgntn_n=='Capricornia Cays KBA'){
+        sp_ras1<-subset(mod_pred, 'WTLG_Heron');print(col_sp);print(sp_ras1)}
       if(spkey=='NODD' & col_sp$dsgntn_n=='Capricornia Cays KBA'){
-        sp_ras1<-subset(mod_pred, 'NODD_ensembleHeron');print(col_sp);print(sp_ras1)}
+        sp_ras1<-subset(mod_pred, 'NODD_Heron');print(col_sp);print(sp_ras1)}
       # Not for WTLG Heron as good already
       }
       
@@ -323,13 +325,14 @@ for( i in r_sp)
     
     sr2<-sum_rad
     sr2[sr2==0]<-NA
-    q2 <- quantile(sr2, 0.8) # top 20%
+    q2 <- quantile(sr2, 0.9) # top 10%
     hots<-reclassify(sum_rad, c(-Inf, q2, NA, q2, Inf, 1), right=F)
     s1<-st_as_sf(rasterToPolygons(hots, dissolve = T)) 
     names(s1)[1]<-'mod'
-    s2<-drop_crumbs(s1, threshold=12000000)
+    s2<-drop_crumbs(s1, threshold=16000000)
     s3<-fill_holes(s2, threshold=54000000)
-    #s4 <- smoothr::smooth(s3, method = "ksmooth", smoothness = 2)
+    s3 <- smoothr::smooth(s3, method = "ksmooth", smoothness = 4)
+    s3<-drop_crumbs(s3, threshold=16000000)
     s3$dsgntn_n<-col_sp$dsgntn_n[1]
     s3$site_nm<-col_sp$site_nm[1]
     s3$dsgntn_t<-col_sp$dsgntn_t[1]
@@ -339,32 +342,37 @@ for( i in r_sp)
     s3$conf<-'Low'
     if(col_sp$rd_clss=='obs'){s3$conf<-'Medium'}
     if(col_sp$rd_clss=='obs' & col_sp$md_spgr=='WTST'){s3$conf<-'High'}
+    s3$mod<-NULL
     
     if(which(j==unique(col$site_nm))==1){core_pols<-s3}else{
       core_pols <- rbind(core_pols, s3)}
     
     plot(mos_ras) 
-    plot(core_pols, add=T)
+    plot(core_pols[1], add=T)
     
   }
-writeRaster(mos_ras, paste0('C:/seabirds/data/modelling/GBR_preds/col_radii_hotspots_', spkey, '.tif'), overwrite=T)
-write_sf(core_pols, paste0('C:/seabirds/data/GIS/col_radii_core_hotspots_', spkey, '.shp'), delete_layer = T)
+#writeRaster(mos_ras, paste0('C:/seabirds/data/modelling/GBR_preds/col_radii_hotspots_', spkey, '.tif'), overwrite=T)
+if(spkey=='BRBO'){out_pols<-core_pols}else{
+  out_pols <- rbind(out_pols, core_pols)}
 print(i)  
 }
+#write all
+write_sf(out_pols, paste0('C:/seabirds/data/GIS/col_radii_core_hotspots_smooth_10perc.shp'), delete_layer = T)
+
 
 #### ~~~~ **** ~~~~ ####
 
 
 #### ~~~~ Make foraging hotspot layer ~~~~ ####
 pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds/selected_preds', full.names=T)
-p1<-pred_list[grep('ensemble.tif', pred_list)]
+#p1<-pred_list[grep('ensemble.tif', pred_list)]
 p2<-pred_list[grep('MultiCol', pred_list)]
-mod_pred<-stack(c(p1, p2))
+mod_pred<-stack(p2)
 
 for_rad<-read_sf('C:/seabirds/data/GIS/foraging_radii.shp')
 rad_diss<-for_rad%>%group_by(md_spgr, rd_clss)%>%summarize(geometry = st_union(geometry))
 
-looplist<-substr(c(p1, p2), 53, 65)
+looplist<-substr(p2, 53, 65)
 for(i in looplist)
 {
 ext<-unlist(raster::extract(subset(mod_pred, i),
@@ -378,9 +386,9 @@ r1[values(r1)<mn]<-mn
 
 r2<-(r1-mn)/(mx-mn)# normalise (0-1)
 #r3<-reclassify(r2, c(-Inf, 0.5, 0, 0.5,Inf,1))
-if(i=='BRBO_ensemble'){hotsp<-r2}else{hotsp<-hotsp+r2}
+if(i=='BRBO_MultiCol'){hotsp<-r2}else{hotsp<-hotsp+r2}
 }
-writeRaster(hotsp, 'C:/seabirds/data/modelling/GBR_preds/hotspots.tif')
+writeRaster(hotsp, 'C:/seabirds/data/modelling/GBR_preds/hotspotsMultiCol.tif')
 
 #### ~~~~ **** ~~~~ ####
 
@@ -397,7 +405,7 @@ gbrmp<-read_sf('C:/seabirds/sourced_data/GBRMPA_Data Export/GBRMP_BOUNDS.shp')
 colz<-read_sf('C:/seabirds/data/GIS/parks_gbr_cols.shp')
 pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds/selected_preds', full.names=T)
 mod_pred<-stack(pred_list)
-hotspots<-raster('C:/seabirds/data/modelling/GBR_preds/hotspots.tif')
+hotspots<-raster('C:/seabirds/data/modelling/GBR_preds/hotspotsMultiCol.tif')
 # merge colz by md_spgr and rd_class for gbr-wide plots
 rad_diss<-for_rad%>%group_by(md_spgr, rd_clss)%>%summarize(geometry = st_union(geometry))
 
@@ -454,30 +462,30 @@ mk_gbrplot<-function(spg='TERN_MultiCol'){
 #### ~~~~ **** ~~~~ #####
 
 #### ~~~~ Make GBR-wide plots ~~~~ ####
-p_brbo<-mk_gbrplot(spg='BRBO_ensemble')
-p_mabo<-mk_gbrplot(spg='MABO_ensemble')
+p_brbo<-mk_gbrplot(spg='BRBO_MultiCol')
+p_mabo<-mk_gbrplot(spg='MABO_MultiCol')
 p_rfbo<-mk_gbrplot(spg='RFBO_MultiCol')
 p_frbd<-mk_gbrplot(spg='FRBD_MultiCol')
-p_trbd<-mk_gbrplot(spg='TRBD_ensemble')
-p_wtst<-mk_gbrplot(spg='WTST_ensemble')
+p_trbd<-mk_gbrplot(spg='TRBD_MultiCol')
+p_wtst<-mk_gbrplot(spg='WTST_MultiCol')
 p_wtlg<-mk_gbrplot(spg='WTLG_MultiCol')
 p_sote<-mk_gbrplot(spg='SOTE_MultiCol')
-p_nodd<-mk_gbrplot(spg='NODD_ensemble')
+p_nodd<-mk_gbrplot(spg='NODD_MultiCol')
 p_tern<-mk_gbrplot(spg='TERN_MultiCol')
 
-png(paste0('C:/seabirds/outputs/maps/gbr_wide/boobies2wtst_class.png'),width = 8.3, height =11.7 , units ="in", res =300)
+png(paste0('C:/seabirds/outputs/maps/gbr_wide/boobies2wtst_classMultiCol.png'),width = 8.3, height =11.7 , units ="in", res =300)
 p_brbo+ggtitle('A) Brown Booby')+p_mabo+ggtitle('B) Masked Booby')+
  p_rfbo+ggtitle('C) Red-footed Booby')+p_wtst+ggtitle('D) Wedge-tailed Shearwater short trips')+
   plot_layout(ncol=2, nrow=2, guides = 'collect')&theme(legend.position = 'bottom')
 dev.off()
 
-png(paste0('C:/seabirds/outputs/maps/gbr_wide/tropbd2frbd2wtlg2sote_class.png'),width = 8.3, height =11.7 , units ="in", res =300)
+png(paste0('C:/seabirds/outputs/maps/gbr_wide/tropbd2frbd2wtlg2sote_classMultiCol.png'),width = 8.3, height =11.7 , units ="in", res =300)
 p_wtlg+ggtitle('E) Wedge-tailed Shearwater long trips')+p_frbd+ggtitle('F) Frigatebirds')+
     p_trbd+ggtitle('G) Tropicbirds')+p_sote+ggtitle('H) Sooty Tern')+
     plot_layout(ncol=2, nrow=2, guides = 'collect')&theme(legend.position = 'bottom')
 dev.off()
 
-png(paste0('C:/seabirds/outputs/maps/gbr_wide/nodd2tern_class.png'),width = 8.3, height =6.85 , units ="in", res =300)
+png(paste0('C:/seabirds/outputs/maps/gbr_wide/nodd2tern_classMultiCol.png'),width = 8.3, height =6.85 , units ="in", res =300)
 p_nodd+ggtitle('I) Noddies')+p_tern+ggtitle('J) Terns')+
     plot_layout(ncol=2, guides = 'collect')&theme(legend.position = 'bottom')
 dev.off()
@@ -502,7 +510,7 @@ p1<-ggplot() +
   scale_fill_viridis_b('Likely\nseabird\nforaging\nhabitat', option='magma',
                      breaks=c(seq(0.1, 0.9, 0.1)),labels=c('low', rep('', 7), 'high'), na.value = NA)
 
-png(paste0('C:/seabirds/outputs/maps/gbr_wide/hotspots.png'),width = 8.3, height =5.85 , units ="in", res =300)
+png(paste0('C:/seabirds/outputs/maps/gbr_wide/hotspotsMultiCol.png'),width = 8.3, height =5.85 , units ="in", res =300)
 p1
 dev.off()
 #### ~~~~ **** ~~~~ #####
