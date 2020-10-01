@@ -25,56 +25,65 @@ colz<-read_sf('C:/seabirds/data/GIS/parks_gbr_cols.shp')
 colz<-colz%>%group_by(dsgntn_n, site_nm)%>%summarise(species=paste(unique(species), collapse=', '))
 
 # core areas
-for(i in c("BRBO", 'MABO', 'RFBO', 'FRBD', 'TRBD', 'WTST', "WTLG", "SOTE" , 'NODD', 'TERN'))
-{
-if(i=='BRBO'){s1<-read_sf(paste0('C:/seabirds/data/GIS/col_radii_core_hotspots_', i, '.shp'))
-s1<-s1[,-1]}else{
-  s2<-read_sf(paste0('C:/seabirds/data/GIS/col_radii_core_hotspots_', i, '.shp'))
-  s2<-s2[,-1]
-  s1<-rbind(s1,s2)}
-}
-s1<-s1%>%group_by(md_spgr)%>%st_buffer(0)%>%summarize(geometry = st_union(geometry))
+s1<-read_sf('C:/seabirds/data/GIS/site_radii_core_hotspots_pixel_10perc.shp')
 
 #gbr_reef<-read_sf('C:/seabirds/sourced_data/GBRMPA_Data #Export/Great_Barrier_Reef_Features.shp')
 #gbr_reef<-filter(gbr_reef, FEAT_NAME=='Reef')
 
-pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds', full.names=T)
-pred_list<-pred_list[grep('indivSUM.tif', pred_list)]
+pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds/selected_preds', full.names=T)
+pred_list<-pred_list[grep('MultiCol.tif', pred_list)]
 mod_pred<-stack(pred_list)
-hotspots<-raster('C:/seabirds/data/modelling/GBR_preds/hotspots.tif')
+hotspots<-raster('C:/seabirds/data/modelling/GBR_preds/hotspotsMultiCol.tif')
 # merge colz by md_spgr and rd_class for gbr-wide plots
 rad_diss<-for_rad%>%group_by(md_spgr, rd_clss)%>%summarize(geometry = st_union(geometry))
+rad_diss$rd_clss<-factor(rad_diss$rd_clss, levels=c('min','med','max','obs'))
 
 #normalize_rasts
 hotspots<-(hotspots-min(values(hotspots), na.rm=T))/(max(values(hotspots), na.rm=T)-min(values(hotspots), na.rm=T))
 
-brbo_ras<-subset(mod_pred, 'BRBO_indivSUM')
+brbo_ras<-subset(mod_pred, 'BRBO_MultiCol')
+brbo_ras<-mask(brbo_ras, rad_diss%>%filter(md_spgr=='BRBO'&rd_clss=='max')%>%st_convex_hull())
 brbo_ras<-(brbo_ras-min(values(brbo_ras), na.rm=T))/(max(values(brbo_ras), na.rm=T)-min(values(brbo_ras), na.rm=T))
-mabo_ras<-subset(mod_pred, 'MABO_indivSUM')
+mabo_ras<-subset(mod_pred, 'MABO_MultiCol')
+mabo_ras<-mask(mabo_ras, rad_diss%>%filter(md_spgr=='MABO'&rd_clss=='max')%>%st_convex_hull())
 mabo_ras<-(mabo_ras-min(values(mabo_ras), na.rm=T))/(max(values(mabo_ras), na.rm=T)-min(values(mabo_ras), na.rm=T))
-rfbo_ras<-subset(mod_pred, 'RFBO_indivSUM')
+rfbo_ras<-subset(mod_pred, 'RFBO_MultiCol')
+rfbo_ras<-mask(rfbo_ras, rad_diss%>%filter(md_spgr=='RFBO'&rd_clss=='max')%>%st_convex_hull())
 rfbo_ras<-(rfbo_ras-min(values(rfbo_ras), na.rm=T))/(max(values(rfbo_ras), na.rm=T)-min(values(rfbo_ras), na.rm=T))
-frbd_ras<-subset(mod_pred, 'FRBD_indivSUM')
+frbd_ras<-subset(mod_pred, 'FRBD_MultiCol')
+frbd_ras<-mask(frbd_ras, rad_diss%>%filter(md_spgr=='FRBD'&rd_clss=='max')%>%st_convex_hull())
 frbd_ras<-(frbd_ras-min(values(frbd_ras), na.rm=T))/(max(values(frbd_ras), na.rm=T)-min(values(frbd_ras), na.rm=T))
-trbd_ras<-subset(mod_pred, 'TRBD_indivSUM')
+trbd_ras<-subset(mod_pred, 'TRBD_MultiCol')
+trbd_ras<-mask(trbd_ras, rad_diss%>%filter(md_spgr=='TRBD'&rd_clss=='max')%>%st_convex_hull())
 trbd_ras<-(trbd_ras-min(values(trbd_ras), na.rm=T))/(max(values(trbd_ras), na.rm=T)-min(values(trbd_ras), na.rm=T))
-wtst_ras<-subset(mod_pred, 'WTST_indivSUM')
+wtst_ras<-subset(mod_pred, 'WTST_MultiCol')
+wtst_ras<-mask(wtst_ras, rad_diss%>%filter(md_spgr=='WTST'&rd_clss=='max')%>%st_convex_hull())
 wtst_ras<-(wtst_ras-min(values(wtst_ras), na.rm=T))/(max(values(wtst_ras), na.rm=T)-min(values(wtst_ras), na.rm=T))
-wtlg_ras<-subset(mod_pred, 'WTLG_indivSUM')
+wtlg_ras<-subset(mod_pred, 'WTLG_MultiCol')
+wtlg_ras<-mask(wtlg_ras, rad_diss%>%filter(md_spgr=='WTLG'&rd_clss=='max')%>%st_convex_hull())
 wtlg_ras<-(wtlg_ras-min(values(wtlg_ras), na.rm=T))/(max(values(wtlg_ras), na.rm=T)-min(values(wtlg_ras), na.rm=T))
-sote_ras<-subset(mod_pred, 'SOTE_indivSUM')
+sote_ras<-subset(mod_pred, 'SOTE_MultiCol')
+sote_ras<-mask(sote_ras, rad_diss%>%filter(md_spgr=='SOTE'&rd_clss=='max')%>%st_convex_hull())
 sote_ras<-(sote_ras-min(values(sote_ras), na.rm=T))/(max(values(sote_ras), na.rm=T)-min(values(sote_ras), na.rm=T))
-nodd_ras<-subset(mod_pred, 'NODD_indivSUM')
+nodd_ras<-subset(mod_pred, 'NODD_MultiCol')
+nodd_ras<-mask(nodd_ras, rad_diss%>%filter(md_spgr=='NODD'&rd_clss=='max')%>%st_convex_hull())
 nodd_ras<-(nodd_ras-min(values(nodd_ras), na.rm=T))/(max(values(nodd_ras), na.rm=T)-min(values(nodd_ras), na.rm=T))
-tern_ras<-subset(mod_pred, 'TERN_indivSUM')
+tern_ras<-subset(mod_pred, 'TERN_MultiCol')
+tern_ras<-mask(tern_ras, rad_diss%>%filter(md_spgr=='TERN'&rd_clss=='max')%>%st_convex_hull())
 tern_ras<-(tern_ras-min(values(tern_ras), na.rm=T))/(max(values(tern_ras), na.rm=T)-min(values(tern_ras), na.rm=T))
  
-
+rm(mod_pred)
 ```
 
 
 ```{r, echo=FALSE, warning=F, message=F, fig.width=10, fig.height=6}
-pal <- colorBin(rev(c('#9e0142','#d53e4f','#f46d43','#fdae61','#fee08b','#e6f598','#abdda4','#66c2a5','#3288bd','#5e4fa2')), bins=10, c(NA, seq(0, 1, 0.1)), na.color = "transparent")
+#pal <- colorBin(rev(c('#9e0142','#d53e4f','#f46d43','#fdae61','#fee08b','#e6f598','#abdda4','#66c2a5','#3288bd','#5e4fa2')), bins=10, c(NA, seq(0, 1, 0.1)), na.color = "transparent")
+# magma viridis
+pal <- colorBin(c("#000004FF", "#180F3EFF", "#451077FF", "#721F81FF", "#9F2F7FFF", "#CD4071FF" ,"#F1605DFF","#FD9567FF", "#FEC98DFF" ,"#FCFDBFFF"), bins=10, c(NA, seq(0, 1, 0.1)), na.color = "transparent")
+
+pal_rad <- colorFactor(
+  palette =c('#00FFFF','#66FFCC', '#00FF66',  'yellow'),domain = rad_diss$rd_clss)
+
 
  m <- leaflet() %>%
   addTiles() %>% 
@@ -92,29 +101,29 @@ pal <- colorBin(rev(c('#9e0142','#d53e4f','#f46d43','#fdae61','#fee08b','#e6f598
  
      addRasterImage(hotspots, colors = pal, opacity = 0.8, group='Hotspots') %>%
    addLegend(pal = pal, values = c(NA, seq(0, 1, 0.1)),
-    title = "Likely foraging habitat") %>%
+    title = "Foraging habitat suitability") %>%
    
-   addPolygons(data=filter(rad_diss, md_spgr=='BRBO'), fill=F,group='BRBO', weight=3, color='black')%>%
-   addPolygons(data=filter(rad_diss, md_spgr=='MABO'), fill=F, group='MABO', weight=3, color='black')%>%
-   addPolygons(data=filter(rad_diss, md_spgr=='RFBO'), fill=F, group='RFBO', weight=3, color='black')%>%
-   addPolygons(data=filter(rad_diss, md_spgr=='FRBD'), fill=F, group='FRBD', weight=3, color='black')%>%
-   addPolygons(data=filter(rad_diss, md_spgr=='TRBD'), fill=F, group='TRBD', weight=3, color='black')%>%
-   addPolygons(data=filter(rad_diss, md_spgr=='WTST'), fill=F, group='WTST', weight=3, color='black')%>%
-   addPolygons(data=filter(rad_diss, md_spgr=='WTLG'), fill=F, group='WTLG', weight=3, color='black')%>%
-   addPolygons(data=filter(rad_diss, md_spgr=='SOTE'), fill=F, group='SOTE', weight=3, color='black')%>%
-   addPolygons(data=filter(rad_diss, md_spgr=='NODD'), fill=F, group='NODD', weight=3, color='black')%>%
-   addPolygons(data=filter(rad_diss, md_spgr=='TERN'), fill=F, group='TERN', weight=3, color='black')%>%
+   addPolygons(data=filter(rad_diss, md_spgr=='BRBO'), fill=F,group='BRBO', weight=3, color=~pal_rad(rd_clss))%>%
+   addPolygons(data=filter(rad_diss, md_spgr=='MABO'), fill=F, group='MABO', weight=3, color=~pal_rad(rd_clss))%>%
+   addPolygons(data=filter(rad_diss, md_spgr=='RFBO'), fill=F, group='RFBO', weight=3, color=~pal_rad(rd_clss))%>%
+   addPolygons(data=filter(rad_diss, md_spgr=='FRBD'), fill=F, group='FRBD', weight=3, color=~pal_rad(rd_clss))%>%
+   addPolygons(data=filter(rad_diss, md_spgr=='TRBD'), fill=F, group='TRBD', weight=3, color=~pal_rad(rd_clss))%>%
+   addPolygons(data=filter(rad_diss, md_spgr=='WTST'), fill=F, group='WTST', weight=3, color=~pal_rad(rd_clss))%>%
+   addPolygons(data=filter(rad_diss, md_spgr=='WTLG'), fill=F, group='WTLG', weight=3, color=~pal_rad(rd_clss))%>%
+   addPolygons(data=filter(rad_diss, md_spgr=='SOTE'), fill=F, group='SOTE', weight=3, color=~pal_rad(rd_clss))%>%
+   addPolygons(data=filter(rad_diss, md_spgr=='NODD'), fill=F, group='NODD', weight=3, color=~pal_rad(rd_clss))%>%
+   addPolygons(data=filter(rad_diss, md_spgr=='TERN'), fill=F, group='TERN', weight=3, color=~pal_rad(rd_clss))%>%
    
-   addPolygons(data=filter(s1, md_spgr=='BRBO'), fill=F, color='red', weight=3, group='BRBO')%>%
-   addPolygons(data=filter(s1, md_spgr=='MABO'),  fill=F, color='red', weight=3, group='MABO')%>%
-   addPolygons(data=filter(s1, md_spgr=='RFBO'), fill=F, color='red', weight=3, group='RFBO')%>%
-   addPolygons(data=filter(s1, md_spgr=='FRBD'), fill=F, color='red', weight=3, group='FRBD')%>%
-   addPolygons(data=filter(s1, md_spgr=='TRBD'), fill=F, color='red', weight=3, group='TRBD')%>%
-   addPolygons(data=filter(s1, md_spgr=='WTST'), fill=F, color='red', weight=3, group='WTST')%>%
-   addPolygons(data=filter(s1, md_spgr=='WTLG'), fill=F, color='red', weight=3, group='WTLG')%>%
-   addPolygons(data=filter(s1, md_spgr=='SOTE'), fill=F, color='red', weight=3, group='SOTE')%>%
-   addPolygons(data=filter(s1, md_spgr=='NODD'), fill=F, color='red', weight=3, group='NODD')%>%
-   addPolygons(data=filter(s1, md_spgr=='TERN'), fill=F, color='red', weight=3, group='TERN')%>%
+   addPolygons(data=filter(s1, md_spgr=='BRBO'), fill=F, color='#00FF00', weight=3, group='BRBO', opacity=1, popup= paste("Site:", filter(s1, md_spgr=='BRBO')$dsgntn_n , "<br>", "Confidence:", filter(s1, md_spgr=='BRBO')$conf))%>%
+   addPolygons(data=filter(s1, md_spgr=='MABO'),  fill=F, color='#00FF00', weight=3, group='MABO', opacity=1, popup= paste("Site:", filter(s1, md_spgr=='MABO')$dsgntn_n , "<br>", "Confidence:", filter(s1, md_spgr=='MABO')$conf))%>%
+   addPolygons(data=filter(s1, md_spgr=='RFBO'), fill=F, color='#00FF00', weight=3, group='RFBO', opacity=1, popup= paste("Site:", filter(s1, md_spgr=='RFBO')$dsgntn_n , "<br>", "Confidence:", filter(s1, md_spgr=='RFBO')$conf))%>%
+   addPolygons(data=filter(s1, md_spgr=='FRBD'), fill=F, color='#00FF00', weight=3, group='FRBD', opacity=1, popup= paste("Site:", filter(s1, md_spgr=='FRBD')$dsgntn_n , "<br>", "Confidence:", filter(s1, md_spgr=='FRBD')$conf))%>%
+   addPolygons(data=filter(s1, md_spgr=='TRBD'), fill=F, color='#00FF00', weight=3, group='TRBD', opacity=1, popup= paste("Site:", filter(s1, md_spgr=='TRBD')$dsgntn_n , "<br>", "Confidence:", filter(s1, md_spgr=='TRBD')$conf))%>%
+   addPolygons(data=filter(s1, md_spgr=='WTST'), fill=F, color='#00FF00', weight=3, group='WTST', opacity=1, popup= paste("Site:", filter(s1, md_spgr=='WTST')$dsgntn_n , "<br>", "Confidence:", filter(s1, md_spgr=='WTST')$conf))%>%
+   addPolygons(data=filter(s1, md_spgr=='WTLG'), fill=F, color='#00FF00', weight=3, group='WTLG', opacity=1, popup= paste("Site:", filter(s1, md_spgr=='WTLG')$dsgntn_n , "<br>", "Confidence:", filter(s1, md_spgr=='WTLG')$conf))%>%
+   addPolygons(data=filter(s1, md_spgr=='SOTE'), fill=F, color='#00FF00', weight=3, group='SOTE',opacity=1, popup= paste("Site:", filter(s1, md_spgr=='SOTE')$dsgntn_n , "<br>", "Confidence:", filter(s1, md_spgr=='SOTE')$conf))%>%
+   addPolygons(data=filter(s1, md_spgr=='NODD'), fill=F, color='#00FF00', weight=3, group='NODD', opacity=1, popup= paste("Site:", filter(s1, md_spgr=='NODD')$dsgntn_n , "<br>", "Confidence:", filter(s1, md_spgr=='NODD')$conf))%>%
+   addPolygons(data=filter(s1, md_spgr=='TERN'), fill=F, color='#00FF00', weight=3, group='TERN', opacity=1, popup= paste("Site:", filter(s1, md_spgr=='TERN')$dsgntn_n , "<br>", "Confidence:", filter(s1, md_spgr=='TERN')$conf))%>%
    
    #addPolygons(data=gbr_reef, fill=F, group='Reef', weight=1)%>%
    
@@ -128,3 +137,4 @@ m%>%hideGroup(c('BRBO', 'MABO', 'RFBO', 'FRBD', 'TRBD', 'WTST', 'WTLG',
                                         'SOTE', 'NODD', 'TERN', 'Hotspots'))
 ```
 
+This mapper can be used to visualise predictions of foraging habitat suitability for modelled species and hotspots. By selecting a species the predicted foraging habitat suitability is displayed and overlain with foraging radii and core areas. Foraging radii of three sizes (minimum, median and maximum) calculated from global tracking data are displayed along with foraging radii observed from GBR local tracking (in yellow) where avaialable. Core foraging areas are also shown with green polygons, these represent the highest 10% of foraging habitat suitability values within median or observed foraging radii. Clicking green core foraging area polygons displays the associated site name and the confidence assigned to the prediction. Clicking on blue colony points displays rudimentary colony info.
