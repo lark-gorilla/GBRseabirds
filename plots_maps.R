@@ -18,6 +18,29 @@ library(smoothr)
 
 ####~~~~ read in data ~~~~####
 aucz_out<-read.csv('C:/seabirds/data/mod_validation_vals.csv')
+# correct colony self prediction AUC and need to do TSS too
+auc_self<-read.csv('C:/seabirds/data/colony_self_validation.csv')
+auc_self<-auc_self%>%group_by(sp, col)%>%summarise(AUC=mean(ROC), AUC_sd=mean(ROCSD))
+auc_self$col<-as.character(auc_self$col)
+auc_self[auc_self$col=='LHI',]$col<-'Lord Howe'
+auc_self[auc_self$sp=='TRBD' & auc_self$col=='Peña blanca',]$col<-'Pena Blanca'
+aucz_out<-left_join(aucz_out, auc_self[,1:3], by=c('sp', 'Resample'='col'))
+aucz_out[aucz_out$Resample==aucz_out$spcol,]$auc<-aucz_out[aucz_out$Resample==aucz_out$spcol,]$AUC
+aucz_out$AUC<-NULL
+aucz_out[aucz_out$spcol=='Swains' &aucz_out$sp=='BRBO' &
+           aucz_out$Resample==aucz_out$spcol,]$auc<-0.68
+aucz_out[aucz_out$spcol=='Swains' &aucz_out$sp=='MABO' &
+           aucz_out$Resample==aucz_out$spcol,]$auc<-0.64
+aucz_out[aucz_out$spcol=='Raine' &aucz_out$sp=='BRBO' &
+           aucz_out$Resample==aucz_out$spcol,]$auc<-0.65
+aucz_out[aucz_out$spcol=='Heron' &aucz_out$sp=='WTST' &
+           aucz_out$Resample==aucz_out$spcol,]$auc<-0.73
+aucz_out[aucz_out$spcol=='Heron' &aucz_out$sp=='WTLG' &
+           aucz_out$Resample==aucz_out$spcol,]$auc<-0.64
+aucz_out[aucz_out$spcol=='Heron' &aucz_out$sp=='NODD' &
+           aucz_out$Resample==aucz_out$spcol,]$auc<-0.68
+aucz_out[aucz_out$Resample==aucz_out$spcol,]$TSS<-NA
+#
 matx_out<-read.csv('C:/seabirds/data/mod_clustering_vals.csv')
 t_qual<-read.csv('C:/seabirds/data/tracking_trip_decisions.csv')
 colz<-st_read('C:/seabirds/data/GIS/trackingID_colony_locs.shp')
@@ -34,6 +57,9 @@ colz$Longitude<-st_coordinates(colz)[,1]
 colz$Latitude<-st_coordinates(colz)[,2]
 st_geometry(colz)<-NULL
 colz<-colz%>%group_by(sp, coly)%>%summarise_all(first)
+#png('C:/seabirds/outputs/maps/tracking_data_locs.png'),width = 8.3, height =8 , units ="in", res =300)
+#ggplot()+geom_sf(data=land)+geom_sf(data=colz, shape=1, colour='red')+facet_wrap(~sp_group)+coord_sf(xlim = c(-180, 180), ylim = c(-36, 36), expand = F)+theme_bw()
+#dev.off()
 
 # formatting t_qual
 t_qual<-t_qual[-which(t_qual$ID%in%c('MEND2_RFBO_Christmas', 'MEND3_RFBO_Christmas',
@@ -282,7 +308,7 @@ for(i in unique(gbr_rep$site_name))
 
 #### ~~~~ **** ~~~~ ####
 
-#### ~~~~ Make spgroup-colony foraging hotspots ~~~~ ####
+#### ~~~~ Make spgroup-colony foraging core areas ~~~~ ####
 for_rad<-read_sf('C:/seabirds/data/GIS/foraging_radii.shp')
 
 pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds/selected_preds', full.names=T)
@@ -358,6 +384,11 @@ print(i)
 }
 #write all
 write_sf(out_pols, paste0('C:/seabirds/data/GIS/col_radii_core_hotspots_smooth_10perc.shp'), delete_layer = T)
+# merge col_rad_cores by md_spgr and site for gbr-wide plots
+col_rad_core_diss<-out_pols%>%group_by(md_spgr, dsgntn_n)%>%
+  summarize(geometry = st_union(geometry), dsgntn_t=first(dsgntn_t), 
+            trigger=first(trigger), conf=first(conf))
+write_sf(col_rad_core_diss, paste0('C:/seabirds/data/GIS/site_radii_core_hotspots_pixel_10perc.shp'), delete_layer = T)
 
 
 #### ~~~~ **** ~~~~ ####
@@ -377,6 +408,7 @@ for(i in looplist)
 {
 ext<-unlist(raster::extract(subset(mod_pred, i),
                             as(filter(rad_diss, md_spgr==substr(i, 1, 4) & rd_clss=='max'), 'Spatial')))
+
 mn<-min(ext, na.rm=T)
 mx<-max(ext, na.rm=T)
 
@@ -396,8 +428,8 @@ writeRaster(hotsp, 'C:/seabirds/data/modelling/GBR_preds/hotspotsMultiCol.tif')
 for_rad<-read_sf('C:/seabirds/data/GIS/foraging_radii.shp')
 # add sp colours
 for_rad$md_spgr<-factor(for_rad$md_spgr, levels=c("BRBO", 'MABO', 'RFBO', 'FRBD', 'TRBD', 'WTST', "WTLG", "SOTE" , 'NODD', 'TERN'))
-for_rad$spcol<-recode(for_rad$md_spgr, "BRBO"='#8dd3c7','MABO'='#ffffb3','RFBO'='#bebada','FRBD'='#fb8072', 'TRBD'='#80b1d3',
-                      'WTST'='#fdb462','WTLG'='#b3de69',"SOTE"='#fccde5','NODD'='#d9d9d9','TERN'='#bc80bd')
+for_rad$spcol<-recode(for_rad$md_spgr, "BRBO"='#b15928','MABO'='#1f78b4','RFBO'='#fb9a99','FRBD'='#fdbf6f', 'TRBD'='#b2df8a',
+                      'WTST'='#6a3d9a','WTLG'='#cab2d6',"SOTE"='#e31a1c','NODD'='#ff7f00','TERN'='#33a02c')
 
 land<-read_sf('C:/coral_fish/sourced_data/country_borders/TM_WORLD_BORDERS-0.3.shp')
 gbr_reef<-read_sf('C:/seabirds/sourced_data/GBRMPA_Data Export/Great_Barrier_Reef_Features.shp')
@@ -408,6 +440,8 @@ mod_pred<-stack(pred_list)
 hotspots<-raster('C:/seabirds/data/modelling/GBR_preds/hotspotsMultiCol.tif')
 # merge colz by md_spgr and rd_class for gbr-wide plots
 rad_diss<-for_rad%>%group_by(md_spgr, rd_clss)%>%summarize(geometry = st_union(geometry))
+site_rad_cores<-st_read('C:/seabirds/data/GIS/site_radii_core_hotspots_smooth_10perc.shp')
+
 
 #### ~~~~ GBR plot function ~~~~ ####
 mk_gbrplot<-function(spg='TERN_MultiCol'){
@@ -517,72 +551,133 @@ dev.off()
 
 #### ~~~~ kba/site local plot function ~~~~ ####
 mk_kbaplot<-function(site="Capricornia Cays KBA"){
+
+  rad_diss_site<-filter(for_rad, dsgntn_n==site & rd_clss %in% c('med', 'obs'))%>%group_by(md_spgr, rd_clss)%>%
+    summarize(spcol=first(spcol), species=first(species), dist=first(dist),
+              dsgntn_n=first(dsgntn_n), geometry = st_union(geometry))
   
-  rad_diss_site<-filter(for_rad, dsgntn_n==site)%>%group_by(md_spgr, rd_clss)%>%
-    summarize(spcol=first(spcol), species=first(species),geometry = st_union(geometry))
-   plim<-st_bbox(filter(rad_diss_site,rd_clss=='med'))
+  if(site=="Capricornia Cays KBA"){
+    rad_diss_site<-rad_diss_site[-which(rad_diss_site$md_spgr=='NODD' & rad_diss_site$rd_clss=='obs'),]}
+  
+  rad_diss_site<-rad_diss_site%>%group_by(md_spgr)%>%filter(rd_clss==last(rd_clss))
+  
+   plim<-st_bbox(rad_diss_site)
+   my.by=1
+   if(length(seq(floor(plim[2]), ceiling(plim[4]), by=1))>5){my.by=2}
+   if(length(seq(floor(plim[2]), ceiling(plim[4]), by=1))>10){my.by=5}
   p1<-ggplot() +
     geom_sf(data=filter(gbr_reef, FEAT_NAME=='Reef'), fill='NA', colour=alpha('black',0.5))+
     geom_sf(data=filter(colz, dsgntn_n==site), shape = 23, fill = "darkred") +
-    geom_sf(data=filter(rad_diss_site,rd_clss=='med'), aes(colour=spcol), fill='NA') +
+    geom_sf(data=filter(rad_diss_site), aes(colour=spcol), fill='NA') +
     geom_sf(data=gbrmp, col='black', fill='NA') +
     geom_sf(data=land, col='black', fill='grey') +
     theme_bw()+
     annotation_scale(location = "bl")+  
-    annotation_north_arrow(location = "tr", which_north = "true")+
-    labs(x='Longitude', y='Latitude')+
     coord_sf(xlim = plim[c(1,3)], ylim = plim[c(2,4)], expand = T)+
     scale_colour_identity('Species',labels = unique(rad_diss_site$md_spgr),
-        breaks = unique(rad_diss_site$spcol), guide = "legend")+ggtitle('A) Community')
+        breaks = unique(rad_diss_site$spcol), guide = "legend")+ggtitle('A) Community')+
+    scale_x_continuous(breaks=seq(ceiling(plim[1]), floor(plim[3]), by=my.by))+
+    scale_y_continuous(breaks=seq(ceiling(plim[2]), floor(plim[4]), by=my.by))+
+    theme(axis.title.x = element_blank(),
+          axis.title.y = element_blank())
   
-  hotspot_local<-crop(hotspots, bbox(as(filter(rad_diss_site,rd_clss=='med'), 'Spatial')))
+  plim2<-bbox(as(filter(colz, dsgntn_n==site), 'Spatial'))
+  plim2[c(1,2)]<-plim2[c(1,2)]-1# add 1 degree
+  plim2[c(3,4)]<-plim2[c(3,4)]+1
+  my.by=1
+  if(length(seq(floor(plim2[2]), ceiling(plim2[4]), by=1))>5){my.by=2}
+  if(length(seq(floor(plim2[2]), ceiling(plim2[4]), by=1))>10){my.by=5}
+  hotspot_local<-crop(hotspots, plim2)
+  hotspot_local<-(hotspot_local-(min(values(hotspot_local), na.rm=T)))/
+    ((max(values(hotspot_local), na.rm=T))-(min(values(hotspot_local), na.rm=T)))# normalise (0-1)
+  
   p_last<-ggplot() +
     layer_spatial(data=hotspot_local)+
+    geom_sf(data=filter(gbr_reef, FEAT_NAME=='Reef'), fill='NA', colour=alpha('black',0.7))+
     geom_sf(data=filter(colz, dsgntn_n==site), shape = 23, fill = "darkred") +
-    geom_sf(data=gbrmp, col='black', fill='NA') +
-    geom_sf(data=land, col='black', fill='grey') +
-    theme_bw()+
-    annotation_scale(location = "bl")+  
-    labs(x='Longitude', y='Latitude')+
-    coord_sf(xlim = plim[c(1,3)], ylim = plim[c(2,4)], expand = F)+
-      scale_fill_viridis(option='magma',na.value = NA)+
-      ggtitle(paste0(LETTERS[length(unique(rad_diss_site$md_spgr))+2], ') Hotspots'))+
-      theme(legend.position = 'none')
-  
-  p_spz<-list()
-  for(i in unique(rad_diss_site$md_spgr))
-  {
-  r1<-subset(mod_pred, paste0(i,'_indivSUM'))
-  beeb<-bbox(as(filter(rad_diss_site, md_spgr==i), 'Spatial'))
-  beeb[c(1, 2)]<-beeb[c(1, 2)]-0.1
-  beeb[c(3, 4)]<-beeb[c(3, 4)]+0.1
-  r1<-crop(r1, beeb)
-  mn<-min(values(r1), na.rm=T)+var(values(r1), na.rm=T) # small fudge
-  mx<-max(values(r1), na.rm=T)-var(values(r1), na.rm=T)
-  plim<-st_bbox(r1)  
-  p2<-ggplot() +
-    layer_spatial(data=r1) 
-    if(i %in% c('BRBO' ,'MABO' ,'RFBO' ,'WTST', 'NODD','TERN')){
-       p2<-p2+geom_sf(data=filter(gbr_reef, FEAT_NAME=='Reef'), fill='NA', colour=alpha('grey',0.5))}
-    p2<-p2+geom_sf(data=filter(colz, dsgntn_n==site& md_spgr==i), shape = 23, fill = "darkred") +
-    geom_sf(data=filter(rad_diss_site, md_spgr==i), aes(colour=rd_clss), fill='NA') +
     geom_sf(data=gbrmp, col='white', fill='NA') +
     geom_sf(data=land, col='black', fill='grey') +
     theme_bw()+
     annotation_scale(location = "bl")+  
-    labs(x='Longitude', y='Latitude')+
+    coord_sf(xlim = plim2[c(1,3)], ylim = plim2[c(2,4)], expand = F)+
+    scale_fill_viridis_b('Likely\nseabird\nforaging\nhabitat', option='magma',
+          breaks=c(seq(0.1, 0.9, 0.1)),labels=c('low', rep('', 7), 'high'), na.value = NA)+
+      ggtitle(paste0(LETTERS[length(unique(rad_diss_site$md_spgr))+2], ') Hotspots'))+
+      theme(legend.position = 'none', axis.title.x = element_blank(),
+            axis.title.y = element_blank())+
+    scale_x_continuous(breaks=seq(ceiling(plim2[1]), floor(plim2[3]), by=my.by))+
+    scale_y_continuous(breaks=seq(ceiling(plim2[2]), floor(plim2[4]), by=my.by))
+  
+  p_spz<-list()
+  for(i in unique(rad_diss_site$md_spgr))
+  {
+    sel_rad<-rad_diss_site[rad_diss_site$md_spgr==i,]
+  if(sel_rad$rd_clss=='obs')
+    {
+    if(sel_rad$md_spgr=='BRBO' & sel_rad$dsgntn_n=='Raine Island, Moulter and MacLennan cays KBA'){
+      r1<-subset(mod_pred, 'BRBO_Raine')}
+    if(sel_rad$md_spgr=='BRBO' & sel_rad$dsgntn_n=='Swain Reefs KBA'){
+      r1<-subset(mod_pred, 'BRBO_Swains')}
+    if(sel_rad$md_spgr=='MABO' & sel_rad$dsgntn_n=='Swain Reefs KBA'){
+      r1<-subset(mod_pred, 'MABO_Swains')}
+    if(sel_rad$md_spgr=='WTST' & sel_rad$dsgntn_n=='Capricornia Cays KBA'){
+      r1<-subset(mod_pred, 'WTST_Heron')}
+    if(sel_rad$md_spgr=='WTLG' & sel_rad$dsgntn_n=='Capricornia Cays KBA'){
+      r1<-subset(mod_pred, 'WTLG_Heron')}
+    if(sel_rad$md_spgr=='NODD' & sel_rad$dsgntn_n=='Capricornia Cays KBA'){
+      r1<-subset(mod_pred, 'NODD_Heron')}
+  }else{
+  r1<-subset(mod_pred, paste0(i,'_MultiCol'))
+  }
+    
+    
+  beeb<-bbox(as(sel_rad, 'Spatial'))
+  beeb[c(1, 2)]<-beeb[c(1, 2)]-0.1
+  beeb[c(3, 4)]<-beeb[c(3, 4)]+0.1
+  r1<-crop(r1, beeb)
+  r1<-(r1-(min(values(r1), na.rm=T)))/
+    ((max(values(r1), na.rm=T))-(min(values(r1), na.rm=T)))# normalise (0-1)
+  
+  plim<-st_bbox(r1)  
+  my.by=1
+  if(length(seq(floor(plim[2]), ceiling(plim[4]), by=1))>5){my.by=2}
+  if(length(seq(floor(plim[2]), ceiling(plim[4]), by=1))>10){my.by=5}
+  p2<-ggplot() +
+    layer_spatial(data=r1)+
+    scale_fill_viridis_b('Likely\nseabird\nforaging\nhabitat', option='magma',
+                         breaks=c(seq(0.1, 0.9, 0.1)),labels=c('low', rep('', 7), 'high'), na.value = NA)
+    
+  if(sel_rad$rd_clss=='obs'){p2.1<-p2+
+    geom_sf(data=filter(site_rad_cores,  dsgntn_n==site& md_spgr==i),
+            colour='green', fill='NA')+
+    geom_sf(data=filter(colz, dsgntn_n==site& md_spgr==i), shape = 23, fill = "darkred")+
+    geom_sf(data=sel_rad, aes(color="B"), show.legend = "polygon", fill='NA')+
+    scale_color_manual(values = c("B" = "yellow"), 
+                       labels = c("Observed\nforaging\nradius"), name=NULL)}else{
+    p2.1<-p2+geom_sf(data=filter(site_rad_cores,  dsgntn_n==site& md_spgr==i),
+                     aes(color="A"), show.legend = "polygon", fill='NA')+
+      geom_sf(data=filter(colz, dsgntn_n==site& md_spgr==i), shape = 23, fill = "darkred")+
+      geom_sf(data=sel_rad,aes(color="B"), show.legend = "polygon", fill='NA')+
+      scale_color_manual(values = c("A" = "green", "B" = "#66FFCC"), 
+                         labels = c("Top 10%\npredicted\nhabitat", "All colony\nmedian\nforaging\nradius"), name=NULL)}
+    p2<-p2.1+geom_sf(data=gbrmp, col='white', fill='NA') +
+    geom_sf(data=land, col='black', fill='grey') +
+    theme_bw()+
+    annotation_scale(location = "bl")+  
     coord_sf(xlim = plim[c(1,3)], ylim = plim[c(2,4)], expand = F)+
-    scale_colour_manual('Forgaing\nradii', values=c('#00FFFF','#66FFCC', '#00FF66' ), labels=c(
-      'Max', 'Med', 'Min'))+
-    scale_fill_viridis('Likely\nforaging\nhabitat',option='magma',
-                       breaks=c(mn, mx), labels=c('low', 'high'),na.value = NA)
+      scale_x_continuous(breaks=seq(ceiling(plim[1]), floor(plim[3]), by=my.by))+
+      scale_y_continuous(breaks=seq(ceiling(plim[2]), floor(plim[4]), by=my.by))+
+    annotate(geom = 'label', label = site_rad_cores[site_rad_cores$dsgntn_n==site&
+            site_rad_cores$md_spgr==i,]$conf, x = Inf, y = Inf, hjust = 1, vjust = 1, col='red')+
+      theme(axis.title.x = element_blank(),
+            axis.title.y = element_blank())+
+      guides(fill = guide_colorbar(order = 1),color = guide_legend(order = 0))
     
     if(1 %in% for_rad[for_rad$dsgntn_n==site & for_rad$md_spgr==i,]$trigger){
       p2<-p2+ggtitle(paste0(LETTERS[(which(i== unique(rad_diss_site$md_spgr)))+1], ') ', i, ' (Tr)'))
     } else{ 
     p2<-p2+ggtitle(paste0(LETTERS[(which(i== unique(rad_diss_site$md_spgr)))+1], ') ', i))}
     
-  if(which(i== unique(rad_diss_site$md_spgr))!=1){p2<-p2+theme(legend.position = 'none')}
   p_spz[[which(i== unique(rad_diss_site$md_spgr))]]<-p2
   print(i)
   }
@@ -594,15 +689,16 @@ mk_kbaplot<-function(site="Capricornia Cays KBA"){
 #### ~~~~ **** ~~~~ #####
 
 #### ~~~~ Make local KBA  plots ~~~~ ####
-
 for(k in unique(for_rad$dsgntn_n))
 {
   multip<-mk_kbaplot(site=k) 
-  png(paste0('C:/seabirds/outputs/maps/local_site/',gsub( ',', '',k),'.png'),width = 8.3, height =11.7 , units ="in", res =600)
+  png(paste0('C:/seabirds/outputs/maps/local_site/',gsub( ',', '',k),'.png'),
+      width = 8.3, height =11.7 , units ="in", res =300)
   print(multip)
   dev.off()
   print(k)
 }
+ 
 
 #### ~~~~ **** ~~~~ #####
 
@@ -722,14 +818,26 @@ mkVal<-function(my.sp='BRBO', my.metric='AUC', calc.niche=F)
   hc1<-hclust(d1, method='average')
   hc_dend<-ggdendrogram(data = as.dendrogram(hc1), rotate = T)
   
+  #recalc colouring due to colony self change
+  my.aucz$auctemp<-my.aucz$auc
+  my.aucz[my.aucz$spcol=='MEAN',]$auctemp<-NA
+  my.aucz$auc_bin<-cut(my.aucz$auctemp, c(0, 0.6, 0.7, 0.8, 0.9, 1),include.lowest =T)
+  my.aucz$auc_bin<-factor(my.aucz$auc_bin, levels = levels(addNA(my.aucz$auc_bin)),
+                       labels = c("#cccccc", "#ffffb2", "#fecc5c", '#fd8d3c', '#f03b20', '#c6dbef'), exclude = NULL)
+  
+  my.aucz$tsstemp<-my.aucz$TSS
+  my.aucz[my.aucz$spcol=='MEAN',]$tsstemp<-NA
+  my.aucz$tss_bin<-cut(my.aucz$tsstemp, c(0, 0.2, 0.6, 1), include.lowest =T)
+  my.aucz$tss_bin<-factor(my.aucz$tss_bin, levels = levels(addNA(my.aucz$tss_bin)),
+                       labels = c("#cccccc", "#fecc5c", '#f03b20', '#c6dbef'), exclude = NULL)
+  
   
   my.aucz$Resample<-as.character(my.aucz$Resample)
-  my.aucz<-my.aucz[my.aucz$Resample!='EnsembleNrm',]
-  my.aucz[my.aucz$Resample=='EnsembleRaw',]$Resample<-'Ensemble'
+  my.aucz<-filter(my.aucz, !Resample %in% c('EnsembleNrm','EnsembleRaw'))
   my.aucz[my.aucz$Resample=='MultiCol',]$Resample<-'Multi-colony'
   my.aucz$Resample<-factor(my.aucz$Resample) 
   my.aucz$spcol<-factor(my.aucz$spcol)
-  my.aucz$Resample<-factor(my.aucz$Resample, levels=c("Multi-colony", "Ensemble",paste(hc1$labels[hc1$order])))
+  my.aucz$Resample<-factor(my.aucz$Resample, levels=c("Multi-colony",paste(hc1$labels[hc1$order])))
   my.aucz$spcol<-factor(my.aucz$spcol,levels=c("MEAN", paste(hc1$labels[hc1$order])))
   
   if(my.metric=='AUC')
@@ -785,7 +893,7 @@ mkVal<-function(my.sp='BRBO', my.metric='AUC', calc.niche=F)
 brbo_auc<-mkVal('BRBO', 'AUC', calc.niche = F)
 brbo_tss<-mkVal('BRBO', 'TSS', calc.niche = F)
 brbo_auc_dend<-ggdendrogram(data = as.dendrogram(brbo_auc[[1]]), rotate = T)
-brbo_tss_dend<-ggdendrogram(data = as.dendrogram(mabo_tss[[1]]), rotate = T)
+brbo_tss_dend<-ggdendrogram(data = as.dendrogram(brbo_tss[[1]]), rotate = T)
 # MABO
 mabo_auc<-mkVal('MABO', 'AUC', calc.niche = F)
 mabo_tss<-mkVal('MABO', 'TSS', calc.niche = F)
@@ -899,7 +1007,6 @@ print(brbo_auc[[2]], vp = viewport(x = 0.4, y = 0.5, width = 0.8, height = 1.0))
 print(brbo_auc[[1]], vp = viewport(x = 0.90, y = 0.58, width = 0.2, height = 0.82))
 dev.off()
 #### ~~~~ *** ~~~~ ####
-
 
 
 ####~~~~ local adaptation mantel and plots function ~~~~####
@@ -1087,4 +1194,63 @@ p1<-qplot(data=filter(plotdat, sp==i), y=dat, x=spcol, geom='boxplot')+
                     axis.title.x=element_blank(),axis.title.y=element_blank())
 print(p1)
 dev.off()}
+#### ~~~~ *** ~~~~ ####
+
+#### ~~~~ Make local tracking map ~~~~ ####
+
+b1<-read.csv('C:/seabirds/sourced_data/tracking_data/foraging_embc/CONG2_BRBO_Raine.csv')
+b1$ID='E'
+b2<-read.csv('C:/seabirds/sourced_data/tracking_data/foraging_embc/CONG3_BRBO_Swains.csv')
+b2$ID='D'
+b3<-read.csv('C:/seabirds/sourced_data/tracking_data/foraging_embc/CONG3_MABO_Swains.csv')
+b3$ID='C'
+b4<-read.csv('C:/seabirds/sourced_data/tracking_data/foraging_embc/CONG4_MABO_Swains.csv')
+b4$ID='C'
+b5<-read.csv('C:/seabirds/sourced_data/tracking_data/foraging_embc/MCDU1_BRBO_Swains.csv')
+b5$ID='D'
+b6<-read.csv('C:/seabirds/sourced_data/tracking_data/foraging_embc/MCDU1_MABO_Swains.csv')
+b6$ID='C'
+b6$trip_id<-as.factor(b6$trip_id)
+b7<-read.csv('C:/seabirds/sourced_data/tracking_data/foraging_embc/BUNC1_BRBO_Swains.csv')
+b7$ID='D'
+b8<-read.csv('C:/seabirds/sourced_data/tracking_data/foraging_embc/CONG1_WTSH_Heron.csv')
+b8$ID='A'
+b8<-b8[!b8$trip_id %in% unique(b8[b8$ColDist>300000,]$trip_id),]
+
+bready<-rbind(b1[,1:4],b2[,1:4],b3[,1:4],b4[,1:4],b5[,1:4],b6[,1:4],b7[,1:4],b8[,1:4])%>%
+  st_as_sf(coords=c('Longitude', 'Latitude'), crs=4326)
+
+tst <- bready %>% 
+  group_by(ID,trip_id) %>%
+  summarise(do_union = FALSE) %>%
+  st_cast("LINESTRING")
+
+LTs<-read_sf('C:/seabirds/phd/analyses/paper2/spatial/paper_tracking_lines.shp')
+LTs<-LTs[LTs$Colony==1,]
+
+p1<-ggplot() +
+  geom_sf(data=land, col='black', fill='grey') +
+  geom_sf(data=filter(gbr_reef, FEAT_NAME=='Reef'), fill='NA', colour=alpha('black',0.5))+
+  geom_sf(data=gbrmp, col='black', fill='NA', linetype='dashed') +
+  geom_sf(data=LTs, aes(color="B"), show.legend = "line") +
+  geom_sf(data=tst, aes(color=ID), show.legend = "line")+
+  geom_sf(data=filter(colz, site_nm %in% c('Raine Island', 'Price Cay', 'Heron Island'))%>%
+            group_by(site_nm)%>%filter(species==first(species)), shape = 23, fill = "darkred") +
+
+  scale_color_manual(values = c("B" = "#1f78b4", 'A'='#e31a1c', 'C'='#6a3d9a', 'D'='#33a02c', 'E'='#ff7f00'), 
+                     labels = c("Wedge-tailed Shearwater\nlong trips, Heron Island",
+                                'Wedge-tailed Shearwater\nshort trips, Heron Island',
+                                'Masked Booby, Swain Reefs','Brown Booby, Swain Reefs',
+                                'Brown Booby, Raine Island'), name='Tracking data')+
+  theme_bw()+
+  coord_sf(xlim = c(142, 160), ylim = c(-27, -10), expand = FALSE)+
+  annotation_scale(location = "bl")+  
+  annotation_north_arrow(location = "tr", which_north = "true")+
+  labs(x='Longitude', y='Latitude')
+
+png(paste0('C:/seabirds/outputs/maps/gbr_wide/GBR_tracking.png'),
+    width = 8.3, height =11.7 , units ="in", res =300)
+print(p1)
+dev.off()
+
 #### ~~~~ *** ~~~~ ####
