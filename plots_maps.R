@@ -15,7 +15,6 @@ library(viridis)
 library(geodist)
 library(smoothr)
 
-
 ####~~~~ read in data ~~~~####
 aucz_out<-read.csv('C:/seabirds/data/mod_validation_vals.csv')
 # auc tss cor
@@ -27,10 +26,8 @@ cor.test(auc_temp$auc, auc_temp$TSS)
 qplot(data=auc_temp, x=auc, y=TSS)+facet_wrap(~sp)
 # end cor test
 
+##!! correct colony self-validation values
 auc_self<-read.csv('C:/seabirds/data/colony_self_validation.csv')
-# need to reerun internal clock spatial validation
-# calc TSS so not caret
-# run more simulations/ shuffle kmeans class to get consensus
 auc_self_max<-auc_self%>%group_by(sp, col, run)%>%
   summarise(AUC=max(ROC), AUC_sd=max(ROCSD))
 auc_self<-auc_self_max%>%group_by(sp, col)%>%
@@ -38,24 +35,32 @@ auc_self<-auc_self_max%>%group_by(sp, col)%>%
 auc_self$col<-as.character(auc_self$col)
 auc_self[auc_self$col=='LHI',]$col<-'Lord Howe'
 auc_self[auc_self$sp=='TRBD' & auc_self$col=='Peña blanca',]$col<-'Pena Blanca'
-aucz_out<-left_join(aucz_out, auc_self[,c(1:3)], by=c('sp', 'Resample'='col'))
-aucz_out[aucz_out$Resample==aucz_out$spcol,]$auc<-aucz_out[aucz_out$Resample==aucz_out$spcol,]$AUC
+# join corrected tss
+tss_self<-read.csv('C:/seabirds/data/colony_self_validation_TSS.csv')
+auc_self<-arrange(auc_self, sp, col)
+auc_self$tss<-tss_self$tss2
 
-aucz_out$AUC<-NULL
+aucz_out<-left_join(aucz_out, auc_self[,c(1:3, 5)], by=c('sp', 'Resample'='col'))
+aucz_out[aucz_out$Resample==aucz_out$spcol,]$auc<-aucz_out[aucz_out$Resample==aucz_out$spcol,]$AUC
+aucz_out[aucz_out$Resample==aucz_out$spcol,]$TSS<-aucz_out[aucz_out$Resample==aucz_out$spcol,]$tss
+
+aucz_out$AUC<-NULL; aucz_out$tss<-NULL
+aucz_out$thresh<-NULL; aucz_out$sens<-NULL; aucz_out$spec<-NULL
+
 aucz_out[aucz_out$spcol=='Swains' &aucz_out$sp=='BRBO' &
-           aucz_out$Resample==aucz_out$spcol,]$auc<-0.68
+           aucz_out$Resample==aucz_out$spcol,]$auc<-0.65
 aucz_out[aucz_out$spcol=='Swains' &aucz_out$sp=='MABO' &
            aucz_out$Resample==aucz_out$spcol,]$auc<-0.64
 aucz_out[aucz_out$spcol=='Raine' &aucz_out$sp=='BRBO' &
-           aucz_out$Resample==aucz_out$spcol,]$auc<-0.65
+           aucz_out$Resample==aucz_out$spcol,]$auc<-0.66
 aucz_out[aucz_out$spcol=='Heron' &aucz_out$sp=='WTST' &
-           aucz_out$Resample==aucz_out$spcol,]$auc<-0.73
+           aucz_out$Resample==aucz_out$spcol,]$auc<-0.74
 aucz_out[aucz_out$spcol=='Heron' &aucz_out$sp=='WTLG' &
            aucz_out$Resample==aucz_out$spcol,]$auc<-0.64
 aucz_out[aucz_out$spcol=='Heron' &aucz_out$sp=='NODD' &
-           aucz_out$Resample==aucz_out$spcol,]$auc<-0.68
-aucz_out[aucz_out$Resample==aucz_out$spcol,]$TSS<-NA
-#
+           aucz_out$Resample==aucz_out$spcol,]$auc<-0.66
+##!! 
+
 matx_out<-read.csv('C:/seabirds/data/mod_clustering_vals.csv')
 t_qual<-read.csv('C:/seabirds/data/tracking_trip_decisions.csv')
 colz<-st_read('C:/seabirds/data/GIS/trackingID_colony_locs.shp')
