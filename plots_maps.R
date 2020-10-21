@@ -18,14 +18,29 @@ library(smoothr)
 
 ####~~~~ read in data ~~~~####
 aucz_out<-read.csv('C:/seabirds/data/mod_validation_vals.csv')
-# correct colony self prediction AUC and need to do TSS too
+# auc tss cor
+auc_temp<-filter(aucz_out, as.character(Resample)!=as.character(spcol))
+auc_temp<-filter(auc_temp ,Resample!='EnsembleRaw')
+auc_temp<-filter(auc_temp ,Resample!='EnsembleNrm')
+auc_temp%>%group_by(sp)%>%summarise(cor(auc, TSS))
+cor.test(auc_temp$auc, auc_temp$TSS)
+qplot(data=auc_temp, x=auc, y=TSS)+facet_wrap(~sp)
+# end cor test
+
 auc_self<-read.csv('C:/seabirds/data/colony_self_validation.csv')
-auc_self<-auc_self%>%group_by(sp, col)%>%summarise(AUC=mean(ROC), AUC_sd=mean(ROCSD))
+# need to reerun internal clock spatial validation
+# calc TSS so not caret
+# run more simulations/ shuffle kmeans class to get consensus
+auc_self_max<-auc_self%>%group_by(sp, col, run)%>%
+  summarise(AUC=max(ROC), AUC_sd=max(ROCSD))
+auc_self<-auc_self_max%>%group_by(sp, col)%>%
+  summarise(AUC=mean(AUC), AUC_sd=mean(AUC_sd))
 auc_self$col<-as.character(auc_self$col)
 auc_self[auc_self$col=='LHI',]$col<-'Lord Howe'
 auc_self[auc_self$sp=='TRBD' & auc_self$col=='Peña blanca',]$col<-'Pena Blanca'
-aucz_out<-left_join(aucz_out, auc_self[,1:3], by=c('sp', 'Resample'='col'))
+aucz_out<-left_join(aucz_out, auc_self[,c(1:3)], by=c('sp', 'Resample'='col'))
 aucz_out[aucz_out$Resample==aucz_out$spcol,]$auc<-aucz_out[aucz_out$Resample==aucz_out$spcol,]$AUC
+
 aucz_out$AUC<-NULL
 aucz_out[aucz_out$spcol=='Swains' &aucz_out$sp=='BRBO' &
            aucz_out$Resample==aucz_out$spcol,]$auc<-0.68
@@ -174,6 +189,20 @@ bind_out$mx_sumr_ts<-paste0(round(bind_out$mn_max_tss, 2),'±', round(bind_out$s
 
 bind_out2<-bind_out%>%select(sp, mn_sumr, mx_sumr, mn_sumr_ts, mx_sumr_ts, auc_rank, tss_rank, auc_rank1, tss_rank1, min.for, med.for, max.for)
 #write.csv(bind_out2, 'C:/seabirds/data/sp_main_summary.csv', quote=F, row.names=F)
+
+# extra multicol vs local model summary
+my.aucz_temp<-aucz_out
+my.aucz_temp<-left_join(my.aucz_temp, filter(my.aucz_temp, Resample=='MultiCol')%>%
+                          select(sp, spcol, auc, TSS),by=c('sp', 'spcol'))
+my.aucz_temp<-filter(my.aucz_temp, as.character(Resample)==as.character(spcol))
+
+my.aucz_temp$self_mult_dclass_auc<-ifelse(abs(my.aucz_temp$auc.x-my.aucz_temp$auc.y)< 0.05, 'same',
+                                          ifelse(my.aucz_temp$auc.x-my.aucz_temp$auc.y< 0, 'better', 'worse'))
+
+my.aucz_temp$self_mult_dclass_tss<-ifelse(abs(my.aucz_temp$TSS.x-my.aucz_temp$TSS.y)< 0.05, 'same',
+                                          ifelse(my.aucz_temp$TSS.x-my.aucz_temp$TSS.y< 0, 'better', 'worse'))
+
+sumr1<-my.aucz_temp%>%group_by(sp, self_mult_dclass_auc)%>%summarise(nclass=n())
 
 #### ~~~~ **** ~~~~ ####
 
@@ -840,12 +869,37 @@ mkVal<-function(my.sp='BRBO', my.metric='AUC', calc.niche=F)
   my.aucz$Resample<-factor(my.aucz$Resample, levels=c("Multi-colony",paste(hc1$labels[hc1$order])))
   my.aucz$spcol<-factor(my.aucz$spcol,levels=c("MEAN", paste(hc1$labels[hc1$order])))
   
+ 
+  my.aucz_comp<-filter(my.aucz, as.character(Resample)==as.character(spcol) | Resample=='Multi-colony')
+  my.aucz_comp<-my.aucz_comp%>%filter(spcol!='MEAN')
+  my.aucz_comp$idtemp<-1
+  my.aucz_comp[my.aucz_comp$Resample=='Multi-colony',]$idtemp<-2
+  my.aucz_comp<-my.aucz_comp%>%arrange(idtemp)%>%group_by(spcol)%>%
+    mutate(self_auc=first(auc), mult_auc=last(auc), self_tss=first(TSS), mult_tss=last(TSS))
+  
+  my.aucz_comp$self_mult_diff_auc<-ifelse(my.aucz_comp$Resample!='Multi-colony',
+          my.aucz_comp$auc-my.aucz_comp$mult_auc, my.aucz_comp$auc-my.aucz_comp$self_auc)
+  
+  my.aucz_comp$self_mult_dclass_auc<-ifelse(abs(my.aucz_comp$self_mult_diff_auc)< 0.05, 'black',
+                                        ifelse(my.aucz_comp$self_mult_diff_auc< 0, 'firebrick', 'springgreen4'))
+  
+  my.aucz_comp$self_mult_diff_tss<-ifelse(my.aucz_comp$Resample!='Multi-colony',
+           my.aucz_comp$TSS-my.aucz_comp$mult_tss, my.aucz_comp$TSS-my.aucz_comp$self_tss)
+  
+  my.aucz_comp$self_mult_dclass_tss<-ifelse(abs(my.aucz_comp$self_mult_diff_tss)< 0.05, 'black',
+                                        ifelse(my.aucz_comp$self_mult_diff_tss< 0, 'firebrick', 'springgreen4'))
+
+  mytext<-filter(my.aucz, as.character(Resample)!=as.character(spcol) & Resample!='Multi-colony')
+  mytext<-rbind(mytext,filter(my.aucz, Resample=='Multi-colony'&spcol=='MEAN'))
+  
   if(my.metric=='AUC')
   {  
   val_plot<-ggplot(my.aucz, aes(x = spcol, y = Resample)) + 
     geom_raster(aes(fill=auc_bin)) +scale_fill_identity()+ 
-    geom_text(aes(label=round(auc, 2)), size=2)+
-    theme_bw() + theme(axis.text.x=element_text(size=9, angle=90, vjust=0.3),
+    geom_text(data=mytext, aes(label=round(auc, 2)*100), size=2)+
+    geom_text(data=my.aucz_comp, aes(label=round(auc, 2)*100,colour=self_mult_dclass_auc), size=2, fontface='bold')+
+    scale_colour_identity()+theme_bw() + 
+    theme(axis.text.x=element_text(size=9, angle=90, vjust=0.3),
                        axis.text.y=element_text(size=9),
                        plot.title=element_text(size=11))+ylab('Predictions from')+xlab('Predicting to')}
   
@@ -853,8 +907,9 @@ mkVal<-function(my.sp='BRBO', my.metric='AUC', calc.niche=F)
   {
     val_plot<-ggplot(my.aucz, aes(x = spcol, y = Resample)) + 
       geom_raster(aes(fill=tss_bin)) +scale_fill_identity()+ 
-      geom_text(aes(label=round(TSS, 2)), size=2)+
-      theme_bw() + theme(axis.text.x=element_text(size=9, angle=90, vjust=0.3),
+      geom_text(data=mytext,aes(label=round(TSS, 2)*100), size=2)+
+      geom_text(data=my.aucz_comp, aes(label=round(TSS, 2)*100,colour=self_mult_dclass_tss), size=2, fontface='bold')+
+      scale_colour_identity()+theme_bw() + theme(axis.text.x=element_text(size=9, angle=90, vjust=0.3),
                          axis.text.y=element_text(size=9),
                          plot.title=element_text(size=11))+ylab('Predictions from')+xlab('Predicting to')}
   
