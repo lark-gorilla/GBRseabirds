@@ -59,6 +59,8 @@ aucz_out[aucz_out$spcol=='Heron' &aucz_out$sp=='WTLG' &
            aucz_out$Resample==aucz_out$spcol,]$auc<-0.64
 aucz_out[aucz_out$spcol=='Heron' &aucz_out$sp=='NODD' &
            aucz_out$Resample==aucz_out$spcol,]$auc<-0.66
+
+write.csv(aucz_out,'C:/seabirds/data/mod_validation_vals_corrected.csv', quote=F, row.names=F) 
 ##!! 
 
 matx_out<-read.csv('C:/seabirds/data/mod_clustering_vals.csv')
@@ -1298,8 +1300,8 @@ p1<-ggplot() +
             group_by(site_nm)%>%filter(species==first(species)), shape = 23, fill = "darkred") +
 
   scale_color_manual(values = c("B" = "#1f78b4", 'A'='#e31a1c', 'C'='#6a3d9a', 'D'='#33a02c', 'E'='#ff7f00'), 
-                     labels = c("Wedge-tailed Shearwater\nlong trips, Heron Island",
-                                'Wedge-tailed Shearwater\nshort trips, Heron Island',
+                     labels = c("Wedge-tailed Shearwater\nshort trips, Heron Island",
+                                'Wedge-tailed Shearwater\nlong trips, Heron Island',
                                 'Masked Booby, Swain Reefs','Brown Booby, Swain Reefs',
                                 'Brown Booby, Raine Island'), name='Tracking data')+
   theme_bw()+
