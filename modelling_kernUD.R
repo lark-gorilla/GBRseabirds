@@ -490,11 +490,12 @@ write.csv(intval_out, 'colony_self_validation.csv', quote=F, row.names=F)
   
 ####~~~~ Internal Block Validation for colony-self validation  ~~~~####
 library(caret)
+library(cluster)
 # read in data
 sp_groups <- c('BRBO', 'MABO', 'WTST','NODD', 'WTLG')
 intval_out<-NULL
 for(k in sp_groups)
-{
+{ 
   for(h in 1:5)
   {
     dat<-read.csv(paste0('C:/seabirds/data/modelling/kernhull_pts_sample/', k, '_kernhull_sample', h, '.csv'))
@@ -511,36 +512,47 @@ for(k in sp_groups)
       # Internval cross validation for GBR models
       coltemp<-dat[dat$spcol==i,]
       set.seed(24)
-      coltemp$clust<-kmeans(coltemp[,14:15], 4)$cluster
+      coltemp$clust1<-kmeans(coltemp[,14:15], 4)$cluster
+      coltemp$clust2<-cutree(hclust(dist(coltemp[,14:15]),'complete'), 4) # error for wtlg
+      coltemp$clust3<-pam(coltemp[,14:15], 4)$cluster # error for wtlg
       
-      plot(Latitude~Longitude, coltemp, col=coltemp$clust)
-      points(Latitude~Longitude, coltemp[coltemp$forbin=='Core',], pch=16, cex=0.4, col=6)
-      
-      folds2 <- groupKFold(coltemp$clust)
-      tunegrid <- expand.grid(mtry=c(2:6),  splitrule = "gini", min.node.size = c(5,10,20,50))
-      
-      train_control <- trainControl( method="LGOCV",index=folds2,
-                                     classProbs = TRUE, savePredictions = TRUE,
-                                     summaryFunction = twoClassSummary, verboseIter = TRUE)
-      
-      rf_intcol <- caret::train(x=coltemp[,c('sst','sst_sd','chl','chl_sd','mfr_sd', 'pfr_sd',
-                                             'mfr','pfr','bth','slp')],
-                                y=coltemp[,'forbin'], method="ranger", num.trees=500, seed=24, metric='ROC', 
-                                tuneGrid=tunegrid, trControl=train_control, verbose=T)
-      
-      intval_out<-rbind(intval_out,
-                        data.frame(sp=k, col=i, run=h, rf_intcol$results))
-      
+      for(g in c('clust1', 'clust2', 'clust3'))
+      {
+        clusty<-coltemp[,g]
+        plot(Latitude~Longitude, coltemp, col=clusty)
+        
+        points(Latitude~Longitude, coltemp[coltemp$forbin=='Core',], pch=16, cex=0.4, col=6)
+        
+        folds2 <- groupKFold(clusty)
+        tunegrid <- expand.grid(mtry=c(2:6),  splitrule = "gini", min.node.size = c(5,10,20,50))
+        
+        train_control <- trainControl( method="LGOCV",index=folds2,
+                                       classProbs = TRUE, savePredictions = TRUE,
+                                       summaryFunction = twoClassSummary, verboseIter = TRUE)
+        
+        rf_intcol <- caret::train(x=coltemp[,c('sst','sst_sd','chl','chl_sd','mfr_sd', 'pfr_sd',
+                                               'mfr','pfr','bth','slp')],
+                                  y=coltemp[,'forbin'], method="ranger", num.trees=500, seed=24, metric='ROC', 
+                                  tuneGrid=tunegrid, trControl=train_control, verbose=T)
+        
+        intval_out<-rbind(intval_out,
+                          data.frame(sp=k, col=i, run=h, clust=g, rf_intcol$results))
+      }#end clust method loop
       
     }
     print(intval_out)
   } # h 1:5 loop
-  p2<-ggplot(data=filter(intval_out, sp==k), aes(x=mtry, colour=factor(min.node.size)))+
-    geom_point(aes(y=ROC))+geom_line(aes(y=ROC),linetype='dashed')+theme(legend.position = "none")+facet_wrap(~col+run) 
-  png(paste0('C:/seabirds/data/modelling/rf_tuning/plots/GBR_local_', k,'.png'),width = 6, height =6 , units ="in", res =600)
-  print(p2)
-  dev.off()
+  #p2<-ggplot(data=filter(intval_out, sp==k), aes(x=mtry, colour=factor(min.node.size)))+
+  #  geom_point(aes(y=ROC))+geom_line(aes(y=ROC),linetype='dashed')+theme(legend.position = "none")+facet_wrap(~col+run) 
+  #png(paste0('C:/seabirds/data/modelling/rf_tuning/plots/GBR_local_', k,'.png'),width = 6, height =6 , units ="in", res =600)
+  #print(p2)
+  #dev.off()
 }
-write.csv(intval_out, 'C:/seabirds/data/GBR_tracking_representivity.csv', quote=F, row.names=F)
+write.csv(intval_out, 'C:/seabirds/data/GBR_tracking_representivity_updated.csv', quote=F, row.names=F)
+# get vals to plug in
+out1<-intval_out%>%group_by(sp, col, run, clust)%>%summarise(auc=max(ROC))%>%as.data.frame()
+out1%>%group_by(sp, col, run)%>%summarise(auc=mean(auc))%>%ungroup()%>%
+  group_by(sp, col)%>%summarise(auc=mean(auc))
+
 ####~~~~*~~~~####
 
