@@ -794,7 +794,7 @@ p1<-ggplot(data=densdat, aes(x=value, stat(scaled), colour=variable))+
 #### ~~~~ **** ~~~~ ####
 
 ####~~~~ return cluster and heatmap validation plot function ~~~~####
-mkVal<-function(my.sp='BRBO', my.metric='AUC', calc.niche=F)
+mkVal<-function(my.sp='BRBO', my.metric='AUC', calc.niche=F, text_size=2)
 {
   #https://jcoliver.github.io/learn-r/008-ggplot-dendrograms-and-heatmaps.html
   my.matx<-matx_out[matx_out$sp==my.sp,]
@@ -866,20 +866,20 @@ mkVal<-function(my.sp='BRBO', my.metric='AUC', calc.niche=F)
   {  
   val_plot<-ggplot(my.aucz, aes(x = spcol, y = Resample)) + 
     geom_raster(aes(fill=auc_bin)) +scale_fill_identity()+ 
-    geom_text(data=mytext, aes(label=round(auc, 2)*100), size=2)+
-    geom_text(data=my.aucz_comp, aes(label=round(auc, 2)*100,colour=self_mult_dclass_auc), size=2, fontface='bold')+
+    geom_text(data=mytext, aes(label=round(auc, 2)*100), size=text_size)+
+    geom_text(data=my.aucz_comp, aes(label=round(auc, 2)*100,colour=self_mult_dclass_auc), size=text_size, fontface='bold')+
     scale_colour_identity()+theme_bw() + 
-    theme(axis.text.x=element_text(size=9, angle=90, vjust=0.3),
+    theme(axis.text.x=element_text(size=9, angle=90, hjust=1, vjust=0.3),
                        axis.text.y=element_text(size=9),
                        plot.title=element_text(size=11))+ylab('Predictions from')+xlab('Predicting to')}
   
   if(my.metric=='TSS')
   {
     val_plot<-ggplot(my.aucz, aes(x = spcol, y = Resample)) + 
-      geom_raster(aes(fill=tss_bin)) +scale_fill_identity()+ 
-      geom_text(data=mytext,aes(label=round(TSS, 2)*100), size=2)+
-      geom_text(data=my.aucz_comp, aes(label=round(TSS, 2)*100,colour=self_mult_dclass_tss), size=2, fontface='bold')+
-      scale_colour_identity()+theme_bw() + theme(axis.text.x=element_text(size=9, angle=90, vjust=0.3),
+      geom_raster(aes(fill=tss_bin)) +scale_fill_identity()+  
+      geom_text(data=mytext,aes(label=round(TSS, 2)*100), size=text_size)+
+      geom_text(data=my.aucz_comp, aes(label=round(TSS, 2)*100,colour=self_mult_dclass_tss), size=text_size, fontface='bold')+
+      scale_colour_identity()+theme_bw() + theme(axis.text.x=element_text(size=9, angle=90, hjust=1, vjust=0.3),
                          axis.text.y=element_text(size=9),
                          plot.title=element_text(size=11))+ylab('Predictions from')+xlab('Predicting to')}
   
@@ -986,8 +986,39 @@ ggsave(plot=wtstwtlg, filename='C:/seabirds/data/modelling/plots/WTST_WTLG.png',
 noddsotetern<-(nodd_auc[[2]]+ggtitle('B) Noddies'))+nodd_auc_dend+
   (sote_auc[[2]]+ggtitle('B) Sooty Tern'))+sote_auc_dend+(tern_auc[[2]]+ggtitle('C) Terns'))+tern_auc_dend+
   plot_layout(ncol=2, nrow=3, widths=c(3,1))
-ggsave(plot=noddsotetern, filename='C:/seabirds/data/modelling/plots/NODD_SOTE_TERN.png',width = 7, height =12)
+ggsave(plot=noddsotetern, filename='C:/s eabirds/data/modelling/plots/NODD_SOTE_TERN.png',width = 7, height =12)
 
+# epps polt only
+ggsave(plot=brbo_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
+       axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 17*0.5, height =17*0.5, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_BRBO.eps')
+ggsave(plot=mabo_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
+                                axis.title.x=element_blank(),  axis.ticks=element_blank(),axis.title.y=element_blank()), width = 13*0.5, height =13*0.5, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_MABO.eps')
+ggsave(plot=rfbo_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
+                                axis.title.x=element_blank(),  axis.ticks=element_blank(),axis.title.y=element_blank()), width = 12*0.5, height =12*0.5, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_RFBO.eps')
+ggsave(plot=frbd_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
+                                axis.title.x=element_blank(), axis.ticks=element_blank(), axis.title.y=element_blank()), width = 10*0.5, height =10*0.5, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_FRBD.eps')
+ggsave(plot=trbd_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
+                                axis.title.x=element_blank(), axis.ticks=element_blank(), axis.title.y=element_blank()), width = 12*0.5, height =12*0.5, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_TRBD.eps')
+ggsave(plot=wtst_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
+                                axis.title.x=element_blank(),  axis.ticks=element_blank(),axis.title.y=element_blank()), width = 9*0.5, height =9*0.5, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_WTST.eps')
+ggsave(plot=wtlg_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
+                                axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 8*0.5, height =8*0.5, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_WTLG.eps')
+ggsave(plot=nodd_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
+                                axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 3.6, height =3.6, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_NODD.eps')
+ggsave(plot=sote_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
+                                axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 2.5, height =2.5, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_SOTE.eps')
+ggsave(plot=tern_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
+                                axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 2.5, height =2.5, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_TERN.eps')
 
 # same for tss
 
