@@ -915,53 +915,53 @@ mkVal<-function(my.sp='BRBO', my.metric='AUC', calc.niche=F, text_size=2)
 #https://cran.r-project.org/web/packages/ggplotify/vignettes/ggplotify.html
 
 # BRBO 
-brbo_auc<-mkVal('BRBO', 'AUC', calc.niche = F)
-brbo_tss<-mkVal('BRBO', 'TSS', calc.niche = F)
+brbo_auc<-mkVal('BRBO', 'AUC', calc.niche = F, text_size = 2.5)
+brbo_tss<-mkVal('BRBO', 'TSS', calc.niche = F, text_size = 2.5)
 brbo_auc_dend<-ggdendrogram(data = as.dendrogram(brbo_auc[[1]]), rotate = T)
 brbo_tss_dend<-ggdendrogram(data = as.dendrogram(brbo_tss[[1]]), rotate = T)
 # MABO
-mabo_auc<-mkVal('MABO', 'AUC', calc.niche = F)
-mabo_tss<-mkVal('MABO', 'TSS', calc.niche = F)
+mabo_auc<-mkVal('MABO', 'AUC', calc.niche = F, text_size = 2.5)
+mabo_tss<-mkVal('MABO', 'TSS', calc.niche = F, text_size = 2.5)
 mabo_auc_dend<-ggdendrogram(data = as.dendrogram(mabo_auc[[1]]), rotate = T)
 mabo_tss_dend<-ggdendrogram(data = as.dendrogram(mabo_tss[[1]]), rotate = T)
 # RFBO
-rfbo_auc<-mkVal('RFBO', 'AUC', calc.niche = F)
-rfbo_tss<-mkVal('RFBO', 'TSS', calc.niche = F)
+rfbo_auc<-mkVal('RFBO', 'AUC', calc.niche = F, text_size = 2.5)
+rfbo_tss<-mkVal('RFBO', 'TSS', calc.niche = F, text_size = 2.5)
 rfbo_auc_dend<-ggdendrogram(data = as.dendrogram(rfbo_auc[[1]]), rotate = T)
 rfbo_tss_dend<-ggdendrogram(data = as.dendrogram(rfbo_tss[[1]]), rotate = T)
 # FRBD
-frbd_auc<-mkVal('FRBD', 'AUC', calc.niche = F)
-frbd_tss<-mkVal('FRBD', 'TSS', calc.niche = F)
+frbd_auc<-mkVal('FRBD', 'AUC', calc.niche = F, text_size = 2.5)
+frbd_tss<-mkVal('FRBD', 'TSS', calc.niche = F, text_size = 2.5)
 frbd_auc_dend<-ggdendrogram(data = as.dendrogram(frbd_auc[[1]]), rotate = T)
 frbd_tss_dend<-ggdendrogram(data = as.dendrogram(frbd_tss[[1]]), rotate = T)
 # TRBD
-trbd_auc<-mkVal('TRBD', 'AUC', calc.niche = F)
-trbd_tss<-mkVal('TRBD', 'TSS', calc.niche = F)
+trbd_auc<-mkVal('TRBD', 'AUC', calc.niche = F, text_size = 2.5)
+trbd_tss<-mkVal('TRBD', 'TSS', calc.niche = F, text_size = 2.5)
 trbd_auc_dend<-ggdendrogram(data = as.dendrogram(trbd_auc[[1]]), rotate = T)
 trbd_tss_dend<-ggdendrogram(data = as.dendrogram(trbd_tss[[1]]), rotate = T)
 # WTST
-wtst_auc<-mkVal('WTST', 'AUC', calc.niche = F)
-wtst_tss<-mkVal('WTST', 'TSS', calc.niche = F)
+wtst_auc<-mkVal('WTST', 'AUC', calc.niche = F, text_size = 2.5)
+wtst_tss<-mkVal('WTST', 'TSS', calc.niche = F, text_size = 2.5)
 wtst_auc_dend<-ggdendrogram(data = as.dendrogram(wtst_auc[[1]]), rotate = T)
 wtst_tss_dend<-ggdendrogram(data = as.dendrogram(wtst_tss[[1]]), rotate = T)
 # WTLG
-wtlg_auc<-mkVal('WTLG', 'AUC', calc.niche = F)
-wtlg_tss<-mkVal('WTLG', 'TSS', calc.niche = F)
+wtlg_auc<-mkVal('WTLG', 'AUC', calc.niche = F, text_size = 2.5)
+wtlg_tss<-mkVal('WTLG', 'TSS', calc.niche = F, text_size = 2.5)
 wtlg_auc_dend<-ggdendrogram(data = as.dendrogram(wtlg_auc[[1]]), rotate = T)
 wtlg_tss_dend<-ggdendrogram(data = as.dendrogram(wtlg_tss[[1]]), rotate = T)
 # NODD
-nodd_auc<-mkVal('NODD', 'AUC', calc.niche = )
-nodd_tss<-mkVal('NODD', 'TSS', calc.niche = F)
+nodd_auc<-mkVal('NODD', 'AUC', calc.niche = F, text_size = 2.5)
+nodd_tss<-mkVal('NODD', 'TSS', calc.niche = F, text_size = 2.5)
 nodd_auc_dend<-ggdendrogram(data = as.dendrogram(nodd_auc[[1]]), rotate = T)
 nodd_tss_dend<-ggdendrogram(data = as.dendrogram(nodd_tss[[1]]), rotate = T)
 # SOTE
-sote_auc<-mkVal('SOTE', 'AUC', calc.niche = F)
-sote_tss<-mkVal('SOTE', 'TSS', calc.niche = F)
+sote_auc<-mkVal('SOTE', 'AUC', calc.niche = F, text_size = 2.5)
+sote_tss<-mkVal('SOTE', 'TSS', calc.niche = F, text_size = 2.5)
 sote_auc_dend<-ggdendrogram(data = as.dendrogram(sote_auc[[1]]), rotate = T)
 sote_tss_dend<-ggdendrogram(data = as.dendrogram(sote_tss[[1]]), rotate = T)
 # TERN
-tern_auc<-mkVal('TERN', 'AUC', calc.niche = F)
-tern_tss<-mkVal('TERN', 'TSS', calc.niche = F)
+tern_auc<-mkVal('TERN', 'AUC', calc.niche = F, text_size = 2.5)
+tern_tss<-mkVal('TERN', 'TSS', calc.niche = F, text_size = 2.5)
 tern_auc_dend<-ggdendrogram(data = as.dendrogram(tern_auc[[1]]), rotate = T)
 tern_tss_dend<-ggdendrogram(data = as.dendrogram(tern_tss[[1]]), rotate = T)
 
@@ -988,37 +988,37 @@ noddsotetern<-(nodd_auc[[2]]+ggtitle('B) Noddies'))+nodd_auc_dend+
   plot_layout(ncol=2, nrow=3, widths=c(3,1))
 ggsave(plot=noddsotetern, filename='C:/s eabirds/data/modelling/plots/NODD_SOTE_TERN.png',width = 7, height =12)
 
-# epps polt only
+# eps polt only
 ggsave(plot=brbo_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
-       axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 17*0.5, height =17*0.5, units='cm',
-       filename='C:/seabirds/data/modelling/plots/matr_BRBO.eps')
+       axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 17*0.66, height =17*0.66, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_BRBO_3rd.eps')
 ggsave(plot=mabo_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
-                                axis.title.x=element_blank(),  axis.ticks=element_blank(),axis.title.y=element_blank()), width = 13*0.5, height =13*0.5, units='cm',
-       filename='C:/seabirds/data/modelling/plots/matr_MABO.eps')
+                                axis.title.x=element_blank(),  axis.ticks=element_blank(),axis.title.y=element_blank()), width = 13*0.66, height =13*0.66, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_MABO_3rd.eps')
 ggsave(plot=rfbo_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
-                                axis.title.x=element_blank(),  axis.ticks=element_blank(),axis.title.y=element_blank()), width = 12*0.5, height =12*0.5, units='cm',
-       filename='C:/seabirds/data/modelling/plots/matr_RFBO.eps')
+                                axis.title.x=element_blank(),  axis.ticks=element_blank(),axis.title.y=element_blank()), width = 12*0.66, height =12*0.66, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_RFBO_3rd.eps')
 ggsave(plot=frbd_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
-                                axis.title.x=element_blank(), axis.ticks=element_blank(), axis.title.y=element_blank()), width = 10*0.5, height =10*0.5, units='cm',
+                                axis.title.x=element_blank(), axis.ticks=element_blank(), axis.title.y=element_blank()), width = 10*0.66, height =10*0.66, units='cm',
        filename='C:/seabirds/data/modelling/plots/matr_FRBD.eps')
 ggsave(plot=trbd_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
-                                axis.title.x=element_blank(), axis.ticks=element_blank(), axis.title.y=element_blank()), width = 12*0.5, height =12*0.5, units='cm',
-       filename='C:/seabirds/data/modelling/plots/matr_TRBD.eps')
+                                axis.title.x=element_blank(), axis.ticks=element_blank(), axis.title.y=element_blank()), width = 12*0.66, height =12*0.66, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_TRBD_3rd.eps')
 ggsave(plot=wtst_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
-                                axis.title.x=element_blank(),  axis.ticks=element_blank(),axis.title.y=element_blank()), width = 9*0.5, height =9*0.5, units='cm',
-       filename='C:/seabirds/data/modelling/plots/matr_WTST.eps')
+                                axis.title.x=element_blank(),  axis.ticks=element_blank(),axis.title.y=element_blank()), width = 9*0.66, height =9*0.66, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_WTST_3rd.eps')
 ggsave(plot=wtlg_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
-                                axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 8*0.5, height =8*0.5, units='cm',
-       filename='C:/seabirds/data/modelling/plots/matr_WTLG.eps')
+                                axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 8*0.66, height =8*0.66, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_WTLG_3rd.eps')
 ggsave(plot=nodd_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
-                                axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 3.6, height =3.6, units='cm',
-       filename='C:/seabirds/data/modelling/plots/matr_NODD.eps')
+                                axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 4, height =4, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_NODD_3rd.eps')
 ggsave(plot=sote_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
-                                axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 2.5, height =2.5, units='cm',
-       filename='C:/seabirds/data/modelling/plots/matr_SOTE.eps')
+                                axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 3, height =3, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_SOTE_3rd.eps')
 ggsave(plot=tern_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
-                                axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 2.5, height =2.5, units='cm',
-       filename='C:/seabirds/data/modelling/plots/matr_TERN.eps')
+                                axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 3, height =3, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_TERN_3rd.eps')
 
 # same for tss
 
