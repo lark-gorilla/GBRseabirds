@@ -550,9 +550,9 @@ for(k in sp_groups)
 }
 write.csv(intval_out, 'C:/seabirds/data/GBR_tracking_representivity_updated.csv', quote=F, row.names=F)
 # get vals to plug in
-out1<-intval_out%>%group_by(sp, col, run, clust)%>%summarise(auc=max(ROC))%>%as.data.frame()
-out1%>%group_by(sp, col, run)%>%summarise(auc=mean(auc))%>%ungroup()%>%
-  group_by(sp, col)%>%summarise(auc=mean(auc))
+out1<-intval_out%>%group_by(sp, col, run, clust)%>%filter(ROC==max(ROC))%>%as.data.frame()
+out1%>%group_by(sp, col, run)%>%summarise(auc=mean(ROC), auc_sd=mean(ROCSD))%>%ungroup()%>%
+  group_by(sp, col)%>%summarise(auc=mean(auc), auc_sd=mean(auc_sd))
 
 ####~~~~*~~~~####
 
