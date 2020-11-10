@@ -483,6 +483,10 @@ fronts<-stack('C:/seabirds/sourced_data/oceano_modelready/mfront_mn.tif',
               'C:/seabirds/sourced_data/oceano_modelready/pfront_sd.tif')
 bathy<-raster('C:/seabirds/sourced_data/oceano_modelready/bathy.tif')
 slope<-raster('C:/seabirds/sourced_data/oceano_modelready/slope.tif')
+# global bathy and slope
+#bathy<-raster('C:/seabirds/sourced_data/gebco_wgs84')
+#slope<-terrain(bathy, opt='slope', unit='degrees', neighbors=4)
+
 
 #stacks for wtsh Dec-Mar
 
@@ -507,6 +511,8 @@ pfront_stack<-subset(pfront_stack, 1:4)
 pred_ras<-rasterize(pred_a, tmpl2km, field=1) # using 2 km rather than bathy
 pred_pts<-rasterToPoints(pred_ras, spatial=T)
 
+#pred_pts<-rasterToPoints(subset(fronts, 1), spatial=T) # make ~5km res global prediction layer
+
 ex_sst<-extract(sst, pred_pts)
 ex_chl<-extract(chl, pred_pts)
 ex_front<-extract(fronts, pred_pts)
@@ -517,6 +523,8 @@ out3<-data.frame(pred_pts@coords, ex_sst, ex_chl, ex_front, ex_bathy, ex_slope)
 
 out4<-na.omit(out3) # cut out land
 write.csv(out4, 'C:/seabirds/data/pred_area_large_modelready_2km.csv', quote=F, row.names=F)
+# write global 5km layer
+#write.csv(out4, 'C:/seabirds/data/pred_area_global_modelready_5km.csv', quote=F, row.names=F)
 
 #extract for wtsh only dyn_varibs
 pt2<-SpatialPoints(out4[,c(1,2)], proj4string = CRS(projection(tmpl2km)))
