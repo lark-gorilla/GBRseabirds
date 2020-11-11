@@ -1,0 +1,96 @@
+---
+title: "Global seabird predictions to inform Great Barrier Reef management"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, echo=F, warning=F, message=F}
+library(raster)
+library(dplyr)
+library(sf)
+library(leaflet)
+
+#read in data
+colz<-st_read('C:/seabirds/data/GIS/trackingID_colony_locs.shp')
+colz$sp<-do.call(c, lapply(strsplit(as.character(colz$ID), '_'), function(x)x[2]))
+colz$coly<-do.call(c, lapply(strsplit(as.character(colz$ID), '_'), function(x)x[3]))
+colz$sp_group=colz$sp
+colz[colz$sp %in% c('GRFR', 'LEFR', 'MAFR'),]$sp_group<-'FRBD'
+colz[colz$sp %in% c('RBTB', 'RTTB'),]$sp_group<-'TRBD'
+colz[colz$sp %in% c('BRNO', 'LENO', 'BLNO'),]$sp_group<-'NODD'
+colz[colz$sp %in% c('CRTE', 'ROTE', 'CATE'),]$sp_group<-'TERN'
+
+#normalize_rasts
+
+brbo_ras<-raster('C:/seabirds/data/modelling/global_preds/BRBO_global.grd')
+brbo_ras<-(brbo_ras-min(values(brbo_ras), na.rm=T))/(max(values(brbo_ras), na.rm=T)-min(values(brbo_ras), na.rm=T))
+mabo_ras<-raster('C:/seabirds/data/modelling/global_preds/MABO_global.grd')
+mabo_ras<-(mabo_ras-min(values(mabo_ras), na.rm=T))/(max(values(mabo_ras), na.rm=T)-min(values(mabo_ras), na.rm=T))
+rfbo_ras<-raster('C:/seabirds/data/modelling/global_preds/RFBO_global.grd')
+rfbo_ras<-(rfbo_ras-min(values(rfbo_ras), na.rm=T))/(max(values(rfbo_ras), na.rm=T)-min(values(rfbo_ras), na.rm=T))
+frbd_ras<-raster('C:/seabirds/data/modelling/global_preds/FRBD_global.grd')
+frbd_ras<-(frbd_ras-min(values(frbd_ras), na.rm=T))/(max(values(frbd_ras), na.rm=T)-min(values(frbd_ras), na.rm=T))
+trbd_ras<-raster('C:/seabirds/data/modelling/global_preds/TRBD_global.grd')
+trbd_ras<-(trbd_ras-min(values(trbd_ras), na.rm=T))/(max(values(trbd_ras), na.rm=T)-min(values(trbd_ras), na.rm=T))
+wtst_ras<-raster('C:/seabirds/data/modelling/global_preds/WTST_global.grd')
+wtst_ras<-(wtst_ras-min(values(wtst_ras), na.rm=T))/(max(values(wtst_ras), na.rm=T)-min(values(wtst_ras), na.rm=T))
+wtlg_ras<-raster('C:/seabirds/data/modelling/global_preds/WTLG_global.grd')
+wtlg_ras<-(wtlg_ras-min(values(wtlg_ras), na.rm=T))/(max(values(wtlg_ras), na.rm=T)-min(values(wtlg_ras), na.rm=T))
+sote_ras<-raster('C:/seabirds/data/modelling/global_preds/SOTE_global.grd')
+sote_ras<-(sote_ras-min(values(sote_ras), na.rm=T))/(max(values(sote_ras), na.rm=T)-min(values(sote_ras), na.rm=T))
+nodd_ras<-raster('C:/seabirds/data/modelling/global_preds/NODD_global.grd')
+nodd_ras<-(nodd_ras-min(values(nodd_ras), na.rm=T))/(max(values(nodd_ras), na.rm=T)-min(values(nodd_ras), na.rm=T))
+tern_ras<-raster('C:/seabirds/data/modelling/global_preds/TERN_global.grd')
+tern_ras<-(tern_ras-min(values(tern_ras), na.rm=T))/(max(values(tern_ras), na.rm=T)-min(values(tern_ras), na.rm=T))
+ 
+```
+
+
+```{r, echo=FALSE, warning=F, message=F, fig.width=10, fig.height=6}
+#pal <- colorBin(rev(c('#9e0142','#d53e4f','#f46d43','#fdae61','#fee08b','#e6f598','#abdda4','#66c2a5','#3288bd','#5e4fa2')), bins=10, c(NA, seq(0, 1, 0.1)), na.color = "transparent")
+# magma viridis
+pal <- colorBin(c("#000004FF", "#180F3EFF", "#451077FF", "#721F81FF", "#9F2F7FFF", "#CD4071FF" ,"#F1605DFF","#FD9567FF", "#FEC98DFF" ,"#FCFDBFFF"), bins=10, c(NA, seq(0, 1, 0.1)), na.color = "transparent")
+
+
+ m <- leaflet() %>%
+  addTiles() %>% 
+   
+  addRasterImage(brbo_ras, colors = pal, opacity = 0.8, group='BRBO')%>%
+   addRasterImage(mabo_ras, colors = pal, opacity = 0.8, group='MABO')%>%
+   addRasterImage(rfbo_ras, colors = pal, opacity = 0.8, group='RFBO')%>%
+   addRasterImage(frbd_ras, colors = pal, opacity = 0.8, group='FRBD')%>%
+   addRasterImage(trbd_ras, colors = pal, opacity = 0.8, group='TRBD')%>%
+   addRasterImage(wtst_ras, colors = pal, opacity = 0.8, group='WTST')%>%
+   addRasterImage(wtlg_ras, colors = pal, opacity = 0.8, group='WTLG')%>%
+   addRasterImage(sote_ras, colors = pal, opacity = 0.8, group='SOTE')%>%
+   addRasterImage(nodd_ras, colors = pal, opacity = 0.8, group='NODD')%>%
+   addRasterImage(tern_ras, colors = pal, opacity = 0.8, group='TERN')%>%
+ 
+   addLegend(pal = pal, values = c(NA, seq(0, 1, 0.1)),
+    title = "Foraging habitat suitability") %>%
+   
+   
+    addCircleMarkers(data=filter(colz, sp_group=='BRBO'), group='BRBO', popup= paste("Colony:", colz[colz$sp_group=='BRBO',]$coly , "<br>", "Species:", colz[colz$sp_group=='BRBO',]$sp), stroke=F, radius=6, fillOpacity =1, color='yellow')%>%
+       addCircleMarkers(data=filter(colz, sp_group=='MABO'), group='MABO', popup= paste("Colony:", colz[colz$sp_group=='MABO',]$coly , "<br>", "Species:", colz[colz$sp_group=='MABO',]$sp), stroke=F, radius=6, fillOpacity =1, color='yellow')%>%
+       addCircleMarkers(data=filter(colz, sp_group=='RFBO'), group='RFBO', popup= paste("Colony:", colz[colz$sp_group=='RFBO',]$coly , "<br>", "Species:", colz[colz$sp_group=='RFBO',]$sp), stroke=F, radius=6, fillOpacity =1, color='yellow')%>%
+       addCircleMarkers(data=filter(colz, sp_group=='FRBD'), group='FRBD', popup= paste("Colony:", colz[colz$sp_group=='FRBD',]$coly , "<br>", "Species:", colz[colz$sp_group=='FRBD',]$sp), stroke=F, radius=6, fillOpacity =1, color='yellow')%>%
+       addCircleMarkers(data=filter(colz, sp_group=='TRBD'), group='TRBD', popup= paste("Colony:", colz[colz$sp_group=='TRBD',]$coly , "<br>", "Species:", colz[colz$sp_group=='TRBD',]$sp), stroke=F, radius=6, fillOpacity =1, color='yellow')%>%
+       addCircleMarkers(data=filter(colz, sp_group=='WTST'), group='WTST', popup= paste("Colony:", colz[colz$sp_group=='WTST',]$coly , "<br>", "Species:", colz[colz$sp_group=='WTST',]$sp), stroke=F, radius=6, fillOpacity =1, color='yellow')%>%
+       addCircleMarkers(data=filter(colz, sp_group=='WTLG'), group='WTLG', popup= paste("Colony:", colz[colz$sp_group=='WTLG',]$coly , "<br>", "Species:", colz[colz$sp_group=='WTLG',]$sp), stroke=F, radius=6, fillOpacity =1, color='yellow')%>%
+       addCircleMarkers(data=filter(colz, sp_group=='NODD'), group='NODD', popup= paste("Colony:", colz[colz$sp_group=='NODD',]$coly , "<br>", "Species:", colz[colz$sp_group=='NODD',]$sp), stroke=F, radius=6, fillOpacity =1, color='yellow')%>%
+       addCircleMarkers(data=filter(colz, sp_group=='SOTE'), group='SOTE', popup= paste("Colony:", colz[colz$sp_group=='SOTE',]$coly , "<br>", "Species:", colz[colz$sp_group=='SOTE',]$sp), stroke=F, radius=6, fillOpacity =1, color='yellow')%>%
+       addCircleMarkers(data=filter(colz, sp_group=='TERN'), group='TERN', popup= paste("Colony:", colz[colz$sp_group=='TERN',]$coly , "<br>", "Species:", colz[colz$sp_group=='TERN',]$sp), stroke=F, radius=6, fillOpacity =1, color='yellow')%>%
+   
+   
+     addLayersControl(overlayGroups = c('BRBO', 'MABO', 'RFBO', 'FRBD', 'TRBD', 'WTST', 'WTLG',
+                                        'SOTE', 'NODD', 'TERN'), options=layersControlOptions(collapsed=F))
+   
+m%>%hideGroup(c('BRBO', 'MABO', 'RFBO', 'FRBD', 'TRBD', 'WTST', 'WTLG',
+                                        'SOTE', 'NODD', 'TERN'))
+```
+
+This mapper can be used to visualise predictions of foraging habitat suitability for modelled species  applied to the globe rather than just the Great Barrier Reef. This can hopefully provide a measure of informal validation for the transferability of models into new areas.
