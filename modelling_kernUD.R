@@ -556,3 +556,78 @@ out1%>%group_by(sp, col, run)%>%summarise(auc=mean(ROC), auc_sd=mean(ROCSD))%>%u
 
 ####~~~~*~~~~####
 
+## produce global predictions run on cluster ##
+
+# Read in optimal hyperparameters
+my_hyp<-read.csv('rf_optimal_hyp.csv')
+
+#read in GBR ocean data
+gbr2<-read.csv('pred_area_global_modelready_5km.csv')
+names(gbr2)<-c('x', 'y', 'sst', 'sst_sd', 'chl', 'chl_sd',
+              'mfr', 'mfr_sd', 'pfr', 'pfr_sd', 'bth', 'slp')
+gbr2[gbr2$bth>0,]$bth<-0 
+gbr2$bth<-sqrt(gbr2$bth^2)# Remember nearshore front values which ==0 should be NA
+
+# read in 5km rasterize template
+templ<-raster('pred_global_ras_template.grd')
+
+# read in data
+sp_groups <- c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST', 'WTLG',
+               'FRBD', 'TRBD', 'NODD', 'TERN')
+
+for(k in sp_groups)
+{
+  # Using the first resampled dataset as the baseline for AUC validation 
+  dat<-read.csv(paste0('kernhull_pts_sample/', k, '_kernhull_sample1.csv'))
+  dat$X<-NULL
+  
+  # lookup optimal vals
+  my.hyp.sp<-filter(my_hyp, sp==k)
+  my.hyp.sp$Resample<-as.character(my.hyp.sp$Resample)
+  
+  if(k=='RFBO'){dat<-filter(dat, spcol!='Christmas')}
+  if(k=='SOTE'){dat$spcol<-as.character(dat$spcol)
+  dat[dat$spcol=='chick',]$spcol<-'Rat'}
+  
+  #subset gbr predictions to within max 
+  
+  rep_GBRpreds<-data.frame(ID=1:nrow(gbr2))
+
+  for(h in 1:5) # loop through 5 resamples of PsuedoAbs data and evrage mode predictions
+  {
+    if(h==1){repdat<-dat}else{
+      repdat<-read.csv(paste0('kernhull_pts_sample/', k, '_kernhull_sample', h,'.csv'))}
+    if(k=='SOTE' & h>1){
+      repdat$spcol<-as.character(repdat$spcol)
+      repdat[repdat$spcol=='chick',]$spcol<-'Rat'}
+    
+    # make full (all cols) multicolony model for prediction to Reef
+    rf3<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
+                data=repdat, num.trees=500,  
+                mtry=filter(my.hyp.sp, Resample=='MultiCol')$mtry, 
+                min.node.size=filter(my.hyp.sp, Resample=='MultiCol')$min.node.size,
+                splitrule = "gini",  importance='impurity',probability =T, seed=24)
+    
+    #predict to GBR
+    rep_GBRpreds$MultiCol<-predict(rf3, data=gbr2)$predictions[,1]
+    names(rep_GBRpreds)[which(names(rep_GBRpreds)=='MultiCol')]<-paste('MultiCol', h, sep='_')
+    
+    if(h==5) # ave 1:5 multicol model preds to GBR
+    {gbr2$MultiCol<-rowMeans(rep_GBRpreds[paste('MultiCol', 1:5, sep='_')])}
+    
+    rm(rf3)
+    print(h)
+    print(Sys.time())
+  }
+  
+  # Write out spatial predictions
+  spdf<-SpatialPointsDataFrame(SpatialPoints(gbr2[,1:2], proj4string = CRS(projection(templ))),
+                               data=gbr2[,12:13])
+  
+    p1<-rasterize(spdf, templ, field='MultiCol')
+    writeRaster(p1, paste0('global_preds/',k, '_global.grd'), overwrite=T)
+  print(k)
+  rm(spdf)
+  rm(p1)
+  }
+  
