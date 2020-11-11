@@ -469,7 +469,7 @@ mk_gbrplot<-function(spg='TERN_MultiCol'){
 
   p1<-ggplot() +
   layer_spatial(data=r1) +
-  geom_sf(data=filter(colz, md_spgr==col_sp), shape = 23, fill = "darkred") +
+  geom_sf(data=filter(colz, md_spgr==col_sp), shape = 23, fill = "yellow") +
   geom_sf(data=sp.rad, aes(colour=rd_clss), fill='NA') +
   geom_sf(data=gbrmp, col='white', fill='NA') +
   geom_sf(data=land, col='black', fill='grey') +
@@ -532,7 +532,7 @@ hotspots<-(hotspots-mn)/(mx-mn)# normalise (0-1)
 
 p1<-ggplot() +
   layer_spatial(data=hotspots) +
-  geom_sf(data=filter(colz), shape = 23, fill = "darkred") +
+  geom_sf(data=filter(colz), shape = 23, fill = "yellow") +
   geom_sf(data=gbrmp, col='white', fill='NA') +
   geom_sf(data=land, col='black', fill='grey') +
   theme_bw()+
@@ -566,7 +566,7 @@ mk_kbaplot<-function(site="Capricornia Cays KBA"){
    if(length(seq(floor(plim[2]), ceiling(plim[4]), by=1))>10){my.by=5}
   p1<-ggplot() +
     geom_sf(data=filter(gbr_reef, FEAT_NAME=='Reef'), fill='NA', colour=alpha('black',0.5))+
-    geom_sf(data=filter(colz, dsgntn_n==site), shape = 23, fill = "darkred") +
+    geom_sf(data=filter(colz, dsgntn_n==site), shape = 23, fill = "yellow") +
     geom_sf(data=filter(rad_diss_site), aes(colour=spcol), fill='NA') +
     geom_sf(data=gbrmp, col='black', fill='NA') +
     geom_sf(data=land, col='black', fill='grey') +
@@ -593,7 +593,7 @@ mk_kbaplot<-function(site="Capricornia Cays KBA"){
   p_last<-ggplot() +
     layer_spatial(data=hotspot_local)+
     geom_sf(data=filter(gbr_reef, FEAT_NAME=='Reef'), fill='NA', colour=alpha('black',0.7))+
-    geom_sf(data=filter(colz, dsgntn_n==site), shape = 23, fill = "darkred") +
+    geom_sf(data=filter(colz, dsgntn_n==site), shape = 23, fill = "yellow") +
     geom_sf(data=gbrmp, col='white', fill='NA') +
     geom_sf(data=land, col='black', fill='grey') +
     theme_bw()+
@@ -628,7 +628,9 @@ mk_kbaplot<-function(site="Capricornia Cays KBA"){
   }else{
   r1<-subset(mod_pred, paste0(i,'_MultiCol'))
   }
-    
+  
+  icol=i
+  if(i=='WTLG'){icol='WTST'}
     
   beeb<-bbox(as(sel_rad, 'Spatial'))
   beeb[c(1, 2)]<-beeb[c(1, 2)]-0.1
@@ -649,13 +651,13 @@ mk_kbaplot<-function(site="Capricornia Cays KBA"){
   if(sel_rad$rd_clss=='obs'){p2.1<-p2+
     geom_sf(data=filter(site_rad_cores,  dsgntn_n==site& md_spgr==i),
             colour='green', fill='NA')+
-    geom_sf(data=filter(colz, dsgntn_n==site& md_spgr==i), shape = 23, fill = "darkred")+
+    geom_sf(data=filter(colz, dsgntn_n==site& md_spgr==icol), shape = 23, fill = "yellow")+
     geom_sf(data=sel_rad, aes(color="B"), show.legend = "polygon", fill='NA')+
     scale_color_manual(values = c("B" = "yellow"), 
                        labels = c("Observed\nforaging\nradius"), name=NULL)}else{
     p2.1<-p2+geom_sf(data=filter(site_rad_cores,  dsgntn_n==site& md_spgr==i),
                      aes(color="A"), show.legend = "polygon", fill='NA')+
-      geom_sf(data=filter(colz, dsgntn_n==site& md_spgr==i), shape = 23, fill = "darkred")+
+      geom_sf(data=filter(colz, dsgntn_n==site& md_spgr==icol), shape = 23, fill = "yellow")+
       geom_sf(data=sel_rad,aes(color="B"), show.legend = "polygon", fill='NA')+
       scale_color_manual(values = c("A" = "green", "B" = "#66FFCC"), 
                          labels = c("Top 10%\npredicted\nhabitat", "All colony\nmedian\nforaging\nradius"), name=NULL)}
@@ -691,8 +693,14 @@ mk_kbaplot<-function(site="Capricornia Cays KBA"){
 for(k in unique(for_rad$dsgntn_n))
 {
   multip<-mk_kbaplot(site=k) 
+  pl_h=8.3
+  if(k=="Raine Island, Moulter and MacLennan cays KBA"){pl_h=11.7}
+  if(k%in% c("South Barnard Islands KBA", "Pelican Island" ,
+                "Eshelby islands complex, Whitsundays")){pl_h=4.5}
+     if(k%in% c("Rocky Islets (No 1)","Mudjimba Island", "Combe Island" )){pl_h=6}
+  
   png(paste0('C:/seabirds/outputs/maps/local_site/',gsub( ',', '',k),'.png'),
-      width = 8.3, height =11.7 , units ="in", res =300)
+      width = 8.3, height =pl_h , units ="in", res =300)
   print(multip)
   dev.off()
   print(k)
@@ -988,37 +996,37 @@ noddsotetern<-(nodd_auc[[2]]+ggtitle('B) Noddies'))+nodd_auc_dend+
   plot_layout(ncol=2, nrow=3, widths=c(3,1))
 ggsave(plot=noddsotetern, filename='C:/s eabirds/data/modelling/plots/NODD_SOTE_TERN.png',width = 7, height =12)
 
-# eps polt only
+# eps plot only
 ggsave(plot=brbo_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
-       axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 17*0.66, height =17*0.66, units='cm',
-       filename='C:/seabirds/data/modelling/plots/matr_BRBO_3rd.eps')
+       axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 17*0.5, height =17*0.5, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_BRBO.eps')
 ggsave(plot=mabo_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
-                                axis.title.x=element_blank(),  axis.ticks=element_blank(),axis.title.y=element_blank()), width = 13*0.66, height =13*0.66, units='cm',
-       filename='C:/seabirds/data/modelling/plots/matr_MABO_3rd.eps')
+                                axis.title.x=element_blank(),  axis.ticks=element_blank(),axis.title.y=element_blank()), width = 13*0.5, height =13*0.5, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_MABO.eps')
 ggsave(plot=rfbo_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
-                                axis.title.x=element_blank(),  axis.ticks=element_blank(),axis.title.y=element_blank()), width = 12*0.66, height =12*0.66, units='cm',
-       filename='C:/seabirds/data/modelling/plots/matr_RFBO_3rd.eps')
+                                axis.title.x=element_blank(),  axis.ticks=element_blank(),axis.title.y=element_blank()), width = 12*0.5, height =12*0.5, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_RFBO.eps')
 ggsave(plot=frbd_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
-                                axis.title.x=element_blank(), axis.ticks=element_blank(), axis.title.y=element_blank()), width = 10*0.66, height =10*0.66, units='cm',
+                                axis.title.x=element_blank(), axis.ticks=element_blank(), axis.title.y=element_blank()), width = 10*0.5, height =10*0.5, units='cm',
        filename='C:/seabirds/data/modelling/plots/matr_FRBD.eps')
 ggsave(plot=trbd_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
-                                axis.title.x=element_blank(), axis.ticks=element_blank(), axis.title.y=element_blank()), width = 12*0.66, height =12*0.66, units='cm',
-       filename='C:/seabirds/data/modelling/plots/matr_TRBD_3rd.eps')
+                                axis.title.x=element_blank(), axis.ticks=element_blank(), axis.title.y=element_blank()), width = 12*0.5, height =12*0.5, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_TRBD.eps')
 ggsave(plot=wtst_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
-                                axis.title.x=element_blank(),  axis.ticks=element_blank(),axis.title.y=element_blank()), width = 9*0.66, height =9*0.66, units='cm',
-       filename='C:/seabirds/data/modelling/plots/matr_WTST_3rd.eps')
+                                axis.title.x=element_blank(),  axis.ticks=element_blank(),axis.title.y=element_blank()), width = 9*0.5, height =9*0.5, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_WTST.eps')
 ggsave(plot=wtlg_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
-                                axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 8*0.66, height =8*0.66, units='cm',
-       filename='C:/seabirds/data/modelling/plots/matr_WTLG_3rd.eps')
+                                axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 8*0.5, height =8*0.5, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_WTLG.eps')
 ggsave(plot=nodd_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
-                                axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 4, height =4, units='cm',
-       filename='C:/seabirds/data/modelling/plots/matr_NODD_3rd.eps')
+                                axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 3.6, height =3.6, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_NODD.eps')
 ggsave(plot=sote_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
-                                axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 3, height =3, units='cm',
-       filename='C:/seabirds/data/modelling/plots/matr_SOTE_3rd.eps')
+                                axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 2.5, height =2.5, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_SOTE.eps')
 ggsave(plot=tern_auc[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
-                                axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 3, height =3, units='cm',
-       filename='C:/seabirds/data/modelling/plots/matr_TERN_3rd.eps')
+                                axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 2.5, height =2.5, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_TERN.eps')
 
 # same for tss
 
@@ -1038,11 +1046,42 @@ wtstwtlg<-(wtst_tss[[2]]+ggtitle('A) Wedge-tailed Shearwater short trips'))+wtst
   plot_layout(ncol=2, nrow=2, widths=c(3,1))
 ggsave(plot=wtstwtlg, filename='C:/seabirds/data/modelling/plots/WTST_WTLG_tss.png',width = 7, height =10)
 
-noddsotetern<-(nodd_tss[[2]]+ggtitle('B) Noddies'))+nodd_tss_dend+
+noddsotetern<-(nodd_tss[[2]]+ggtitle('A) Noddies'))+nodd_tss_dend+
   (sote_tss[[2]]+ggtitle('B) Sooty Tern'))+sote_tss_dend+(tern_tss[[2]]+ggtitle('C) Terns'))+tern_tss_dend+
   plot_layout(ncol=2, nrow=3, widths=c(3,1))
 ggsave(plot=noddsotetern, filename='C:/seabirds/data/modelling/plots/NODD_SOTE_TERN_tss.png',width = 7, height =12)
 
+# eps plot only
+ggsave(plot=brbo_tss[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
+                                axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 17*0.5, height =17*0.5, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_BRBO_tss.eps')
+ggsave(plot=mabo_tss[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
+                                axis.title.x=element_blank(),  axis.ticks=element_blank(),axis.title.y=element_blank()), width = 13*0.5, height =13*0.5, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_MABO_tss.eps')
+ggsave(plot=rfbo_tss[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
+                                axis.title.x=element_blank(),  axis.ticks=element_blank(),axis.title.y=element_blank()), width = 12*0.5, height =12*0.5, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_RFBO_tss.eps')
+ggsave(plot=frbd_tss[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
+                                axis.title.x=element_blank(), axis.ticks=element_blank(), axis.title.y=element_blank()), width = 10*0.5, height =10*0.5, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_FRBD_tss.eps')
+ggsave(plot=trbd_tss[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
+                                axis.title.x=element_blank(), axis.ticks=element_blank(), axis.title.y=element_blank()), width = 12*0.5, height =12*0.5, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_TRBD_tss.eps')
+ggsave(plot=wtst_tss[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
+                                axis.title.x=element_blank(),  axis.ticks=element_blank(),axis.title.y=element_blank()), width = 9*0.5, height =9*0.5, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_WTST_tss.eps')
+ggsave(plot=wtlg_tss[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
+                                axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 8*0.5, height =8*0.5, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_WTLG_tss.eps')
+ggsave(plot=nodd_tss[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
+                                axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 3.6, height =3.6, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_NODD.eps')
+ggsave(plot=sote_tss[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
+                                axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 2.5, height =2.5, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_SOTE.eps')
+ggsave(plot=tern_tss[[2]]+theme(axis.text.x=element_blank(), axis.text.y=element_blank(),
+                                axis.title.x=element_blank(), axis.ticks=element_blank(),axis.title.y=element_blank()), width = 2.5, height =2.5, units='cm',
+       filename='C:/seabirds/data/modelling/plots/matr_TERN_tss.eps')
 
 
 # If time
@@ -1290,8 +1329,9 @@ p1<-ggplot() +
   geom_sf(data=gbrmp, col='black', fill='NA', linetype='dashed') +
   geom_sf(data=LTs, aes(color="B"), show.legend = "line") +
   geom_sf(data=tst, aes(color=ID), show.legend = "line")+
+  geom_sf(data=colz%>%group_by(site_nm)%>%filter(species==first(species)), shape = 23, fill = "yellow")+
   geom_sf(data=filter(colz, site_nm %in% c('Raine Island', 'Price Cay', 'Heron Island'))%>%
-            group_by(site_nm)%>%filter(species==first(species)), shape = 23, fill = "darkred") +
+            group_by(site_nm)%>%filter(species==first(species)), shape = 23, fill = "cyan") +
 
   scale_color_manual(values = c("B" = "#1f78b4", 'A'='#e31a1c', 'C'='#6a3d9a', 'D'='#33a02c', 'E'='#ff7f00'), 
                      labels = c("Wedge-tailed Shearwater\nshort trips, Heron Island",
@@ -1305,7 +1345,7 @@ p1<-ggplot() +
   labs(x='Longitude', y='Latitude')
 
 png(paste0('C:/seabirds/outputs/maps/gbr_wide/GBR_tracking.png'),
-    width = 8.3, height =11.7 , units ="in", res =300)
+    width = 8.3, height =8.3 , units ="in", res =300)
 print(p1)
 dev.off()
 
