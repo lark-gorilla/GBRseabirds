@@ -439,7 +439,10 @@ mod_pred<-stack(pred_list)
 hotspots<-raster('C:/seabirds/data/modelling/GBR_preds/hotspotsMultiCol.tif')
 # merge colz by md_spgr and rd_class for gbr-wide plots
 rad_diss<-for_rad%>%group_by(md_spgr, rd_clss)%>%summarize(geometry = st_union(geometry))
+# core areas, merged by site and raw per colony
 site_rad_cores<-st_read('C:/seabirds/data/GIS/site_radii_core_hotspots_smooth_10perc.shp')
+col_rad_cores<-st_read('C:/seabirds/data/GIS/col_radii_core_hotspots_smooth_10perc.shp')
+
 
 
 #### ~~~~ GBR plot function ~~~~ ####
@@ -1103,7 +1106,6 @@ print(brbo_auc[[1]], vp = viewport(x = 0.90, y = 0.58, width = 0.2, height = 0.8
 dev.off()
 #### ~~~~ *** ~~~~ ####
 
-
 ####~~~~ local adaptation mantel and plots function ~~~~####
 mklocada<-function(my.sp='BRBO', my.metric='AUC')
 {
@@ -1349,4 +1351,23 @@ png(paste0('C:/seabirds/outputs/maps/gbr_wide/GBR_tracking.png'),
 print(p1)
 dev.off()
 
+#### ~~~~ *** ~~~~ ####
+
+#### ~~~~ cost-confidence analyses ~~~~ ####
+
+# quick plot to see where we're at
+ggplot()+geom_sf(data=filter(for_rad, md_spgr=='BRBO' &
+                        dsgntn_n=='Raine Island, Moulter and MacLennan cays KBA' & rd_clss=='obs'),fill=NA)+
+  geom_sf(data=filter(col_rad_cores, md_spgr=='BRBO' &
+                        dsgntn_n=='Raine Island, Moulter and MacLennan cays KBA'),fill=NA)+facet_wrap(~site_nm)
+
+# subset foraging radii to select median, unless there is an observed radii
+# makes the assumption that observed radii from colony represents all colonies within site.
+# not perfect but matches predictions
+
+for_rad_sel<-filter(for_rad, rd_clss %in% c('obs', 'med'))
+for_rad_sel%>%group_by(md_spgr, site_nm)%>%summarise_all(last)
+
+# calculate area
+  
 #### ~~~~ *** ~~~~ ####
