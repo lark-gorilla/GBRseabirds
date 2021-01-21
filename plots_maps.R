@@ -443,8 +443,6 @@ rad_diss<-for_rad%>%group_by(md_spgr, rd_clss)%>%summarize(geometry = st_union(g
 site_rad_cores<-st_read('C:/seabirds/data/GIS/site_radii_core_hotspots_smooth_10perc.shp')
 col_rad_cores<-st_read('C:/seabirds/data/GIS/col_radii_core_hotspots_smooth_10perc.shp')
 
-
-
 #### ~~~~ GBR plot function ~~~~ ####
 mk_gbrplot<-function(spg='TERN_MultiCol'){
   ext<-unlist(raster::extract(subset(mod_pred, spg),
@@ -1361,13 +1359,70 @@ ggplot()+geom_sf(data=filter(for_rad, md_spgr=='BRBO' &
   geom_sf(data=filter(col_rad_cores, md_spgr=='BRBO' &
                         dsgntn_n=='Raine Island, Moulter and MacLennan cays KBA'),fill=NA)+facet_wrap(~site_nm)
 
+# calculate areas
+for_rad$area_km2<-as.numeric(st_area(for_rad)/1000000) # 
+col_rad_cores$area_km2<-as.numeric(st_area(col_rad_cores)/1000000) # 
+
 # subset foraging radii to select median, unless there is an observed radii
 # makes the assumption that observed radii from colony represents all colonies within site.
 # not perfect but matches predictions
 
 for_rad_sel<-filter(for_rad, rd_clss %in% c('obs', 'med'))
-for_rad_sel%>%group_by(md_spgr, site_nm)%>%summarise_all(last)
+for_rad_sel<-for_rad_sel%>%group_by(md_spgr, site_nm)%>%
+  summarise_all(last)%>%arrange(md_spgr, dsgntn_n)%>%ungroup()
 
-# calculate area
-  
+# attribute model AUC
+#global
+glob_auc<-data.frame(md_spgr=c('BRBO','MABO','RFBO','FRBD','TRBD','WTST','WTLG','SOTE','NODD','TERN'),
+auc=c(0.55,0.53, 0.54, 0.61, 0.56, 0.58, 0.54, 0.48, 0.40, 0.82))
+
+col_rad_cores<-left_join(col_rad_cores, glob_auc, by='md_spgr')
+# overwrite global with local where available
+
+col_rad_cores[col_rad_cores$md_spgr=='BRBO' &
+                col_rad_cores$dsgntn_n=='Raine Island, Moulter and MacLennan cays KBA',]$auc<-0.66
+col_rad_cores[col_rad_cores$md_spgr=='BRBO' &
+                col_rad_cores$dsgntn_n=='Swain Reefs KBA',]$auc<-0.65
+col_rad_cores[col_rad_cores$md_spgr=='MABO' &
+                  col_rad_cores$dsgntn_n=='Swain Reefs KBA',]$auc<-0.64
+col_rad_cores[col_rad_cores$md_spgr=='WTST' &
+                col_rad_cores$dsgntn_n=='Capricornia Cays KBA',]$auc<-0.74
+col_rad_cores[col_rad_cores$md_spgr=='WTLG' &
+                col_rad_cores$dsgntn_n=='Capricornia Cays KBA',]$auc<-0.64
+col_rad_cores[col_rad_cores$md_spgr=='NODD' &
+                col_rad_cores$dsgntn_n=='Capricornia Cays KBA',]$auc<-0.66
+
+# join rads and cores to figure auc scaling parameter
+for_rad_sel<-dplyr::rename(for_rad_sel, area_rad= area_km2)
+col_rad_cores<-dplyr::rename(col_rad_cores, area_core= area_km2)
+
+auc_scale_dat<-left_join(for_rad_sel%>%st_set_geometry(NULL), 
+                         col_rad_cores%>%select(md_spgr,site_nm, area_core, auc)%>%st_set_geometry(NULL),
+                         by=c('md_spgr', 'site_nm'))%>%as.data.frame()
+# remove tiny differences
+auc_scale_dat$area_rad<-as.integer(auc_scale_dat$area_rad)
+auc_scale_dat$area_core<-as.integer(auc_scale_dat$area_core)
+
+# adjust by land?
+ggplot(data=auc_scale_dat, aes(x=area_rad, y=area_core))+geom_point()+facet_wrap(~md_spgr, scales='free')
+
+#trial with nodd
+tempy<-auc_scale_dat[auc_scale_dat$md_spgr=='NODD',]
+ggplot(data=tempy, aes(x=auc, y=area_core))+geom_point()
+
+#confidence per unit area (km2)
+tempy$core_confkm2<-(tempy$auc*100)/tempy$area_core
+tempy$rad_confkm2<-100/tempy$area_rad
+tempy$selection<-ifelse(tempy$rad_confkm2>tempy$core_confkm2, 'radius', 'core')
+
+tempy2<-tempy%>% select(md_spgr, dsgntn_n, site_nm, core_confkm2, rad_confkm2, selection)%>%
+  gather(core_rad, confidencekm2, -md_spgr, -dsgntn_n, -site_nm, -selection)
+
+
+ggplot(data=tempy2, aes(x=core_rad, y=confidencekm2))+geom_point(shape=1)+
+  geom_line(aes(group=site_nm, colour=selection), alpha=0.5)+
+  geom_text(data=tempy2[tempy2$selection=='radius'&tempy2$core_rad=='rad_confkm2',], aes(label=site_nm), size=2, alpha=0.5)+
+  theme_bw()
+
+
 #### ~~~~ *** ~~~~ ####
