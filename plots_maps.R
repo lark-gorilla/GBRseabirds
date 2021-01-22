@@ -308,6 +308,9 @@ for(i in unique(gbr_rep$site_name))
 #### ~~~~ **** ~~~~ ####
 
 #### ~~~~ Make spgroup-colony foraging core areas ~~~~ ####
+glob_auc<-data.frame(md_spgr=c('BRBO','MABO','RFBO','FRBD','TRBD','WTST','WTLG','SOTE','NODD','TERN'),
+                     auc=c(0.55,0.53, 0.54, 0.61, 0.56, 0.58, 0.54, 0.48, 0.40, 0.82))
+
 for_rad<-read_sf('C:/seabirds/data/GIS/foraging_radii.shp')
 
 pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds/selected_preds', full.names=T)
@@ -350,7 +353,25 @@ for( i in r_sp)
     
     sr2<-sum_rad
     sr2[sr2==0]<-NA
-    q2 <- quantile(sr2, 0.9) # top 10%
+    ## either making 10% cores or AUC-informed % core ##
+    #q2 <- quantile(sr2, 0.9) # top 10%
+    # lookup auc global
+    auc_val<-glob_auc[glob_auc$md_spgr==col_sp$md_spgr,]$auc
+    
+    if(col_sp$md_spgr=='BRBO' & col_sp$dsgntn_n=='Raine Island, Moulter and MacLennan cays KBA'){
+      auc_val<-0.66}
+    if(col_sp$md_spgr=='BRBO' & col_sp$dsgntn_n=='Swain Reefs KBA'){auc_val<-0.65}
+    if(col_sp$md_spgr=='MABO' & col_sp$dsgntn_n=='Swain Reefs KBA'){auc_val<-0.64}
+    if(col_sp$md_spgr=='WTST' & col_sp$dsgntn_n=='Capricornia Cays KBA'){auc_val<-0.74}
+    if(col_sp$md_spgr=='WTLG' & col_sp$dsgntn_n=='Capricornia Cays KBA'){auc_val<-0.64}
+    if(col_sp$md_spgr=='NODD' & col_sp$dsgntn_n=='Capricornia Cays KBA'){auc_val<-0.66}
+    
+    #scale auc to quantile cutoff: 0.5=0, 1=0.9 (perfect prediction gives 10% core)
+    auc_cut<-((auc_val-0.5)/(1-0.5))*(0.9-0)+0
+    if(auc_cut<0){auc_cut=0} # catch <0.5 auc species
+    
+    q2 <- quantile(sr2, auc_cut)
+    ## ** ##
     hots<-reclassify(sum_rad, c(-Inf, q2, NA, q2, Inf, 1), right=F)
     s1<-st_as_sf(rasterToPolygons(hots, dissolve = T)) 
     names(s1)[1]<-'mod'
@@ -381,6 +402,10 @@ if(spkey=='BRBO'){out_pols<-core_pols}else{
   out_pols <- rbind(out_pols, core_pols)}
 print(i)  
 }
+#write out auc-core creations - ignore warnings from loop
+write_sf(out_pols, paste0('C:/seabirds/data/GIS/col_radii_AUC_core_smooth_10perc.shp'), delete_layer = T)
+
+
 #write all
 write_sf(out_pols, paste0('C:/seabirds/data/GIS/col_radii_core_hotspots_smooth_10perc.shp'), delete_layer = T)
 # merge col_rad_cores by md_spgr and site for gbr-wide plots
