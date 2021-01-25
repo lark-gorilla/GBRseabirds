@@ -426,6 +426,7 @@ mod_pred<-stack(pred_list)
 r_sp<-substr(pred_list[nchar(pred_list)==69], 53, 65)
 
 collect_auc_area<-NULL
+collect_polys<-NULL
 for( i in r_sp)
 {
   spkey=substr(i, 1, 4)
@@ -472,12 +473,17 @@ for( i in r_sp)
     if(col_sp$md_spgr=='WTLG' & col_sp$dsgntn_n=='Capricornia Cays KBA'){auc_val<-0.64}
     if(col_sp$md_spgr=='NODD' & col_sp$dsgntn_n=='Capricornia Cays KBA'){auc_val<-0.66}
     
-    auc_trials<-c(auc_val, 0.5, 0.6, 0.7, 0.8, 0.9, 1)
+    seq1<-seq(auc_val, 0.5+auc_val, 0.1)
+    seq1<-seq1[seq1< 1 & seq1>=0.51] 
+    seq1<-seq1[seq1!=auc_val]
+    
+    auc_trials<-c(auc_val, 0.5, seq1, 1)
     for(k in auc_trials)
     {
-      #scale auc to quantile cutoff: 0.5=0 (ie radius), 1=0.9 (perfect prediction gives 10% core)
-      auc_cut<-((k-0.5)/(1-0.5))*(0.9-0)+0
-      if(auc_cut<0){auc_cut=0} # catch <0.5 auc species
+      #scale auc to quantile cutoff: 0.5=0 (ie radius), 0.9=0.9 ('Excellent' prediction gives 10% core)
+      auc_cut<-((k-0.5)/(0.9-0.5))*(0.9-0)+0
+      if(auc_cut>0.9){auc_cut<-0.9} # anything above 0.9AUC gets 10% core also
+      if(auc_cut<0){auc_cut=0} # catch <0.5AUC species and set to radius
       
       q2 <- quantile(sr2, auc_cut)
       ## ** ##
@@ -488,19 +494,22 @@ for( i in r_sp)
       s3<-fill_holes(s2, threshold=54000000)
       s3 <- smoothr::smooth(s3, method = "ksmooth", smoothness = 4)
       s3<-drop_crumbs(s3, threshold=16000000)
+
+      # rbind sf object
+      s3$dsgntn_n<-col_sp$dsgntn_n[1]
+      s3$site_nm<-col_sp$site_nm[1]
+      s3$md_spgr<-col_sp$md_spgr[1]
+      s3$species<-col_sp$species[1]
+      s3$auc_type<-'sim'
+      if(which(k==auc_trials)==1){s3$auc_type<-'obs'}
+      s3$auc<-k
+      s3$area_km2<-as.numeric(st_area(s3)/1000000)
+      s3$mod<-NULL
+      collect_polys <- rbind(collect_polys, s3)
       
-      out1<-data.frame(dsgntn_n=col_sp$dsgntn_n[1],
-                       site_nm=col_sp$site_nm[1],
-                       md_spgr=col_sp$md_spgr[1],
-                       species=col_sp$species[1],
-                       auc_type='sim',
-                       auc=k, area_km2=as.numeric(st_area(s3)/1000000))
-      if(which(k==auc_trials)==1){out1$auc_type<-'obs'}
-      
-      collect_auc_area<-rbind(collect_auc_area, out1)
-      print(collect_auc_area)
-      }
+    }
   }
+print(i)
 }
 
 # read in auc-calced core areas
