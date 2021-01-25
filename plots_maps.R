@@ -405,7 +405,6 @@ print(i)
 #write out auc-core creations - ignore warnings from loop
 write_sf(out_pols, paste0('C:/seabirds/data/GIS/col_radii_AUC_core_smooth_10perc.shp'), delete_layer = T)
 
-
 #write all
 write_sf(out_pols, paste0('C:/seabirds/data/GIS/col_radii_core_hotspots_smooth_10perc.shp'), delete_layer = T)
 # merge col_rad_cores by md_spgr and site for gbr-wide plots
@@ -414,7 +413,109 @@ col_rad_core_diss<-out_pols%>%group_by(md_spgr, dsgntn_n)%>%
             trigger=first(trigger), conf=first(conf))
 write_sf(col_rad_core_diss, paste0('C:/seabirds/data/GIS/site_radii_core_hotspots_pixel_10perc.shp'), delete_layer = T)
 
+#### ~~~~ **** ~~~~ ####
 
+#### ~~~~ AUC-core areas parameterization ~~~~ ####
+glob_auc<-data.frame(md_spgr=c('BRBO','MABO','RFBO','FRBD','TRBD','WTST','WTLG','SOTE','NODD','TERN'),
+                     auc=c(0.55,0.53, 0.54, 0.61, 0.56, 0.58, 0.54, 0.48, 0.40, 0.82))
+
+for_rad<-read_sf('C:/seabirds/data/GIS/foraging_radii.shp')
+
+pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds/selected_preds', full.names=T)
+mod_pred<-stack(pred_list)
+r_sp<-substr(pred_list[nchar(pred_list)==69], 53, 65)
+
+collect_auc_area<-NULL
+for( i in r_sp)
+{
+  spkey=substr(i, 1, 4)
+  col<-filter(for_rad, md_spgr==spkey & rd_clss %in% c('med', 'obs'))
+  
+  for(j in unique(col$site_nm))
+  {
+    sp_ras1<-subset(mod_pred, i)
+    col_sp<-filter(col, site_nm==j)
+    
+    if('obs' %in% col_sp$rd_clss)
+    {
+      col_sp<-filter(col_sp, rd_clss=='obs')
+      if(spkey=='BRBO' & col_sp$dsgntn_n=='Raine Island, Moulter and MacLennan cays KBA'){
+        sp_ras1<-subset(mod_pred, 'BRBO_Raine')}
+      if(spkey=='BRBO' & col_sp$dsgntn_n=='Swain Reefs KBA'){
+        sp_ras1<-subset(mod_pred, 'BRBO_Swains')}
+      if(spkey=='MABO' & col_sp$dsgntn_n=='Swain Reefs KBA'){
+        sp_ras1<-subset(mod_pred, 'MABO_Swains')}
+      if(spkey=='WTST' & col_sp$dsgntn_n=='Capricornia Cays KBA'){
+        sp_ras1<-subset(mod_pred, 'WTST_Heron')}
+      if(spkey=='WTLG' & col_sp$dsgntn_n=='Capricornia Cays KBA'){
+        sp_ras1<-subset(mod_pred, 'WTLG_Heron')}
+      if(spkey=='NODD' & col_sp$dsgntn_n=='Capricornia Cays KBA'){
+        sp_ras1<-subset(mod_pred, 'NODD_Heron')}
+      # Not for WTLG Heron as good already
+    }
+    
+    sp_ras<-crop(sp_ras1, extent(col_sp)) # drop size
+    
+    sum_rad<-mask(sp_ras, as(col_sp, 'Spatial'), updatevalue=0, updateNA=T)
+    
+    sr2<-sum_rad
+    sr2[sr2==0]<-NA
+    
+    # lookup auc global
+    auc_val<-glob_auc[glob_auc$md_spgr==col_sp$md_spgr,]$auc
+    
+    if(col_sp$md_spgr=='BRBO' & col_sp$dsgntn_n=='Raine Island, Moulter and MacLennan cays KBA'){
+      auc_val<-0.66}
+    if(col_sp$md_spgr=='BRBO' & col_sp$dsgntn_n=='Swain Reefs KBA'){auc_val<-0.65}
+    if(col_sp$md_spgr=='MABO' & col_sp$dsgntn_n=='Swain Reefs KBA'){auc_val<-0.64}
+    if(col_sp$md_spgr=='WTST' & col_sp$dsgntn_n=='Capricornia Cays KBA'){auc_val<-0.74}
+    if(col_sp$md_spgr=='WTLG' & col_sp$dsgntn_n=='Capricornia Cays KBA'){auc_val<-0.64}
+    if(col_sp$md_spgr=='NODD' & col_sp$dsgntn_n=='Capricornia Cays KBA'){auc_val<-0.66}
+    
+    auc_trials<-c(auc_val, 0.5, 0.6, 0.7, 0.8, 0.9, 1)
+    for(k in auc_trials)
+    {
+      #scale auc to quantile cutoff: 0.5=0 (ie radius), 1=0.9 (perfect prediction gives 10% core)
+      auc_cut<-((k-0.5)/(1-0.5))*(0.9-0)+0
+      if(auc_cut<0){auc_cut=0} # catch <0.5 auc species
+      
+      q2 <- quantile(sr2, auc_cut)
+      ## ** ##
+      hots<-reclassify(sum_rad, c(-Inf, q2, NA, q2, Inf, 1), right=F)
+      s1<-st_as_sf(rasterToPolygons(hots, dissolve = T)) 
+      names(s1)[1]<-'mod'
+      s2<-drop_crumbs(s1, threshold=16000000)
+      s3<-fill_holes(s2, threshold=54000000)
+      s3 <- smoothr::smooth(s3, method = "ksmooth", smoothness = 4)
+      s3<-drop_crumbs(s3, threshold=16000000)
+      
+      out1<-data.frame(dsgntn_n=col_sp$dsgntn_n[1],
+                       site_nm=col_sp$site_nm[1],
+                       md_spgr=col_sp$md_spgr[1],
+                       species=col_sp$species[1],
+                       auc_type='sim',
+                       auc=k, area_km2=as.numeric(st_area(s3)/1000000))
+      if(which(k==auc_trials)==1){out1$auc_type<-'obs'}
+      
+      collect_auc_area<-rbind(collect_auc_area, out1)
+      print(collect_auc_area)
+      }
+  }
+}
+
+# read in auc-calced core areas
+
+ggplot(data=collect_auc_area, aes(x=auc, y=area_km2, colour=md_spgr))+geom_point()+
+  geom_line(aes(group=interaction(md_spgr, site_nm)))
+
+ex1<-expand.grid(rad=seq(100000, 1000000, 100000), perc=1-((c(0.5, 0.6, 0.7, 0.8, 0.9, 1)-0.5)/(1-0.5))*(0.9-0)+0)
+#ex1$auc<-dplyr::recode(ex1$perc, '1.00'=0.5, '0.82'=0.6, '0.64'=0.7, '0.46'=0.8, '0.28'=0.9, '0.10'=1)
+ex1$auc<-sort(rep(c(0.5, 0.6, 0.7, 0.8, 0.9, 1), 10))
+ex1$auc_core<-ex1$rad*ex1$perc
+ggplot(data=ex1, aes(x=auc, y=auc_core))+geom_point()
+ex2<-data.frame(rad=ex1[1:10,]$rad, auc1_core=ex1[ex1$auc==1,]$auc_core, auc0.5_core=ex1[ex1$auc==0.5,]$auc_core)
+ex2$diffauc<-ex2$auc0.5_core-ex2$auc1_core
+ggplot(data=ex2, aes(x=rad, y=diffauc))+geom_point()
 #### ~~~~ **** ~~~~ ####
 
 
