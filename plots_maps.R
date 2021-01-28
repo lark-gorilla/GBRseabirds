@@ -317,7 +317,6 @@ pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds/selected_preds', ful
 mod_pred<-stack(pred_list)
 r_sp<-substr(pred_list[nchar(pred_list)==69], 53, 65)
 
-collect_auc_area<-NULL
 collect_polys<-NULL
 for( i in r_sp)
 {
@@ -349,10 +348,10 @@ for( i in r_sp)
     
     sp_ras<-crop(sp_ras1, extent(col_sp)) # drop size
     
-    sum_rad<-mask(sp_ras, as(col_sp, 'Spatial'), updatevalue=0, updateNA=T)
+    sum_rad<-mask(sp_ras, as(col_sp, 'Spatial'), updatevalue=999, updateNA=T)
     
     sr2<-sum_rad
-    sr2[sr2==0]<-NA
+    sr2[sr2==999]<-NA
     
     # lookup auc global
     auc_val<-glob_auc[glob_auc$md_spgr==col_sp$md_spgr,]$auc
@@ -404,21 +403,9 @@ for( i in r_sp)
 print(i)
 }
 
-# read in auc-calced core areas
-
-ggplot(data=collect_auc_area, aes(x=auc, y=area_km2, colour=md_spgr))+geom_point()+
-  geom_line(aes(group=interaction(md_spgr, site_nm)))
-
-ex1<-expand.grid(rad=seq(100000, 1000000, 100000), perc=1-((c(0.5, 0.6, 0.7, 0.8, 0.9, 1)-0.5)/(1-0.5))*(0.9-0)+0)
-#ex1$auc<-dplyr::recode(ex1$perc, '1.00'=0.5, '0.82'=0.6, '0.64'=0.7, '0.46'=0.8, '0.28'=0.9, '0.10'=1)
-ex1$auc<-sort(rep(c(0.5, 0.6, 0.7, 0.8, 0.9, 1), 10))
-ex1$auc_core<-ex1$rad*ex1$perc
-ggplot(data=ex1, aes(x=auc, y=auc_core))+geom_point()
-ex2<-data.frame(rad=ex1[1:10,]$rad, auc1_core=ex1[ex1$auc==1,]$auc_core, auc0.5_core=ex1[ex1$auc==0.5,]$auc_core)
-ex2$diffauc<-ex2$auc0.5_core-ex2$auc1_core
-ggplot(data=ex2, aes(x=rad, y=diffauc))+geom_point()
+# write polys
+#st_write(collect_polys, 'C:/seabirds/data/GIS/col_radii_auc_core_smooth.shp', delete_dsn=T)
 #### ~~~~ **** ~~~~ ####
-
 
 #### ~~~~ Make foraging hotspot layer ~~~~ ####
 pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds/selected_preds', full.names=T)
@@ -551,6 +538,172 @@ p_nodd+ggtitle('I) Noddies')+p_tern+ggtitle('J) Terns')+
     plot_layout(ncol=2, guides = 'collect')&theme(legend.position = 'bottom')
 dev.off()
 #### ~~~~ **** ~~~~ #####
+
+#### ~~~~ AUC-core areas plot (paper fig) ~~~~ ####
+
+# read in auc-calced core areas
+corez<-st_read('C:/seabirds/data/GIS/col_radii_auc_core_smooth.shp')
+
+ggplot(data=corez, aes(x=auc, y=area_km2, colour=md_spgr))+geom_point()+
+  geom_line(aes(group=interaction(md_spgr, site_nm)))
+
+ggplot(data=corez, aes(x=auc, y=area_km2))+geom_line(aes(group=site_nm), alpha=0.5)+
+  geom_point(aes(colour=auc_type))+facet_wrap(~md_spgr, scales='free')+
+  geom_hline(yintercept = 100000)+
+  theme(legend.position = "none") 
+
+ggplot(data=corez, aes(x=auc, y=log(area_km2), colour=md_spgr))+geom_point()+
+  geom_line(aes(group=interaction(md_spgr, site_nm)))
+
+# summarise cores
+corez_nosf<-corez%>%as.data.frame()
+corez_nosf$geometry<-NULL
+
+# add mod type
+corez_nosf$mod<-'global'
+corez_nosf[corez_nosf$md_spgr=='BRBO' & corez_nosf$dsgntn_n=='Raine Island, Moulter and MacLennan cays KBA',]$mod<-'local'
+corez_nosf[corez_nosf$md_spgr=='BRBO' & corez_nosf$dsgntn_n=='Swain Reefs KBA',]$mod<-'local2'
+corez_nosf[corez_nosf$md_spgr=='MABO' & corez_nosf$dsgntn_n=='Swain Reefs KBA',]$mod<-'local'
+corez_nosf[corez_nosf$md_spgr=='WTST' & corez_nosf$dsgntn_n=='Capricornia Cays KBA',]$mod<-'local'
+corez_nosf[corez_nosf$md_spgr=='NODD' & corez_nosf$dsgntn_n=='Capricornia Cays KBA',]$mod<-'local'
+corez_nosf[corez_nosf$md_spgr=='WTLG' & corez_nosf$dsgntn_n=='Capricornia Cays KBA',]$mod<-'local'
+
+# add site-level point colours
+corez_nosf$site_auc_type<-as.character(corez_nosf$auc_type)
+# first auc val below 100000 for some sp
+lookup1<-corez_nosf%>%filter(md_spgr%in%unique(corez[corez$area_km2>100000,]$md_spgr))%>%
+  filter(area_km2<100000)%>%group_by(md_spgr, site_nm)%>%summarise_all(first)
+# manually add wtlg cap cays that are above 100k km2 eve at 10% core
+lookup1<-bind_rows(lookup1, filter(corez_nosf, md_spgr=='WTLG' & dsgntn_n=='Capricornia Cays KBA' & auc==0.94))
+
+corez_nosf[paste(corez_nosf$md_spgr, corez_nosf$site_nm, corez_nosf$auc) %in%
+             paste(lookup1$md_spgr, lookup1$site_nm, lookup1$auc),]$site_auc_type<-'first'
+corez_nosf$site_auc_type<-ifelse(corez_nosf$auc_type=='obs', 'obs', corez_nosf$site_auc_type)
+
+# make site level plot for supplement
+
+p1<-ggplot(data=corez_nosf, aes(x=auc, y=area_km2))+geom_line(aes(colour=substr(mod, 1, 3),group=site_nm), alpha=0.5)+
+  geom_point(aes(colour=site_auc_type))+facet_wrap(~md_spgr, scales='free_y')+
+  geom_hline(yintercept = 100000, linetype='dotted', colour='#1b85b8')+
+  scale_colour_manual(values = c('glo'='#5a5255','loc'='#ae5a41','obs'='#00b159', 'first'='#d11141', 'sim'='black' ))+
+  theme_bw()+theme(legend.position = "none")
+
+#ggsave(p1,  width =8 , height =8, units='in',
+#       filename='C:/seabirds/data/modelling/plots/core_cost_confidence_site.png')
+
+# make species level plots for main fig
+
+corez_sum<-corez_nosf%>%group_by(md_spgr, auc, auc_type, mod)%>%
+  summarise(mn_area=mean(area_km2), sd_area=sd(area_km2))
+
+corez_sum$point_col<-'sim'
+corez_sum[corez_sum$auc_type=='obs' & corez_sum$mod=='global',]$point_col<-'global'
+corez_sum[corez_sum$auc_type=='obs' & corez_sum$mod!='global',]$point_col<-'local'
+
+corez_sum$conf_pts<-'N'
+corez_sum[corez_sum$md_spgr=='TRBD'&corez_sum$auc==0.86,]$conf_pts<-'Y'
+corez_sum[corez_sum$md_spgr=='FRBD'&corez_sum$auc==0.91,]$conf_pts<-'Y'
+corez_sum[corez_sum$md_spgr=='WTST'&corez_sum$auc==0.68,]$conf_pts<-'Y'
+corez_sum[corez_sum$md_spgr=='SOTE'&corez_sum$auc==0.88,]$conf_pts<-'Y'
+corez_sum[corez_sum$md_spgr=='WTLG'&corez_sum$auc==0.94,]$conf_pts<-'Y'
+
+ggplot(data=corez_sum, aes(x=auc, y=log(mn_area)))+
+  geom_line(aes(colour=md_spgr, group=interaction(md_spgr,mod)))+
+  geom_pointrange(data=filter(corez_sum, auc_type=='obs'), aes(colour=point_col, ymin=log(mn_area-sd_area), ymax=log(mn_area+sd_area)))+
+  geom_hline(yintercept = log(100000))+
+  theme(legend.position = "none")+theme_bw() 
+
+p1<-ggplot(data=corez_sum, aes(x=auc, y=mn_area/1000))+geom_line(aes(colour=substr(mod, 1, 3), group=mod))+
+  
+  geom_rect(data=corez_sum%>%filter(auc==0.5), aes(xmin=0.4, xmax=0.5, ymin=0, ymax=mn_area/1000), fill='gray80')+
+  geom_segment(data=corez_sum%>%filter(conf_pts=='Y'), aes(x=0.4, xend=1, y=100, yend=100), colour='#1b85b8')+
+  geom_segment(data=corez_sum%>%filter(auc==0.5), aes(x=0.4, xend=0.5, y=mn_area/1000, yend=mn_area/1000), colour='gray90')+
+  
+  geom_segment(data=corez_sum%>%filter(auc_type=='obs'), aes(x=auc, xend=auc, y=0, yend=mn_area/1000, group=mod), linetype='dotted', colour='#00b159')+
+  geom_segment(data=corez_sum%>%filter(auc_type=='obs'), aes(x=0.4, xend=auc, y=mn_area/1000, yend=mn_area/1000,group=mod), linetype='dotted',colour='#00b159')+
+  
+  geom_segment(data=corez_sum%>%filter(conf_pts=='Y'), aes(x=auc, xend=auc, y=0, yend=mn_area/1000, group=mod), linetype='dotted', colour='#d11141')+
+  geom_segment(data=corez_sum%>%filter(conf_pts=='Y'), aes(x=0.4, xend=auc, y=mn_area/1000, yend=mn_area/1000,group=mod), linetype='dotted',colour='#d11141')+
+  
+  
+  geom_pointrange(data=corez_sum%>%filter(point_col=='sim'), 
+                  aes(colour=point_col, ymin=mn_area/1000-sd_area/1000, ymax=mn_area/1000+sd_area/1000), size=0.1, colour='black')+
+  geom_pointrange(data=corez_sum%>%filter(point_col!='sim'), 
+                  aes(colour=point_col, ymin=mn_area/1000-sd_area/1000, ymax=mn_area/1000+sd_area/1000), size=0.3, colour='#00b159')+
+  geom_pointrange(data=corez_sum%>%filter(conf_pts=='Y'), 
+                  aes(colour=point_col, ymin=mn_area/1000-sd_area/1000, ymax=mn_area/1000+sd_area/1000), size=0.3, colour='#d11141')+
+  scale_colour_manual(values = c('#5a5255','#ae5a41'))+
+  facet_wrap(~md_spgr, scales='free_y', nrow=2)+scale_x_continuous(limits=c(0.4, 1), breaks=seq(0.4,1, 0.1))+
+  theme_bw()+theme(legend.position = "none", panel.grid.minor = element_blank())
+
+#ggsave(p1,  width =8 , height =4, units='in',
+#       filename='C:/seabirds/data/modelling/plots/core_cost_confidence.eps')
+
+# summary table and spatial plots to go in main fig
+
+#colour species
+corez$md_spgr<-factor(corez$md_spgr, levels=c("BRBO", 'MABO', 'RFBO', 'FRBD', 'TRBD', 'WTST', "WTLG", "SOTE" , 'NODD', 'TERN'))
+corez$spcol<-recode(corez$md_spgr, "BRBO"='#b15928','MABO'='#1f78b4','RFBO'='#fb9a99','FRBD'='#fdbf6f', 'TRBD'='#b2df8a',
+                    'WTST'='#6a3d9a','WTLG'='#cab2d6',"SOTE"='#e31a1c','NODD'='#ff7f00','TERN'='#33a02c')
+
+#use lookup to identify confidence-adj cores
+corez$site_auc_type<-as.character(corez$auc_type)
+corez[paste(corez$md_spgr, corez$site_nm, corez$auc) %in%
+        paste(lookup1$md_spgr, lookup1$site_nm, lookup1$auc),]$site_auc_type<-'first'
+corez$site_auc_type<-ifelse(corez$auc_type=='obs', 'obs', corez$site_auc_type)
+
+radz<-filter(corez, auc==0.5 )
+obz<-filter(corez, site_auc_type=='obs' )
+confz<-corez%>%group_by(md_spgr, site_nm)%>%filter(site_auc_type!='sim')%>%
+  filter(row_number()==n())%>%ungroup()
+
+# make table
+radz%>%group_by(md_spgr)%>%summarize(area=sum(area_km2))
+
+# plots
+p_base<-ggplot() +
+  geom_sf(data=land, col='black', fill='grey') +
+  #geom_sf(data=filter(gbr_reef, FEAT_NAME=='Reef'), fill='NA', colour=alpha('black',0.5))+
+  geom_sf(data=gbrmp, col='black', fill='NA', linetype='dashed') +
+  geom_sf(data=colz%>%group_by(site_nm)%>%filter(species==first(species)), shape = 23, fill = "yellow")+
+  theme_bw()+
+  annotation_scale(location = "bl")+  
+  annotation_north_arrow(location = "tr", which_north = "true")+
+  labs(x='Longitude', y='Latitude')
+
+# merge layers for better vis
+# merge colz by md_spgr and rd_class for gbr-wide plots
+rad_diss<-radz%>%group_by(md_spgr)%>%summarize(geometry = st_union(geometry))
+# and dsgntn_n? maybe not
+# use test1<-st_simplify(test1, dTolerance=0.01)
+obs_diss<-obz%>%group_by(md_spgr)%>%summarize(geometry = st_union(geometry))
+
+conf_diss<-confz%>%filter(site_auc_type!='sim')%>%
+  filter(row_number()==n())%>%ungroup()%>%group_by(md_spgr)%>%summarize(geometry = st_union(geometry))
+
+p_rad<-p_base+
+  geom_sf(data=filter(corez, auc==0.5 ), aes(colour=spcol), fill=NA)+
+  scale_colour_identity('Species',labels = unique(corez$md_spgr),
+                        breaks = unique(corez$spcol), guide = "legend")+
+  coord_sf(xlim = c(142, 160), ylim = c(-27, -10), expand = FALSE)
+
+p_base+
+  geom_sf(data=filter(corez, site_auc_type=='obs' ), aes(colour=spcol), fill=NA)+
+  scale_colour_identity('Species',labels = unique(corez$md_spgr),
+                        breaks = unique(corez$spcol), guide = "legend")+
+  coord_sf(xlim = c(142, 160), ylim = c(-27, -10), expand = FALSE)
+
+p_base+
+  geom_sf(data=corez%>%group_by(md_spgr, site_nm)%>%filter(site_auc_type!='sim')%>%
+            filter(row_number()==n()), aes(colour=spcol), fill=NA)+
+  scale_colour_identity('Species',labels = unique(corez$md_spgr),
+                        breaks = unique(corez$spcol), guide = "legend")+
+  coord_sf(xlim = c(142, 160), ylim = c(-27, -10), expand = FALSE)
+
+  
+
+  
+#### ~~~~ **** ~~~~ ####
 
 #### ~~~~ Make GBR-wide hotspot plot ~~~~ ####
 mn<-min(values(hotspots), na.rm=T)
