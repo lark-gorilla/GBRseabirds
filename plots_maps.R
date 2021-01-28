@@ -378,7 +378,7 @@ for( i in r_sp)
       
       q2 <- quantile(sr2, auc_cut)
       ## ** ##
-      hots<-reclassify(sum_rad, c(-Inf, q2, NA, q2, Inf, 1), right=F)
+      hots<-reclassify(sr2, c(-Inf, q2, NA, q2, Inf, 1), right=F)
       s1<-st_as_sf(rasterToPolygons(hots, dissolve = T)) 
       names(s1)[1]<-'mod'
       s2<-drop_crumbs(s1, threshold=16000000)
