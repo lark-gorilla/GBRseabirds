@@ -352,6 +352,7 @@ for( i in r_sp)
     
     sr2<-sum_rad
     sr2[sr2==999]<-NA
+    rm(sum_rad)
     
     # lookup auc global
     auc_val<-glob_auc[glob_auc$md_spgr==col_sp$md_spgr,]$auc
@@ -380,9 +381,12 @@ for( i in r_sp)
       ## ** ##
       hots<-reclassify(sr2, c(-Inf, q2, NA, q2, Inf, 1), right=F)
       s1<-st_as_sf(rasterToPolygons(hots, dissolve = T)) 
+      rm(hots)
       names(s1)[1]<-'mod'
       s2<-drop_crumbs(s1, threshold=16000000)
+      rm(s1)
       s3<-fill_holes(s2, threshold=54000000)
+      rm(s2)
       s3 <- smoothr::smooth(s3, method = "ksmooth", smoothness = 4)
       s3<-drop_crumbs(s3, threshold=16000000)
 
@@ -396,7 +400,12 @@ for( i in r_sp)
       s3$auc<-k
       s3$area_km2<-as.numeric(st_area(s3)/1000000)
       s3$mod<-NULL
+      #cp2<-st_read('C:/seabirds/temp/auc_cores_temp.shp')
+      #cp2<-rbind(cp2, s3)
+      #st_write(cp2, 'C:/seabirds/temp/auc_cores_temp.shp', delete_dsn = T)
+      #rm(cp2)
       collect_polys <- rbind(collect_polys, s3)
+      rm(s3)
       
     }
   }
@@ -404,7 +413,7 @@ print(i)
 }
 
 # write polys
-#st_write(collect_polys, 'C:/seabirds/data/GIS/col_radii_auc_core_smooth.shp', delete_dsn=T)
+#st_write(collect_polys, 'C:/seabirds/data/GIS/col_radii_auc_core_smooth3.shp', delete_dsn=T)
 #### ~~~~ **** ~~~~ ####
 
 #### ~~~~ Make foraging hotspot layer ~~~~ ####
