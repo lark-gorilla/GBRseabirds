@@ -124,7 +124,8 @@ t_tripmetric<-t_qual_ret_day%>%group_by(sp_group, sp, coly, breedstage, day)%>%
 spcol_tab<-read.csv('C:/seabirds/data/sp_col_summary.csv')
 
 for_rang<-spcol_tab%>%group_by(sp_group)%>%summarise(min.for=min(max_for_allret),
-                                                med.for=median(max_for_allret),
+                                                mean.for=mean(max_for_allret),
+                                                sd.for=sd(max_for_allret),
                                                 max.for=max(max_for_allret))
 
 sp_col_summr<-aucz_out%>%filter(as.character(spcol)!=as.character(Resample) & spcol!='MEAN')%>%
@@ -157,7 +158,7 @@ bind_out$mn_sumr_ts<-paste0(round(bind_out$mn_tss, 2),'±', round(bind_out$sd_ts
 bind_out$mx_sumr_ts<-paste0(round(bind_out$mn_max_tss, 2),'±', round(bind_out$sd_max_tss, 2))
 
 
-bind_out2<-bind_out%>%select(sp, mn_sumr, mx_sumr, mn_sumr_ts, mx_sumr_ts, auc_rank, tss_rank, auc_rank1, tss_rank1, min.for, med.for, max.for)
+bind_out2<-bind_out%>%select(sp, mn_sumr, mx_sumr, mn_sumr_ts, mx_sumr_ts, auc_rank, tss_rank, auc_rank1, tss_rank1, min.for, mean.for, max.for)
 #write.csv(bind_out2, 'C:/seabirds/data/sp_main_summary.csv', quote=F, row.names=F)
 
 # extra multicol vs local model summary
@@ -204,7 +205,7 @@ gbr_short$mod_spgroup<-recode(gbr_short$species, brown_booby='BRBO',
 
 # replicate data *3 for min, med and max buffers
 gbr_rep<-bind_rows(gbr_short%>%mutate(rad_class='min'), 
-                   gbr_short%>%mutate(rad_class='med'),
+                   gbr_short%>%mutate(rad_class='mea'),
                    gbr_short%>%mutate(rad_class='max'))
 
 #replicate wtsh long trips and bind back in
@@ -213,10 +214,10 @@ wtlong$mod_spgroup<-'WTLG'
 gbr_rep<-bind_rows(gbr_rep, wtlong)%>%arrange(designation_name, site_name, mod_spgroup, species)
 
 #do dist lookup
-spgroup_dists<-spgroup_summ%>%select(sp, min.for, med.for, max.for)%>%
+spgroup_dists<-spgroup_summ%>%select(sp, min.for, mean.for, max.for)%>%
   gather(rad_class, dist, -sp)
 spgroup_dists$rad_class<-recode(spgroup_dists$rad_class,  min.for='min',
-                                med.for ='med',  max.for='max')
+                                mean.for ='mea',  max.for='max')
 gbr_rep<-left_join(gbr_rep, spgroup_dists, by=c('mod_spgroup'='sp', 'rad_class'))
 
 # add in actual values for GBR tracking datasets
