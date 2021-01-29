@@ -322,7 +322,7 @@ collect_polys<-NULL
 for( i in r_sp)
 {
   spkey=substr(i, 1, 4)
-  col<-filter(for_rad, md_spgr==spkey & rd_clss %in% c('med', 'obs'))
+  col<-filter(for_rad, md_spgr==spkey & rd_clss %in% c('mea', 'obs'))
   
   for(j in unique(col$site_nm))
   {
@@ -483,7 +483,7 @@ mk_gbrplot<-function(spg='TERN_MultiCol'){
   if(col_sp=='WTLG'){col_sp<-'WTST'} 
   
   sp.rad<-filter(rad_diss, md_spgr==substr(spg, 1, 4) &
-                   rd_clss %in% c('max', 'med', 'min'))
+                   rd_clss %in% c('max', 'mea', 'min'))
   #beeb<-st_bbox(sp.rad)
   
   xl<-c(142, 156)
@@ -504,7 +504,7 @@ mk_gbrplot<-function(spg='TERN_MultiCol'){
   labs(x='Longitude', y='Latitude')+
   coord_sf(xlim = xl, ylim =yl, expand = FALSE)+
   scale_colour_manual('Forgaing radii', values=c('#00FFFF','#66FFCC', '#00FF66' ), labels=c(
-    'Maximum', 'Median', 'Minimum'))+
+    'Maximum', 'Mean', 'Minimum'))+
     scale_fill_viridis_b('Likely\nseabird\nforaging\nhabitat', option='magma',
                          breaks=c(seq(0.1, 0.9, 0.1)),labels=c('low', rep('', 7), 'high'), na.value = NA)
   #scale_fill_viridis('Likely\nforaging\nhabitat', limits=c(mn, mx), breaks=c(mn, mx), labels=c('low', 'high'),
@@ -742,7 +742,7 @@ dev.off()
 #### ~~~~ kba/site local plot function ~~~~ ####
 mk_kbaplot<-function(site="Capricornia Cays KBA"){
 
-  rad_diss_site<-filter(for_rad, dsgntn_n==site & rd_clss %in% c('med', 'obs'))%>%group_by(md_spgr, rd_clss)%>%
+  rad_diss_site<-filter(for_rad, dsgntn_n==site & rd_clss %in% c('mea', 'obs'))%>%group_by(md_spgr, rd_clss)%>%
     summarize(spcol=first(spcol), species=first(species), dist=first(dist),
               dsgntn_n=first(dsgntn_n), geometry = st_union(geometry))
   
@@ -851,7 +851,7 @@ mk_kbaplot<-function(site="Capricornia Cays KBA"){
       geom_sf(data=filter(colz, dsgntn_n==site& md_spgr==icol), shape = 23, fill = "yellow")+
       geom_sf(data=sel_rad,aes(color="B"), show.legend = "polygon", fill='NA')+
       scale_color_manual(values = c("A" = "green", "B" = "#66FFCC"), 
-                         labels = c("Top 10%\npredicted\nhabitat", "All colony\nmedian\nforaging\nradius"), name=NULL)}
+                         labels = c("Top 10%\npredicted\nhabitat", "All colony\nmean\nforaging\nradius"), name=NULL)}
     p2<-p2.1+geom_sf(data=gbrmp, col='white', fill='NA') +
     geom_sf(data=land, col='black', fill='grey') +
     theme_bw()+
@@ -1538,77 +1538,5 @@ png(paste0('C:/seabirds/outputs/maps/gbr_wide/GBR_tracking.png'),
     width = 8.3, height =8.3 , units ="in", res =300)
 print(p1)
 dev.off()
-
-#### ~~~~ *** ~~~~ ####
-
-#### ~~~~ cost-confidence analyses ~~~~ ####
-
-# clip out land from radii
-for_rad_clip<-st_difference(for_rad, st_union(land%>%filter(ISO3%in%c('AUS', 'IDN', 'NCL', 'PNG'))))
-
-# calculate areas
-for_rad_clip$area_km2<-as.numeric(st_area(for_rad_clip)/1000000) # 
-col_rad_cores$area_km2<-as.numeric(st_area(col_rad_cores)/1000000) # 
-
-#drop geometries (make non sf)
-for_rad_clip<-for_rad_clip%>%st_set_geometry(NULL)
-col_rad_cores<-col_rad_cores%>%st_set_geometry(NULL)
-
-# subset foraging radii to select median, unless there is an observed radii
-# makes the assumption that observed radii from colony represents all colonies within site.
-# not perfect but matches predictions
-
-for_rad_sel<-filter(for_rad_clip, rd_clss %in% c('obs', 'med'))
-for_rad_sel<-for_rad_sel%>%group_by(md_spgr, site_nm)%>%
-  summarise_all(last)%>%arrange(md_spgr, dsgntn_n)%>%ungroup()
-
-# attribute model AUC
-#global
-glob_auc<-data.frame(md_spgr=c('BRBO','MABO','RFBO','FRBD','TRBD','WTST','WTLG','SOTE','NODD','TERN'),
-auc=c(0.55,0.53, 0.54, 0.61, 0.56, 0.58, 0.54, 0.48, 0.40, 0.82))
-
-col_rad_cores<-left_join(col_rad_cores, glob_auc, by='md_spgr')
-# overwrite global with local where available
-
-col_rad_cores[col_rad_cores$md_spgr=='BRBO' &
-                col_rad_cores$dsgntn_n=='Raine Island, Moulter and MacLennan cays KBA',]$auc<-0.66
-col_rad_cores[col_rad_cores$md_spgr=='BRBO' &
-                col_rad_cores$dsgntn_n=='Swain Reefs KBA',]$auc<-0.65
-col_rad_cores[col_rad_cores$md_spgr=='MABO' &
-                  col_rad_cores$dsgntn_n=='Swain Reefs KBA',]$auc<-0.64
-col_rad_cores[col_rad_cores$md_spgr=='WTST' &
-                col_rad_cores$dsgntn_n=='Capricornia Cays KBA',]$auc<-0.74
-col_rad_cores[col_rad_cores$md_spgr=='WTLG' &
-                col_rad_cores$dsgntn_n=='Capricornia Cays KBA',]$auc<-0.64
-col_rad_cores[col_rad_cores$md_spgr=='NODD' &
-                col_rad_cores$dsgntn_n=='Capricornia Cays KBA',]$auc<-0.66
-
-# join rads and cores to figure auc scaling parameter
-for_rad_sel<-dplyr::rename(for_rad_sel, area_rad= area_km2)
-col_rad_cores<-dplyr::rename(col_rad_cores, area_core= area_km2)
-
-auc_scale_dat<-left_join(for_rad_sel, 
-                         col_rad_cores%>%select(md_spgr,site_nm, area_core, auc),
-                         by=c('md_spgr', 'site_nm'))%>%as.data.frame()
-# remove tiny differences
-auc_scale_dat$area_rad<-as.integer(auc_scale_dat$area_rad)
-auc_scale_dat$area_core<-as.integer(auc_scale_dat$area_core)
-
-ggplot(data=auc_scale_dat, aes(x=area_rad, y=area_core))+geom_point()+facet_wrap(~md_spgr, scales='free')
-
-#confidence per unit area (km2)
-auc_scale_dat$core_confkm2<-normalized_auc(auc_scale_dat$auc)/auc_scale_dat$area_core
-auc_scale_dat$rad_confkm2<-1/auc_scale_dat$area_rad
-auc_scale_dat$selection<-ifelse(auc_scale_dat$rad_confkm2>auc_scale_dat$core_confkm2, 'radius', 'core')
-
-auc_scale_plot<-auc_scale_dat%>% select(md_spgr, dsgntn_n, site_nm, core_confkm2, rad_confkm2, selection)%>%
-  gather(core_rad, confidencekm2, -md_spgr, -dsgntn_n, -site_nm, -selection)
-
-ggplot(data=auc_scale_plot, aes(x=core_rad, y=confidencekm2))+geom_point(shape=1)+
-  geom_line(aes(group=site_nm, colour=selection), alpha=0.5)+
-  geom_text(data=auc_scale_plot[auc_scale_plot$selection=='radius'&auc_scale_plot$core_rad=='rad_confkm2',],
-            aes(label=site_nm), size=2, alpha=0.5)+facet_wrap(~md_spgr, scales='free')+
-  theme_bw()
-
 
 #### ~~~~ *** ~~~~ ####
