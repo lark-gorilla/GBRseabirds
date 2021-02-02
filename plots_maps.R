@@ -317,6 +317,7 @@ for_rad<-read_sf('C:/seabirds/data/GIS/foraging_radii.shp')
 pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds/selected_preds', full.names=T)
 mod_pred<-stack(pred_list)
 r_sp<-substr(pred_list[nchar(pred_list)==69], 53, 65)
+r_sp<-r_sp[c(9,2,8,6,5,10,3,4,1,7)] # order by range for memory troubleshooting run
 
 collect_polys<-NULL
 for( i in r_sp)
@@ -354,6 +355,8 @@ for( i in r_sp)
     sr2<-sum_rad
     sr2[sr2==999]<-NA
     rm(sum_rad)
+    rm(sp_ras)
+    rm(sp_ras1)
     
     # lookup auc global
     auc_val<-glob_auc[glob_auc$md_spgr==col_sp$md_spgr,]$auc
@@ -388,7 +391,7 @@ for( i in r_sp)
       rm(s1)
       s3<-fill_holes(s2, threshold=54000000)
       rm(s2)
-      s3 <- smoothr::smooth(s3, method = "ksmooth", smoothness = 4)
+      s3 <- smoothr::smooth(s3, method = "ksmooth", smoothness = 4, n=1) # n=1 stops over-densifying
       s3<-drop_crumbs(s3, threshold=16000000)
 
       # rbind sf object
@@ -404,7 +407,7 @@ for( i in r_sp)
       #cp2<-st_read('C:/seabirds/temp/auc_cores_temp.shp')
       #cp2<-rbind(cp2, s3)
       #st_write(cp2, 'C:/seabirds/temp/auc_cores_temp.shp', delete_dsn = T)
-      #rm(cp2)
+      rm(cp2)
       collect_polys <- rbind(collect_polys, s3)
       rm(s3)
       
@@ -414,7 +417,7 @@ print(i)
 }
 
 # write polys
-#st_write(collect_polys, 'C:/seabirds/data/GIS/col_radii_auc_core_smooth3.shp', delete_dsn=T)
+#st_write(collect_polys, 'C:/seabirds/data/GIS/col_radii_auc_core_smooth.shp', delete_dsn=T)
 #### ~~~~ **** ~~~~ ####
 
 #### ~~~~ Make foraging hotspot layer ~~~~ ####
@@ -590,6 +593,32 @@ corez_nosf[paste(corez_nosf$md_spgr, corez_nosf$site_nm, corez_nosf$auc) %in%
              paste(lookup1$md_spgr, lookup1$site_nm, lookup1$auc),]$site_auc_type<-'first'
 corez_nosf$site_auc_type<-ifelse(corez_nosf$auc_type=='obs', 'obs', corez_nosf$site_auc_type)
 
+#! make main text summary table !#
+
+tab1<-data.frame(filter(corez_nosf, auc==0.5 )%>%group_by(md_spgr)%>%
+  summarise(n_site=length(unique(dsgntn_n)), n_col= length(unique(site_nm)), area_sum=sum(area_km2)/1000), 
+ filter(corez_nosf, site_auc_type=='obs'  )%>%group_by(md_spgr)%>%
+    summarise(obs_sum=sum(area_km2)/1000)%>%select(obs_sum),
+  corez_nosf%>%group_by(md_spgr, site_nm)%>%filter(site_auc_type!='sim')%>%
+    filter(row_number()==n())%>%ungroup()%>%group_by(md_spgr)%>%
+    summarise(conf_sum=sum(area_km2)/1000)%>%select(conf_sum))
+
+# n auc jumps 
+auc_jump<-corez_nosf%>%group_by(md_spgr, site_nm)%>%arrange(md_spgr, site_nm, auc)%>%
+  summarize(pos_first=if('first'%in%site_auc_type){which(site_auc_type=='first')}else{0},
+            pos_obs=which(site_auc_type=='obs'))%>%ungroup()
+
+auc_jump$jumps<-auc_jump$pos_first-auc_jump$pos_obs
+auc_jump$jumps<-ifelse(auc_jump$jumps<0, NA, auc_jump$jumps)
+
+jump_sum<-auc_jump%>%group_by(md_spgr)%>%summarise(n_coljumps=length(which(!is.na(jumps))),
+                                         n_jumps=sum(jumps, na.rm=T),
+                                         mean_jumps=mean(jumps, na.rm=T),
+                                         med_jumps=median(jumps, na.rm=T))
+
+#write out
+# write.csv(data.frame(tab1, jump_sum), 'C:/seabirds/data/conf_area_table.csv', quote=F, row.names=F)
+
 # make site level plot for supplement
 
 p1<-ggplot(data=corez_nosf, aes(x=auc, y=area_km2))+geom_line(aes(colour=substr(mod, 1, 3),group=site_nm), alpha=0.5)+
@@ -610,18 +639,22 @@ corez_sum$point_col<-'sim'
 corez_sum[corez_sum$auc_type=='obs' & corez_sum$mod=='global',]$point_col<-'global'
 corez_sum[corez_sum$auc_type=='obs' & corez_sum$mod!='global',]$point_col<-'local'
 
+# manual selection of 'first' conf points
 corez_sum$conf_pts<-'N'
 corez_sum[corez_sum$md_spgr=='TRBD'&corez_sum$auc==0.86,]$conf_pts<-'Y'
 corez_sum[corez_sum$md_spgr=='FRBD'&corez_sum$auc==0.91,]$conf_pts<-'Y'
 corez_sum[corez_sum$md_spgr=='WTST'&corez_sum$auc==0.68,]$conf_pts<-'Y'
 corez_sum[corez_sum$md_spgr=='SOTE'&corez_sum$auc==0.88,]$conf_pts<-'Y'
 corez_sum[corez_sum$md_spgr=='WTLG'&corez_sum$auc==0.94,]$conf_pts<-'Y'
+corez_sum[corez_sum$md_spgr=='RFBO'&corez_sum$auc==0.74,]$conf_pts<-'Y'
 
 ggplot(data=corez_sum, aes(x=auc, y=log(mn_area)))+
   geom_line(aes(colour=md_spgr, group=interaction(md_spgr,mod)))+
   geom_pointrange(data=filter(corez_sum, auc_type=='obs'), aes(colour=point_col, ymin=log(mn_area-sd_area), ymax=log(mn_area+sd_area)))+
   geom_hline(yintercept = log(100000))+
   theme(legend.position = "none")+theme_bw() 
+
+corez_sum$md_spgr<-factor(corez_sum$md_spgr, levels=c("BRBO", 'MABO', 'RFBO', 'WTST',"WTLG",'FRBD', 'TRBD', "SOTE" , 'NODD', 'TERN'))
 
 p1<-ggplot(data=corez_sum, aes(x=auc, y=mn_area/1000))+geom_line(aes(colour=substr(mod, 1, 3), group=mod))+
   
@@ -643,18 +676,13 @@ p1<-ggplot(data=corez_sum, aes(x=auc, y=mn_area/1000))+geom_line(aes(colour=subs
   geom_pointrange(data=corez_sum%>%filter(conf_pts=='Y'), 
                   aes(colour=point_col, ymin=mn_area/1000-sd_area/1000, ymax=mn_area/1000+sd_area/1000), size=0.3, colour='#d11141')+
   scale_colour_manual(values = c('#5a5255','#ae5a41'))+
-  facet_wrap(~md_spgr, scales='free_y', nrow=2)+scale_x_continuous(limits=c(0.4, 1), breaks=seq(0.4,1, 0.1))+
-  theme_bw()+theme(legend.position = "none", panel.grid.minor = element_blank())
+  facet_wrap(~md_spgr, scales='free_y', ncol=2)+scale_x_continuous(limits=c(0.4, 1), breaks=seq(0.4,1, 0.1))+
+  theme_bw()+theme(legend.position = "none", panel.grid.minor = element_blank())+xlab('AUC')+ylab('Foraging area (thousands of km2)')
 
 #ggsave(p1,  width =8 , height =4, units='in',
 #       filename='C:/seabirds/data/modelling/plots/core_cost_confidence.eps')
 
 # summary table and spatial plots to go in main fig
-
-#colour species
-corez$md_spgr<-factor(corez$md_spgr, levels=c("BRBO", 'MABO', 'RFBO', 'FRBD', 'TRBD', 'WTST', "WTLG", "SOTE" , 'NODD', 'TERN'))
-corez$spcol<-recode(corez$md_spgr, "BRBO"='#b15928','MABO'='#1f78b4','RFBO'='#fb9a99','FRBD'='#fdbf6f', 'TRBD'='#b2df8a',
-                    'WTST'='#6a3d9a','WTLG'='#cab2d6',"SOTE"='#e31a1c','NODD'='#ff7f00','TERN'='#33a02c')
 
 #use lookup to identify confidence-adj cores
 corez$site_auc_type<-as.character(corez$auc_type)
@@ -666,9 +694,6 @@ radz<-filter(corez, auc==0.5 )
 obz<-filter(corez, site_auc_type=='obs' )
 confz<-corez%>%group_by(md_spgr, site_nm)%>%filter(site_auc_type!='sim')%>%
   filter(row_number()==n())%>%ungroup()
-
-# make table
-radz%>%group_by(md_spgr)%>%summarize(area=sum(area_km2))
 
 # plots
 p_base<-ggplot() +
