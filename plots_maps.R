@@ -547,13 +547,8 @@ dev.off()
 #### ~~~~ AUC-core areas plot (paper fig) ~~~~ ####
 
 # read in auc-calced core areas
-corez<-st_read('C:/seabirds/data/GIS/col_radii_auc_core_smooth_holecrumb100.shp')
+corez<-st_read('C:/seabirds/data/GIS/col_radii_auc_core_smooth.shp')
 
-#corez2<-corez%>%drop_crumbs(threshold=100000000)%>% 
-#              fill_holes(threshold=100000000)# drop <100km2 crumbs and holes
-#write_out
-#st_write(corez2, 'C:/seabirds/data/GIS/col_radii_auc_core_smooth_holecrumb100.shp')  
-                      
 ggplot(data=corez, aes(x=auc, y=area_km2, colour=md_spgr))+geom_point()+
   geom_line(aes(group=interaction(md_spgr, site_nm)))
 
@@ -679,53 +674,6 @@ p1<-ggplot(data=corez_sum, aes(x=auc, y=mn_area/1000))+geom_line(aes(colour=subs
 #ggsave(p1,  width =8 , height =4, units='in',
 #       filename='C:/seabirds/data/modelling/plots/core_cost_confidence.eps')
 
-# summary table and spatial plots to go in main fig
-
-#use lookup to identify confidence-adj cores
-corez$site_auc_type<-as.character(corez$auc_type)
-corez[paste(corez$md_spgr, corez$site_nm, corez$auc) %in%
-        paste(lookup1$md_spgr, lookup1$site_nm, lookup1$auc),]$site_auc_type<-'first'
-corez$site_auc_type<-ifelse(corez$auc_type=='obs', 'obs', corez$site_auc_type)
-# and order sp
-corez$md_spgr<-factor(corez$md_spgr, levels=c("BRBO", 'MABO', 'RFBO', 'WTST',"WTLG",'FRBD', 'TRBD', "SOTE" , 'NODD', 'TERN'))
-
-
-radz<-filter(corez, auc==0.5 )
-obz<-filter(corez, site_auc_type=='obs' )
-confz<-corez%>%group_by(md_spgr, site_nm)%>%filter(site_auc_type!='sim')%>%
-  filter(row_number()==n())%>%ungroup()
-
-# merge layers for better vis
-# merge colz by md_spgr and rd_class for gbr-wide plots
-rad_diss<-radz%>%group_by(md_spgr, dsgntn_n)%>%summarize(geometry = st_union(geometry))
-
-obs_diss<-obz%>%group_by(md_spgr, dsgntn_n)%>%summarize(geometry = st_union(geometry))
-
-conf_diss<-confz%>%st_buffer(0)%>%filter(site_auc_type=='first')%>%
-  group_by(md_spgr, dsgntn_n)%>%summarize(geometry = st_union(geometry))
-
-p_rad<-p_base+
-  geom_sf(data=filter(corez, auc==0.5 ), aes(colour=spcol), fill=NA)+
-  scale_colour_identity('Species',labels = unique(corez$md_spgr),
-                        breaks = unique(corez$spcol), guide = "legend")+
-  coord_sf(xlim = c(142, 160), ylim = c(-27, -10), expand = FALSE)
-
-p_base+
-  geom_sf(data=filter(corez, site_auc_type=='obs' ), aes(colour=spcol), fill=NA)+
-  scale_colour_identity('Species',labels = unique(corez$md_spgr),
-                        breaks = unique(corez$spcol), guide = "legend")+
-  coord_sf(xlim = c(142, 160), ylim = c(-27, -10), expand = FALSE)
-
-p_base+
-  geom_sf(data=corez%>%group_by(md_spgr, site_nm)%>%filter(site_auc_type!='sim')%>%
-            filter(row_number()==n()), aes(colour=spcol), fill=NA)+
-  scale_colour_identity('Species',labels = unique(corez$md_spgr),
-                        breaks = unique(corez$spcol), guide = "legend")+
-  coord_sf(xlim = c(142, 160), ylim = c(-27, -10), expand = FALSE)
-
-  
-
-  
 #### ~~~~ **** ~~~~ ####
 
 #### ~~~~ Make GBR-wide hotspot plot ~~~~ ####
