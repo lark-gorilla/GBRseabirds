@@ -558,17 +558,8 @@ dev.off()
 
 # read in auc-calced core areas
 corez<-st_read('C:/seabirds/data/GIS/col_radii_auc_core_smooth.shp')
-
-ggplot(data=corez, aes(x=auc, y=area_km2, colour=md_spgr))+geom_point()+
-  geom_line(aes(group=interaction(md_spgr, site_nm)))
-
-ggplot(data=corez, aes(x=auc, y=area_km2))+geom_line(aes(group=site_nm), alpha=0.5)+
-  geom_point(aes(colour=auc_type))+facet_wrap(~md_spgr, scales='free')+
-  geom_hline(yintercept = 100000)+
-  theme(legend.position = "none") 
-
-ggplot(data=corez, aes(x=auc, y=log(area_km2), colour=md_spgr))+geom_point()+
-  geom_line(aes(group=interaction(md_spgr, site_nm)))
+#remove Wedgie Mudjimba colony
+corez<-corez[corez$dsgntn_!='Mudjimba Island',]
 
 # summarise cores
 corez_nosf<-corez%>%as.data.frame()
@@ -576,39 +567,27 @@ corez_nosf$geometry<-NULL
 
 # add mod type
 corez_nosf$mod<-'global'
-corez_nosf[corez_nosf$md_spgr=='BRBO' & corez_nosf$dsgntn_n=='Raine Island, Moulter and MacLennan cays KBA',]$mod<-'local'
-corez_nosf[corez_nosf$md_spgr=='BRBO' & corez_nosf$dsgntn_n=='Swain Reefs KBA',]$mod<-'local2'
-corez_nosf[corez_nosf$md_spgr=='MABO' & corez_nosf$dsgntn_n=='Swain Reefs KBA',]$mod<-'local'
-corez_nosf[corez_nosf$md_spgr=='WTST' & corez_nosf$dsgntn_n=='Capricornia Cays KBA',]$mod<-'local'
-corez_nosf[corez_nosf$md_spgr=='NODD' & corez_nosf$dsgntn_n=='Capricornia Cays KBA',]$mod<-'local'
-corez_nosf[corez_nosf$md_spgr=='WTLG' & corez_nosf$dsgntn_n=='Capricornia Cays KBA',]$mod<-'local'
-
-# add site-level point colours
-corez_nosf$site_auc_type<-as.character(corez_nosf$auc_type)
-# first auc val below 100000 for some sp
-lookup1<-corez_nosf%>%filter(md_spgr%in%unique(corez[corez$area_km2>100000,]$md_spgr))%>%
-  filter(area_km2<100000)%>%group_by(md_spgr, site_nm)%>%summarise_all(first)
-# manually add wtlg cap cays that are above 100k km2 eve at 10% core
-lookup1<-bind_rows(lookup1, filter(corez_nosf, md_spgr=='WTLG' & dsgntn_n=='Capricornia Cays KBA' & auc==0.94))
-
-corez_nosf[paste(corez_nosf$md_spgr, corez_nosf$site_nm, corez_nosf$auc) %in%
-             paste(lookup1$md_spgr, lookup1$site_nm, lookup1$auc),]$site_auc_type<-'first'
-corez_nosf$site_auc_type<-ifelse(corez_nosf$auc_type=='obs', 'obs', corez_nosf$site_auc_type)
+corez_nosf[corez_nosf$md_spgr=='BRBO' & corez_nosf$dsgntn_=='Raine Island, Moulter and MacLennan cays KBA',]$mod<-'local'
+corez_nosf[corez_nosf$md_spgr=='BRBO' & corez_nosf$dsgntn_=='Swain Reefs KBA',]$mod<-'local2'
+corez_nosf[corez_nosf$md_spgr=='MABO' & corez_nosf$dsgntn_=='Swain Reefs KBA',]$mod<-'local'
+corez_nosf[corez_nosf$md_spgr=='WTST' & corez_nosf$dsgntn_=='Capricornia Cays KBA',]$mod<-'local'
+corez_nosf[corez_nosf$md_spgr=='NODD' & corez_nosf$dsgntn_=='Capricornia Cays KBA',]$mod<-'local'
+corez_nosf[corez_nosf$md_spgr=='WTLG' & corez_nosf$dsgntn_=='Capricornia Cays KBA',]$mod<-'local'
 
 #! make main text summary table !#
 
 tab1<-data.frame(filter(corez_nosf, auc==0.5 )%>%group_by(md_spgr)%>%
-  summarise(n_site=length(unique(dsgntn_n)), n_col= length(unique(site_nm)), area_sum=sum(area_km2)/1000), 
- filter(corez_nosf, site_auc_type=='obs'  )%>%group_by(md_spgr)%>%
-    summarise(obs_sum=sum(area_km2)/1000)%>%select(obs_sum),
-  corez_nosf%>%group_by(md_spgr, site_nm)%>%filter(site_auc_type!='sim')%>%
+  summarise(n_site=length(unique(dsgntn_)), n_col= length(unique(site_nm)), area_sum=sum(are_km2)/1000), 
+ filter(corez_nosf, st_c_ty=='obs'  )%>%group_by(md_spgr)%>%
+    summarise(obs_sum=sum(are_km2)/1000)%>%select(obs_sum),
+  corez_nosf%>%group_by(md_spgr, site_nm)%>%filter(st_c_ty!='sim')%>%
     filter(row_number()==n())%>%ungroup()%>%group_by(md_spgr)%>%
-    summarise(conf_sum=sum(area_km2)/1000)%>%select(conf_sum))
+    summarise(conf_sum=sum(are_km2)/1000)%>%select(conf_sum))
 
 # n auc jumps 
 auc_jump<-corez_nosf%>%group_by(md_spgr, site_nm)%>%arrange(md_spgr, site_nm, auc)%>%
-  summarize(pos_first=if('first'%in%site_auc_type){which(site_auc_type=='first')}else{0},
-            pos_obs=which(site_auc_type=='obs'))%>%ungroup()
+  summarize(pos_first=if('first'%in%st_c_ty){which(st_c_ty=='first')}else{0},
+            pos_obs=which(st_c_ty=='obs'))%>%ungroup()
 
 auc_jump$jumps<-auc_jump$pos_first-auc_jump$pos_obs
 auc_jump$jumps<-ifelse(auc_jump$jumps<0, NA, auc_jump$jumps)
@@ -623,8 +602,8 @@ jump_sum<-auc_jump%>%group_by(md_spgr)%>%summarise(n_coljumps=length(which(!is.n
 
 # make site level plot for supplement
 
-p1<-ggplot(data=corez_nosf, aes(x=auc, y=area_km2))+geom_line(aes(colour=substr(mod, 1, 3),group=site_nm), alpha=0.5)+
-  geom_point(aes(colour=site_auc_type))+facet_wrap(~md_spgr, scales='free_y')+
+p1<-ggplot(data=corez_nosf, aes(x=auc, y=are_km2))+geom_line(aes(colour=substr(mod, 1, 3),group=site_nm), alpha=0.5)+
+  geom_point(aes(colour=st_c_ty))+facet_wrap(~md_spgr, scales='free_y')+
   geom_hline(yintercept = 100000, linetype='dotted', colour='#1b85b8')+
   scale_colour_manual(values = c('glo'='#5a5255','loc'='#ae5a41','obs'='#00b159', 'first'='#d11141', 'sim'='black' ))+
   theme_bw()+theme(legend.position = "none")
@@ -634,12 +613,12 @@ p1<-ggplot(data=corez_nosf, aes(x=auc, y=area_km2))+geom_line(aes(colour=substr(
 
 # make species level plots for main fig
 
-corez_sum<-corez_nosf%>%group_by(md_spgr, auc, auc_type, mod)%>%
-  summarise(mn_area=mean(area_km2), sd_area=sd(area_km2))
+corez_sum<-corez_nosf%>%group_by(md_spgr, auc, auc_typ, mod)%>%
+  summarise(mn_area=mean(are_km2), sd_area=sd(are_km2))
 
 corez_sum$point_col<-'sim'
-corez_sum[corez_sum$auc_type=='obs' & corez_sum$mod=='global',]$point_col<-'global'
-corez_sum[corez_sum$auc_type=='obs' & corez_sum$mod!='global',]$point_col<-'local'
+corez_sum[corez_sum$auc_typ=='obs' & corez_sum$mod=='global',]$point_col<-'global'
+corez_sum[corez_sum$auc_typ=='obs' & corez_sum$mod!='global',]$point_col<-'local'
 
 # manual selection of 'first' conf points
 corez_sum$conf_pts<-'N'
@@ -652,7 +631,7 @@ corez_sum[corez_sum$md_spgr=='RFBO'&corez_sum$auc==0.74,]$conf_pts<-'Y'
 
 ggplot(data=corez_sum, aes(x=auc, y=log(mn_area)))+
   geom_line(aes(colour=md_spgr, group=interaction(md_spgr,mod)))+
-  geom_pointrange(data=filter(corez_sum, auc_type=='obs'), aes(colour=point_col, ymin=log(mn_area-sd_area), ymax=log(mn_area+sd_area)))+
+  geom_pointrange(data=filter(corez_sum, auc_typ=='obs'), aes(colour=point_col, ymin=log(mn_area-sd_area), ymax=log(mn_area+sd_area)))+
   geom_hline(yintercept = log(100000))+
   theme(legend.position = "none")+theme_bw() 
 
@@ -664,8 +643,8 @@ p1<-ggplot(data=corez_sum, aes(x=auc, y=mn_area/1000))+geom_line(aes(colour=subs
   geom_segment(data=corez_sum%>%filter(conf_pts=='Y'), aes(x=0.4, xend=1, y=100, yend=100), colour='#1b85b8')+
   geom_segment(data=corez_sum%>%filter(auc==0.5), aes(x=0.4, xend=0.5, y=mn_area/1000, yend=mn_area/1000), colour='gray90')+
   
-  geom_segment(data=corez_sum%>%filter(auc_type=='obs'), aes(x=auc, xend=auc, y=0, yend=mn_area/1000, group=mod), linetype='dotted', colour='#00b159')+
-  geom_segment(data=corez_sum%>%filter(auc_type=='obs'), aes(x=0.4, xend=auc, y=mn_area/1000, yend=mn_area/1000,group=mod), linetype='dotted',colour='#00b159')+
+  geom_segment(data=corez_sum%>%filter(auc_typ=='obs'), aes(x=auc, xend=auc, y=0, yend=mn_area/1000, group=mod), linetype='dotted', colour='#00b159')+
+  geom_segment(data=corez_sum%>%filter(auc_typ=='obs'), aes(x=0.4, xend=auc, y=mn_area/1000, yend=mn_area/1000,group=mod), linetype='dotted',colour='#00b159')+
   
   geom_segment(data=corez_sum%>%filter(conf_pts=='Y'), aes(x=auc, xend=auc, y=0, yend=mn_area/1000, group=mod), linetype='dotted', colour='#d11141')+
   geom_segment(data=corez_sum%>%filter(conf_pts=='Y'), aes(x=0.4, xend=auc, y=mn_area/1000, yend=mn_area/1000,group=mod), linetype='dotted',colour='#d11141')+
