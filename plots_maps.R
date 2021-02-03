@@ -681,8 +681,57 @@ p1<-ggplot(data=corez_sum, aes(x=auc, y=mn_area/1000))+geom_line(aes(colour=subs
   facet_wrap(~md_spgr, scales='free_y', ncol=2)+scale_x_continuous(limits=c(0.4, 1), breaks=seq(0.4,1, 0.1))+
   theme_bw()+theme(legend.position = "none", panel.grid.minor = element_blank())+xlab('AUC')+ylab('Foraging area (thousands of km2)')
 
-#ggsave(p1,  width =8 , height =4, units='in',
-#       filename='C:/seabirds/data/modelling/plots/core_cost_confidence.eps')
+#ggsave(p1,  width =4 , height =11, units='in',
+#       filename='C:/seabirds/data/modelling/plots/core_cost_confidence.png')
+
+## Mosaic global predictions with local predictions (within obs for rad) for tracked site
+
+for_rad<-read_sf('C:/seabirds/data/GIS/foraging_radii.shp')
+
+for_rad<-for_rad%>%filter(rd_clss=='obs')
+
+for_rad<-for_rad%>%group_by(md_spgr, dsgntn_n)%>%summarise(geometry=st_union(geometry))
+
+pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds/selected_preds', full.names=T)
+mod_pred<-stack(pred_list)
+
+for( i in unique(for_rad$md_spgr))
+{
+  col<-filter(for_rad, md_spgr==i)
+  glob_ras<-subset(mod_pred, paste0(i, '_MultiCol'))
+  
+  for(j in unique(col$dsgntn_n))
+  {
+    col_sp<-filter(col, dsgntn_n==j)
+    rm(sp_ras1)
+    
+      if(i=='BRBO' & col_sp$dsgntn_n=='Raine Island, Moulter and MacLennan cays KBA'){
+        sp_ras1<-subset(mod_pred, 'BRBO_Raine')}
+      if(i=='BRBO' & col_sp$dsgntn_n=='Swain Reefs KBA'){
+        sp_ras1<-subset(mod_pred, 'BRBO_Swains')}
+      if(i=='MABO' & col_sp$dsgntn_n=='Swain Reefs KBA'){
+        sp_ras1<-subset(mod_pred, 'MABO_Swains')}
+      if(i=='WTST' & col_sp$dsgntn_n=='Capricornia Cays KBA'){
+        sp_ras1<-subset(mod_pred, 'WTST_Heron')}
+      if(i=='WTLG' & col_sp$dsgntn_n=='Capricornia Cays KBA'){
+        sp_ras1<-subset(mod_pred, 'WTLG_Heron')}
+      if(i=='NODD' & col_sp$dsgntn_n=='Capricornia Cays KBA'){
+        sp_ras1<-subset(mod_pred, 'NODD_Heron')}
+    
+sp_ras2<-crop(sp_ras1, extent(col_sp)) # drop size
+
+sum_rad<-mask(sp_ras2, as(col_sp, 'Spatial')) # mask set to NA
+
+if(which(j==unique(col$dsgntn_n))==1){
+mos_ras <- merge(sum_rad, glob_ras)}else # merge instead of mosaic, first arguement goes over second
+{mos_ras <- merge(sum_rad, mos_ras)}
+  }
+  print(i)
+
+writeRaster(mos_ras, paste0('C:/seabirds/data/modelling/GBR_preds/glob_local_merge/glob_loc_',i,'.tif'))    
+rm(mos_ras)
+}
+
 
 #### ~~~~ **** ~~~~ ####
 
