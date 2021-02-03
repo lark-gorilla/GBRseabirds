@@ -473,7 +473,7 @@ col_rad_cores<-st_read('C:/seabirds/data/GIS/col_radii_core_hotspots_smooth_10pe
 #### ~~~~ GBR plot function ~~~~ ####
 mk_gbrplot<-function(spg='TERN_MultiCol'){
   ext<-unlist(raster::extract(subset(mod_pred, spg),
-  as(filter(radz, md_spgr==substr(spg, 1, 4)), 'Spatial')))
+       as(filter(rad_diss, md_spgr==substr(spg, 1, 4) & rd_clss=='max'), 'Spatial')))
   mn<-min(ext, na.rm=T)
   mx<-max(ext, na.rm=T)
   
@@ -485,20 +485,30 @@ mk_gbrplot<-function(spg='TERN_MultiCol'){
   col_sp<-substr(spg, 1, 4)
   if(col_sp=='WTLG'){col_sp<-'WTST'} 
   
-  beeb<-st_bbox(filter(radz, md_spgr==substr(spg, 1, 4)))
+  sp.rad<-filter(rad_diss, md_spgr==substr(spg, 1, 4) &
+                 rd_clss %in% c('max', 'mea', 'min'))
+
+  #beeb<-st_bbox(sp.rad)
+
+  xl<-c(142, 156)
+  yl<-c(-29, -7)
+  if(substr(spg, 1, 4) %in%c('WTLG', 'TRBD', 'FRBD', 'SOTE')){
+    xl<-c(142, 161)  
+    yl<-c(-29, -6)}
 
   p_gbr<-ggplot() +
   layer_spatial(data=r1) +
   geom_sf(data=filter(colz, md_spgr==col_sp), shape = 23, fill = "yellow") +
+    geom_sf(data=sp.rad, aes(colour=rd_clss), fill='NA') +
   geom_sf(data=gbrmp, col='white', fill='NA') +
-    geom_sf(data=filter(confz,md_spgr==substr(spg, 1, 4)), colour='red', fill=NA)+
-    geom_sf(data=filter(obz,md_spgr==substr(spg, 1, 4)), colour='green', fill=NA)+
-    geom_sf(data=filter(radz, md_spgr==substr(spg, 1, 4)), colour='blue', fill=NA)+
+    geom_sf(data=land, col='black', fill='grey') +
   theme_bw()+
   annotation_scale(location = "bl")+  
   annotation_north_arrow(location = "tr", which_north = "true")+
   labs(x='Longitude', y='Latitude')+
-  coord_sf(xlim=beeb[c(1,3)],ylim=beeb[c(2,4)], expand = FALSE)+
+    coord_sf(xlim = xl, ylim =yl, expand = FALSE)+
+  scale_colour_manual('Forgaing radii', values=c('#00FFFF','#66FFCC', '#00FF66' ), labels=c(
+    'Maximum', 'Mean', 'Minimum'))+
 
     scale_fill_viridis_b('Likely\nseabird\nforaging\nhabitat', option='magma',
                          breaks=c(seq(0.1, 0.9, 0.1)),labels=c('low', rep('', 7), 'high'), na.value = NA)
