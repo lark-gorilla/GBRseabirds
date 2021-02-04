@@ -556,10 +556,14 @@ dev.off()
 
 #### ~~~~ AUC-core areas plot (paper fig) ~~~~ ####
 
-# read in auc-calced core areas
-corez<-st_read('C:/seabirds/data/GIS/col_radii_auc_core_smooth.shp')
+# read in SIMPLIFIED auc-calced core areas
+corez<-st_read('C:/seabirds/data/GIS/col_radii_auc_core_smooth_simp.shp')
 #remove Wedgie Mudjimba colony
-corez<-corez[corez$dsgntn_!='Mudjimba Island',]
+#corez<-corez[corez$dsgntn_!='Mudjimba Island',]
+# And simplify polys, recalc area and write out
+#c_simpl<-corez%>%st_simplify(preserveTopology=T,dTolerance=0.007)
+#c_simpl$are_km2<-as.numeric(st_area(corez_simpl)/1000000)
+#st_write(c_simpl,'C:/seabirds/data/GIS/col_radii_auc_core_smooth_simp.shp')
 
 # summarise cores
 corez_nosf<-corez%>%as.data.frame()
@@ -575,14 +579,28 @@ corez_nosf[corez_nosf$md_spgr=='NODD' & corez_nosf$dsgntn_=='Capricornia Cays KB
 corez_nosf[corez_nosf$md_spgr=='WTLG' & corez_nosf$dsgntn_=='Capricornia Cays KBA',]$mod<-'local'
 
 #! make main text summary table !#
+# using md_spgr dissolved polys
+
+## dissolve
+ 
+rad_diss<-corez%>%filter(auc==0.5)%>%group_by(md_spgr)%>%summarise(geometry=st_union(geometry))
+obs_diss<-corez%>%filter(auc_typ=='obs')%>%group_by(md_spgr)%>%summarise(geometry=st_union(geometry))
+conf_diss<-corez%>%filter(st_c_ty!='sim')%>%group_by(md_spgr, site_nm)%>%
+  filter(st_c_ty==last(st_c_ty))%>%ungroup()%>%group_by(md_spgr)%>%summarise(geometry=st_union(geometry))
+
+rad_diss$are_km2<-as.numeric(st_area(rad_diss)/1000000)
+obs_diss$are_km2<-as.numeric(st_area(obs_diss)/1000000)
+conf_diss$are_km2<-as.numeric(st_area(conf_diss)/1000000)
 
 tab1<-data.frame(filter(corez_nosf, auc==0.5 )%>%group_by(md_spgr)%>%
-  summarise(n_site=length(unique(dsgntn_)), n_col= length(unique(site_nm)), area_sum=sum(are_km2)/1000), 
- filter(corez_nosf, st_c_ty=='obs'  )%>%group_by(md_spgr)%>%
-    summarise(obs_sum=sum(are_km2)/1000)%>%select(obs_sum),
-  corez_nosf%>%group_by(md_spgr, site_nm)%>%filter(st_c_ty!='sim')%>%
-    filter(row_number()==n())%>%ungroup()%>%group_by(md_spgr)%>%
-    summarise(conf_sum=sum(are_km2)/1000)%>%select(conf_sum))
+  summarise(n_site=length(unique(dsgntn_)), n_col= length(unique(site_nm))), 
+            rad_area=rad_diss$are_km2/1000,obs_area=obs_diss$are_km2/1000,
+            conf_area=conf_diss$are_km2/1000)
+
+# print all sp-dissolved colum totals
+(as.numeric(rad_diss%>%st_union%>%st_area)/1000000)/1000 #2941
+(as.numeric(obs_diss%>%st_union%>%st_area)/1000000)/1000 #2744
+(as.numeric(conf_diss%>%st_union%>%st_area)/1000000)/1000 #1052
 
 # n auc jumps 
 auc_jump<-corez_nosf%>%group_by(md_spgr, site_nm)%>%arrange(md_spgr, site_nm, auc)%>%
@@ -598,7 +616,7 @@ jump_sum<-auc_jump%>%group_by(md_spgr)%>%summarise(n_coljumps=length(which(!is.n
                                          med_jumps=median(jumps, na.rm=T))
 
 #write out
-# write.csv(data.frame(tab1, jump_sum), 'C:/seabirds/data/conf_area_table.csv', quote=F, row.names=F)
+# write.csv(data.frame(tab1, jump_sum), 'C:/seabirds/data/conf_area_table_diss.csv', quote=F, row.names=F)
 
 # make site level plot for supplement
 
@@ -660,7 +678,7 @@ p1<-ggplot(data=corez_sum, aes(x=auc, y=mn_area/1000))+geom_line(aes(colour=subs
   facet_wrap(~md_spgr, scales='free_y', ncol=2)+scale_x_continuous(limits=c(0.4, 1), breaks=seq(0.4,1, 0.1))+
   theme(legend.position = "none", panel.grid.minor = element_blank())+xlab('AUC')+ylab('Foraging area (thousands of km2)')
 
-#ggsave(p1,  width =4 , height =11, units='in',
+#ggsave(p1,  width =4 , height =11.2, units='in',
 #       filename='C:/seabirds/data/modelling/plots/core_cost_confidence.png')
 
 ## split corez shapefile in many for export for QGIS ##
@@ -669,11 +687,24 @@ for(i in unique (corez$md_spgr))
 {
   st_write(filter(corez, md_spgr==i & auc==0.5),
            paste0('C:/seabirds/data/GIS/QGIS_fig_plots/', i, '_rad.shp'))
-  st_write(filter(corez, md_spgr==i & auc_typ=='obs'),
+  st_write(filter(obs_diss, md_spgr==i ),
            paste0('C:/seabirds/data/GIS/QGIS_fig_plots/', i, '_obs.shp'))
   if('first'%in%corez[corez$md_spgr==i,]$st_c_ty){
     st_write(filter(corez, md_spgr==i & st_c_ty=='first'),
              paste0('C:/seabirds/data/GIS/QGIS_fig_plots/', i, '_conf.shp'))}
+  print(i)
+}
+
+
+for(i in unique (corez$md_spgr))
+{
+  st_write(filter(corez, md_spgr==i & auc==0.5),
+           paste0('C:/seabirds/data/GIS/QGIS_fig_plots/', i, '_rad.shp'), delete_dsn=T)
+  st_write(filter(corez, md_spgr==i & auc_typ=='obs'),
+           paste0('C:/seabirds/data/GIS/QGIS_fig_plots/', i, '_obs.shp'), delete_dsn=T)
+  if('first'%in%corez[corez$md_spgr==i,]$st_c_ty){
+    st_write(corez%>%filter(st_c_ty=='first' & md_spgr==i)%>%summarise(geometry=st_union(geometry)),
+             paste0('C:/seabirds/data/GIS/QGIS_fig_plots/', i, '_conf.shp'), delete_dsn=T)}
   print(i)
 }
 
