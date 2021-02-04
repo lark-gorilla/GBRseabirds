@@ -685,22 +685,10 @@ p1<-ggplot(data=corez_sum, aes(x=auc, y=mn_area/1000))+geom_line(aes(colour=subs
 
 for(i in unique (corez$md_spgr))
 {
-  st_write(filter(corez, md_spgr==i & auc==0.5),
-           paste0('C:/seabirds/data/GIS/QGIS_fig_plots/', i, '_rad.shp'))
-  st_write(filter(obs_diss, md_spgr==i ),
-           paste0('C:/seabirds/data/GIS/QGIS_fig_plots/', i, '_obs.shp'))
-  if('first'%in%corez[corez$md_spgr==i,]$st_c_ty){
-    st_write(filter(corez, md_spgr==i & st_c_ty=='first'),
-             paste0('C:/seabirds/data/GIS/QGIS_fig_plots/', i, '_conf.shp'))}
-  print(i)
-}
-
-
-for(i in unique (corez$md_spgr))
-{
-  st_write(filter(corez, md_spgr==i & auc==0.5),
+  st_write(filter(corez, md_spgr==i & auc==0.5)%>%group_by(dsgntn_)%>%
+             summarise(geometry=st_union(geometry))%>%st_cast(),
            paste0('C:/seabirds/data/GIS/QGIS_fig_plots/', i, '_rad.shp'), delete_dsn=T)
-  st_write(filter(corez, md_spgr==i & auc_typ=='obs'),
+  st_write(filter(obs_diss, md_spgr==i ),
            paste0('C:/seabirds/data/GIS/QGIS_fig_plots/', i, '_obs.shp'), delete_dsn=T)
   if('first'%in%corez[corez$md_spgr==i,]$st_c_ty){
     st_write(corez%>%filter(st_c_ty=='first' & md_spgr==i)%>%summarise(geometry=st_union(geometry)),
