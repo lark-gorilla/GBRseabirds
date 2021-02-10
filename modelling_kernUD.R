@@ -391,7 +391,7 @@ best_runs%>%group_by(sp, col)%>%summarise(auc=mean(ROC), auc_sd=mean(ROCSD))
 
 ####~~~*~~~####
 
-####~~~~ Internal Block Validation for GBR-local tracking ~~~~####
+####~~~~ Internal Block Validation for colony-self validation ~~~~####
 library(caret)
 library(ranger)
 library(dplyr)
@@ -488,7 +488,7 @@ write.csv(intval_out, 'colony_self_validation.csv', quote=F, row.names=F)
 }
 ####~~~~*~~~~####
   
-####~~~~ Internal Block Validation for colony-self validation  ~~~~####
+####~~~~ Internal Block Validation for GBR-local tracking  ~~~~####
 library(caret)
 library(cluster)
 # read in data
@@ -556,12 +556,12 @@ out1%>%group_by(sp, col, run)%>%summarise(auc=mean(ROC), auc_sd=mean(ROCSD))%>%u
 
 ####~~~~*~~~~####
 
-## produce global predictions run on cluster ##
+####~~~~ produce global predictions run on cluster ~~~~#####
 
 # Read in optimal hyperparameters
 my_hyp<-read.csv('rf_optimal_hyp.csv')
 
-#read in GBR ocean data
+#read in global ocean data
 gbr2<-read.csv('pred_area_global_modelready_5km.csv')
 names(gbr2)<-c('x', 'y', 'sst', 'sst_sd', 'chl', 'chl_sd',
               'mfr', 'mfr_sd', 'pfr', 'pfr_sd', 'bth', 'slp')
@@ -629,5 +629,167 @@ for(k in sp_groups)
   print(k)
   rm(spdf)
   rm(p1)
-  }
+}
+
+####~~~*~~~####
+
+####~~~~ make predictions for validating AUC-percentile method ~~~~#####
+# predict multicol mod - selected colony on selected colony with glob for radius
+# to run on cluster
+
+#preproccess global ocean data to be subsetted for each sp-colony radius, then upload to cluster
+# do this locally in sf which is unavailable on cluster
+library(sf)
+#read in global ocean data 
+globy<-read.csv('pred_area_global_modelready_5km.csv')
+#gbr2<-read.csv('C:/seabirds/data/pred_area_global_modelready_5km.csv')
+names(globy)<-c('x', 'y', 'sst', 'sst_sd', 'chl', 'chl_sd',
+               'mfr', 'mfr_sd', 'pfr', 'pfr_sd', 'bth', 'slp')
+globy[globy$bth>0,]$bth<-0 
+globy$bth<-sqrt(globy$bth^2)# Remember nearshore front values which ==0 should be NA
+
+# read in for global mean for rad data to get mean rad
+for_rad<-read_sf('C:/seabirds/data/GIS/global_mean_foraging_radii.shp')
+
+
+#make spatial
+globy<-globy%>%st_as_sf(coords=c('x', 'y'), crs=4326)
+globy$ID<-'none'
+# make dset for each sp-col combo inside radius
+for( i in 1:nrow(for_rad))
+{
+  g1<-globy[for_rad[i,],]
+  g1$x<-st_coordinates(g1)[,1]
+  g1$y<-st_coordinates(g1)[,2]
+  st_geometry(g1)<-NULL
+  g1$ID<-for_rad[i,]$spcol
+  if(i==1){out1<-g1}else{
+    out1<-rbind(out1, g1)}
+print(i)  
+}
+write.csv(out1, 'C:/seabirds/data/global_col_mean_rad_env_5km.csv', quote=F, row.names=F)
+
+# read in 5km rasterize template
+templ<-raster('pred_global_ras_template.grd')
+#templ<-raster('C:/seabirds/data/GIS/pred_global_ras_template.grd')
+
+
+spdf<-SpatialPointsDataFrame(SpatialPoints(gbr2[,1:2], proj4string = CRS(projection(templ))),
+                             data=gbr2[,3:12])
+sst<-rasterize(spdf, templ, field='sst')
+sst_sd<-rasterize(spdf, crop(templ, spdf), field='sst_sd')
+
+writeRaster(p1, paste0('global_preds/',k, '_global.grd'), overwrite=T)
+
+
+### run on cluster
+library(dplyr)
+#library(raster)
+library(ranger)
+set.seed(24)
+
+# Read in optimal hyperparameters
+my_hyp<-read.csv('rf_optimal_hyp.csv')
+#my_hyp<-read.csv('C:/seabirds/data/rf_optimal_hyp.csv')
+# read in evv extracted radii
+radz<-read.csv('global_col_mean_rad_env_5km.csv')
+#radz<-read.csv('C:/seabirds/data/global_col_mean_rad_env_5km.csv')
+
+
+# read in data
+sp_groups <- c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST','NODD', 'TERN',
+               'FRBD', 'TRBD', 'WTLG')
+               
+radz$pred<-NA
+for(k in sp_groups)
+{
+  # Using the first resampled dataset as the baseline for AUC validation 
+  dat<-read.csv(paste0('kernhull_pts_sample/', k, '_kernhull_sample1.csv'))
+  dat$X<-NULL
+  dat2<-read.csv(paste0('kernhull_pts_sample/', k, '_kernhull_sample2.csv'))
+  dat3<-read.csv(paste0('kernhull_pts_sample/', k, '_kernhull_sample3.csv'))
+  dat4<-read.csv(paste0('kernhull_pts_sample/', k, '_kernhull_sample4.csv'))
+  dat5<-read.csv(paste0('kernhull_pts_sample/', k, '_kernhull_sample5.csv'))
+  
+  # lookup optimal vals
+  my.hyp.sp<-filter(my_hyp, sp==k)
+  my.hyp.sp$Resample<-as.character(my.hyp.sp$Resample)
+  
+  #remove crap
+  if(k=='RFBO'){dat<-filter(dat, spcol!='Christmas');dat2<-filter(dat2, spcol!='Christmas')
+  dat3<-filter(dat3, spcol!='Christmas');dat4<-filter(dat4, spcol!='Christmas')
+  dat5<-filter(dat5, spcol!='Christmas')}
+  if(k=='SOTE'){dat$spcol<-as.character(dat$spcol);dat[dat$spcol=='chick',]$spcol<-'Rat'
+  dat2$spcol<-as.character(dat2$spcol);dat2[dat2$spcol=='chick',]$spcol<-'Rat'
+  dat3$spcol<-as.character(dat3$spcol);dat3[dat3$spcol=='chick',]$spcol<-'Rat'
+  dat4$spcol<-as.character(dat4$spcol);dat4[dat4$spcol=='chick',]$spcol<-'Rat'
+  dat5$spcol<-as.character(dat5$spcol);dat5[dat5$spcol=='chick',]$spcol<-'Rat'}
+ 
+  # make predict and average the 5 rep models per dataset
+    for( i in unique(dat$spcol))
+    {
+      #pred_data around col
+     pdat<-radz[radz$ID==paste(k, i),]
+      
+      # make leave-one-out multicolony model on dat
+      rf2<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
+                  data=dat[dat$spcol!=i,], num.trees=500,  
+                  mtry=filter(my.hyp.sp, Resample=='MultiCol')$mtry, 
+                  min.node.size=filter(my.hyp.sp, Resample=='MultiCol')$min.node.size,
+                  splitrule = "gini",  importance='impurity',probability =T, seed=24)
+      #and predict
+      pdat$p1<-predict(rf2, data=pdat)$predictions[,1]
+      rm(rf2)
+      
+      # make leave-one-out multicolony model on dat2
+      rf2<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
+                  data=dat2[dat2$spcol!=i,], num.trees=500,  
+                  mtry=filter(my.hyp.sp, Resample=='MultiCol')$mtry, 
+                  min.node.size=filter(my.hyp.sp, Resample=='MultiCol')$min.node.size,
+                  splitrule = "gini",  importance='impurity',probability =T, seed=24)
+      #and predict
+      pdat$p2<-predict(rf2, data=pdat)$predictions[,1]
+      rm(rf2)
+      
+      # make leave-one-out multicolony model on dat3
+      rf2<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
+                  data=dat3[dat3$spcol!=i,], num.trees=500,  
+                  mtry=filter(my.hyp.sp, Resample=='MultiCol')$mtry, 
+                  min.node.size=filter(my.hyp.sp, Resample=='MultiCol')$min.node.size,
+                  splitrule = "gini",  importance='impurity',probability =T, seed=24)
+      #and predict
+      pdat$p3<-predict(rf2, data=pdat)$predictions[,1]
+      rm(rf2)
+      
+      # make leave-one-out multicolony model on dat4
+      rf2<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
+                  data=dat4[dat4$spcol!=i,], num.trees=500,  
+                  mtry=filter(my.hyp.sp, Resample=='MultiCol')$mtry, 
+                  min.node.size=filter(my.hyp.sp, Resample=='MultiCol')$min.node.size,
+                  splitrule = "gini",  importance='impurity',probability =T, seed=24)
+      #and predict
+      pdat$p4<-predict(rf2, data=pdat)$predictions[,1]
+      
+      # make leave-one-out multicolony model on dat5
+      rf2<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
+                  data=dat5[dat5$spcol!=i,], num.trees=500,  
+                  mtry=filter(my.hyp.sp, Resample=='MultiCol')$mtry, 
+                  min.node.size=filter(my.hyp.sp, Resample=='MultiCol')$min.node.size,
+                  splitrule = "gini",  importance='impurity',probability =T, seed=24)
+      #and predict
+      pdat$p5<-predict(rf2, data=pdat)$predictions[,1]
+      rm(rf2)
+      
+      #get mean
+      rmeanz<-rowMeans(pdat[c('p1', 'p2','p3','p4','p5')], na.rm=T)
+      
+      radz[radz$ID==paste(k, i),]$pred<-rmeanz
+    
+    print(paste(k, i))
+    }
+  write.csv(radz, 'radius_LGOCV_predictions.csv', row.names=F, quote=F)  
+}
+  
+
+####~~~*~~~####
   
