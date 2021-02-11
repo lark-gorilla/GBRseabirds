@@ -308,6 +308,45 @@ for(i in unique(gbr_rep$site_name))
 
 #### ~~~~ **** ~~~~ ####
 
+#### ~~~~ Make global mean foraging radii for tracked datasets ~~~~####
+# read in col locs
+colz<-st_read('C:/seabirds/data/GIS/trackingID_colony_locs.shp')
+colz$sp<-do.call(c, lapply(strsplit(as.character(colz$ID), '_'), function(x)x[2]))
+colz$coly<-do.call(c, lapply(strsplit(as.character(colz$ID), '_'), function(x)x[3]))
+colz[colz$coly=='chick',]$coly<-'Rat'
+colz$spcol<-paste(colz$sp, colz$coly)
+
+# select only one per spcol
+colz<-colz%>%dplyr::group_by(spcol)%>%slice(1)
+colz[colz$sp=='WTSH',]$sp<-'WTST'
+c1<-colz[colz$sp=='WTST',]
+c1$sp<-'WTLG'
+colz<-rbind(colz, c1)
+colz$spcol<-paste(colz$sp, colz$coly)
+#dist lookup 
+colz$sp_dist<-colz$sp
+colz[colz$sp_dist %in% c('GRFR', 'LEFR', 'MAFR'),]$sp_dist<-'FRBD'
+colz[colz$sp_dist %in% c('RBTB', 'RTTB'),]$sp_dist<-'TRBD'
+colz[colz$sp_dist %in% c('BRNO', 'LENO', 'BLNO'),]$sp_dist<-'NODD'
+colz[colz$sp_dist %in% c('CRTE', 'ROTE', 'CATE'),]$sp_dist<-'TERN'
+# read sp dist
+radz<-read.csv('C:/seabirds/data/sp_main_summary.csv')
+
+for(i in 1:nrow(colz))
+{
+  col<-colz[i,]
+  colproj<-st_transform(col, crs=paste0('+proj=laea +lon_0=',st_coordinates(col)[1],
+                                        '+lat_0=',st_coordinates(col)[2], '+ellps=WGS84'))
+  colbuf<-colproj%>%st_buffer(dist=radz[radz$sp==col$sp_dist,]$mean.for*1000)
+  colbuf<-colbuf%>%st_transform(crs=4326)
+  if(i==1){buf_out<-colbuf}else{
+    buf_out<-rbind(buf_out, colbuf)}
+  print(i)
+}
+
+#write_sf(buf_out, 'C:/seabirds/data/GIS/global_mean_foraging_radii.shp', delete_layer=T)
+#### ~~~~ **** ~~~~ ####
+
 #### ~~~~ AUC-core areas parameterization ~~~~ ####
 glob_auc<-data.frame(md_spgr=c('BRBO','MABO','RFBO','FRBD','TRBD','WTST','WTLG','SOTE','NODD','TERN'),
                      auc=c(0.55,0.53, 0.54, 0.61, 0.56, 0.58, 0.54, 0.48, 0.40, 0.82))
@@ -418,6 +457,18 @@ print(i)
 
 # write polys
 #st_write(collect_polys, 'C:/seabirds/data/GIS/col_radii_auc_core_smooth.shp', delete_dsn=T)
+#### ~~~~ **** ~~~~ ####
+
+#### ~~~~ Radius refinement approach validation ~~~~ ####
+# rad prediction data
+rad_pred<-read.csv('radius_LGOCV_predictions.csv')
+
+#5 km template
+templ<-raster('C:/seabirds/data/GIS/pred_global_ras_template.grd')
+
+# kernels
+kernz<-st_read('C:/seabirds/data/GIS/NODDkernhull.shp')
+
 #### ~~~~ **** ~~~~ ####
 
 #### ~~~~ Make foraging hotspot layer ~~~~ ####
