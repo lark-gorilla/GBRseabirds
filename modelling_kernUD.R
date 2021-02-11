@@ -641,8 +641,7 @@ for(k in sp_groups)
 # do this locally in sf which is unavailable on cluster
 library(sf)
 #read in global ocean data 
-globy<-read.csv('pred_area_global_modelready_5km.csv')
-#gbr2<-read.csv('C:/seabirds/data/pred_area_global_modelready_5km.csv')
+globy<-read.csv('C:/seabirds/data/pred_area_global_modelready_5km.csv')
 names(globy)<-c('x', 'y', 'sst', 'sst_sd', 'chl', 'chl_sd',
                'mfr', 'mfr_sd', 'pfr', 'pfr_sd', 'bth', 'slp')
 globy[globy$bth>0,]$bth<-0 
@@ -650,7 +649,7 @@ globy$bth<-sqrt(globy$bth^2)# Remember nearshore front values which ==0 should b
 
 # read in for global mean for rad data to get mean rad
 for_rad<-read_sf('C:/seabirds/data/GIS/global_mean_foraging_radii.shp')
-
+for_rad$spcol<-paste(for_rad$sp, for_rad$coly) # wedgies
 
 #make spatial
 globy<-globy%>%st_as_sf(coords=c('x', 'y'), crs=4326)
@@ -668,19 +667,6 @@ for( i in 1:nrow(for_rad))
 print(i)  
 }
 write.csv(out1, 'C:/seabirds/data/global_col_mean_rad_env_5km.csv', quote=F, row.names=F)
-
-# read in 5km rasterize template
-templ<-raster('pred_global_ras_template.grd')
-#templ<-raster('C:/seabirds/data/GIS/pred_global_ras_template.grd')
-
-
-spdf<-SpatialPointsDataFrame(SpatialPoints(gbr2[,1:2], proj4string = CRS(projection(templ))),
-                             data=gbr2[,3:12])
-sst<-rasterize(spdf, templ, field='sst')
-sst_sd<-rasterize(spdf, crop(templ, spdf), field='sst_sd')
-
-writeRaster(p1, paste0('global_preds/',k, '_global.grd'), overwrite=T)
-
 
 ### run on cluster
 library(dplyr)
