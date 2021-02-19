@@ -461,19 +461,173 @@ print(i)
 
 #### ~~~~ Radius refinement approach validation ~~~~ ####
 # rad prediction data
-rad_pred<-read.csv('radius_LGOCV_predictions.csv')
+rad_pred<-read.csv('C:/seabirds/data/radius_LGOCV_predictions.csv')
 
 #5 km template
-templ<-raster('C:/seabirds/data/GIS/pred_global_ras_template.grd')
+templ<-raster('C:/seabirds/data/modelling/global_preds/BRBO_global.grd')
 
 # kernels
-kernz<-st_read('C:/seabirds/data/GIS/NODDkernhull.shp')
+kernz<-rbind(st_read('C:/seabirds/data/GIS/NODDkernhull.shp'),
+             st_read('C:/seabirds/data/GIS/SOTEkernhull.shp'),
+             st_read('C:/seabirds/data/GIS/TERNkernhull.shp'),
+             st_read('C:/seabirds/data/GIS/BRBOkernhull.shp'),
+             st_read('C:/seabirds/data/GIS/MABOkernhull.shp'),
+             st_read('C:/seabirds/data/GIS/RFBOkernhull.shp'),
+             st_read('C:/seabirds/data/GIS/FRBDkernhull.shp'),
+             st_read('C:/seabirds/data/GIS/TRBDkernhull.shp'))
+kernz$spcol<-as.character(kernz$spcol)
+kernz[kernz$spcol=='SOTE chick',]$spcol<-'SOTE Rat'
+
+w1<-st_read('C:/seabirds/data/GIS/WTSTkernhull.shp')
+w1$spcol<-gsub( 'WTSH', 'WTST', w1$spcol)
+kernz<-rbind(kernz, w1)
+rm(w1)
+w1<-st_read('C:/seabirds/data/GIS/WTLGkernhull.shp')
+w1$spcol<-gsub( 'WTSH', 'WTLG', w1$spcol)
+kernz<-rbind(kernz, w1)
+
+#### auc vals
+aucz_out<-read.csv('C:/seabirds/data/mod_validation_vals_corrected.csv')
+aucz_out$spcol<-as.character(aucz_out$spcol)
+aucz_out[aucz_out$spcol=='Lord Howe',]$spcol<-'LHI'
+aucz_out[aucz_out$sp=='TRBD' & aucz_out$spcol=='Pena Blanca',]$spcol<-'Peña blanca'
+
+cover_tab<-NULL
+for(i in unique(rad_pred$ID))
+{
+  if(i=="RFBO Christmas"){next}
+  if(i=="RFBO Isabel"){next}
+  if(i=="WTLG Aride"){next}
+  i=as.character(i)
+  dat1<-rad_pred[rad_pred$ID==i,]
+  
+  #lookup up kern
+  for_kern<-filter(kernz, spcol==i & PA==1)
+  for_kern<-as(for_kern, 'Spatial')
+ 
+  spdf<-SpatialPointsDataFrame(SpatialPoints(dat1[c('x', 'y')],
+                proj4string = CRS(projection(templ))), data=dat1['pred'])
+  
+  # make combined extent
+  comb_bbox<-st_union(st_as_sfc(st_bbox(spdf)),
+              st_as_sfc(st_bbox(for_kern)))
+  
+  sp_templ<-crop(templ, extent(as(comb_bbox, 'Spatial')))
+  
+  kern_ras<-rasterize(for_kern, sp_templ, field=1,background=0)
+  
+  # radius raster
+  rad_ras<-rasterize(spdf, sp_templ, field=1,background=0)
+  
+  # no calc refined rad raster
+  r1<-rasterize(spdf, sp_templ, field='pred') # set background to NA
+  
+  plot(r1, main=i)
+  plot(for_kern, add=T)
+  # filter acuc by sp first then to spcol
+  sp_filt<-substr(paste(i), 1, 4)
+  if(sp_filt %in% c('RTTB', 'RBTB')){sp_filt<-'TRBD'}
+  if(sp_filt %in% c('CRTE', 'CATE', 'ROTE')){sp_filt<-'TERN'}
+  if(sp_filt %in% c('MAFR', 'LEFR', 'GRFR')){sp_filt<-'FRBD'}
+  if(sp_filt %in% c('BLNO', 'BRNO', 'LENO')){sp_filt<-'NODD'}
+  
+  sp_auc<-aucz_out[aucz_out$sp==sp_filt,]
+  i_lkup<-substr(i,6, nchar(i))
+  if(sp_filt=='TERN'|sp_filt=='FRBD'){i_lkup<-i}
+  
+  auc_lookup<-sp_auc[sp_auc$Resample=='MultiCol' & sp_auc$spcol==i_lkup,]$auc
+
+    auc_cut<-((auc_lookup-0.5)/(0.9-0.5))*(0.9-0)+0
+    if(auc_cut>0.9){auc_cut<-0.9} # anything above 0.9AUC gets 10% core also
+    if(auc_cut<0){auc_cut=0} # catch <0.5AUC species and set to radius
+    
+    if (auc_lookup<0.51){ref_ras=rad_ras}else
+    { 
+    
+    q2 <- quantile(r1, auc_cut)
+    hots<-reclassify(r1, c(-Inf, q2, NA, q2, Inf, 1), right=F)
+    
+    # same refinement process in smoothing and dropping crumbs
+    s1<-st_as_sf(rasterToPolygons(hots, dissolve = T)) 
+    rm(hots)
+    names(s1)[1]<-'mod'
+    s2<-drop_crumbs(s1, threshold=16000000)
+    rm(s1)
+    s3<-fill_holes(s2, threshold=54000000)
+    rm(s2)
+    s3 <- smoothr::smooth(s3, method = "ksmooth", smoothness = 4, n=1) # n=1 stops over-densifying
+    s3<-drop_crumbs(s3, threshold=16000000)
+    # and rasterize
+    ref_ras<-rasterize(as(s3, 'Spatial'), sp_templ, field=1,background=0)
+    }
+  
+  #mask out land
+  kern_ras<-mask(kern_ras, sp_templ)
+  rad_ras<-mask(rad_ras, sp_templ)
+  ref_ras<-mask(ref_ras, sp_templ)
+  #calc percentage overlap
+  npix_kern<-table(values(kern_ras))['1']
+  npix_kern_inrad<-table(values(kern_ras+rad_ras))['2']
+  npix_kern_inref<-table(values(kern_ras+ref_ras))['2']
+  
+  plot(stack(kern_ras+rad_ras, kern_ras+ref_ras), main=i)
+  
+  d1<-data.frame(sp=sp_filt, spcol=i, auc=auc_lookup, perc_cut=auc_cut,
+                 percfor_inrad=round(npix_kern_inrad/npix_kern*100),
+                 percfor_inref=round(npix_kern_inref/npix_kern*100),
+                 npixkern=npix_kern, npixrad=table(values(rad_ras))['1'],
+                 npixref=table(values(rad_ras))['1'])
+  
+  cover_tab<-rbind(cover_tab, d1)
+  print(i)
+}
+
+write.csv(cover_tab, 'C:/seabirds/data/refined_radii_core_inclusion.csv', quote=F, row.names=F)
+
+#summary and plots
+inclu<-read.csv('C:/seabirds/data/refined_radii_core_inclusion.csv')
+inclu$ref_loss=inclu$percfor_inrad-inclu$percfor_inref
+inclu$auc_bin=cut(inclu$auc, breaks=c(-Inf, 0.5, 0.6, 0.7, 0.8, 0.9, Inf),
+                  labels=c('radius', 'v poor', 'poor', 'moderate', 'good', 'excellent'))
+
+qplot(data=inclu, x=auc, y=ref_loss)+facet_wrap(~sp)
+
+p1<-ggplot(data=inclu, aes(x=auc_bin, y=ref_loss))+
+  geom_boxplot()+geom_jitter(height=0, width = 0.1, shape=1, colour='red', alpha=0.6)+
+facet_wrap(~sp, scales='free')+ylab('Percentage of core foraging area excluded')+
+  xlab('Radius refinement grouped by Multi-Colony model transferability (AUC)')
+
+#ggsave(p1,  width =8 , height =8, units='in',
+#       filename='C:/seabirds/plots/for_refine_rad_inc.png')
+
+
+qplot(data=inclu[inclu$auc>0.5,], x=ref_loss, geom='histogram')+facet_wrap(~sp)
+
+#summarise ability of mean-max radius to include foraging now in Table 3
+rad_inc<-inclu%>%group_by(sp)%>%summarize(mn_for_rad=mean(percfor_inrad), sd_for_rad=sd(percfor_inrad),
+                                  md_for_rad=median(percfor_inrad))
+
+# summarise ability of refined radius to include foraging
+inc_sp_bin<-inclu%>%group_by(sp, auc_bin)%>%summarize(mn_ref_loss=mean(ref_loss), sd_ref_loss=sd(ref_loss),
+                                 md_ref_loss=median(ref_loss))
+#write.csv(inc_sp_bin, 'C:/seabirds/data/for_refine_rad_inc_sp_bin.csv', quote=F, row.names=F)
+
+all_sp_summr<-inclu%>%group_by(auc_bin)%>%
+  summarize(mn_ref_loss=mean(ref_loss), sd_ref_loss=sd(ref_loss))%>%as.data.frame()
+all_sp_summr$Core.foraging.area.excluded<-paste(
+  round(all_sp_summr$mn_ref_loss, 1),'±', round(all_sp_summr$sd_ref_loss, 1), '%')
+names(all_sp_summr)[1]<-'AUC.group'
+
+p2<-p1 / gridExtra::tableGrob(all_sp_summr[,c(1,4)])+ plot_layout(heights = c(3, 1))
+
+#ggsave(p2,  width =8 , height =11, units='in',
+#       filename='C:/seabirds/plots/for_refine_rad_inc_table.png')
 
 #### ~~~~ **** ~~~~ ####
 
 #### ~~~~ Make foraging hotspot layer ~~~~ ####
 pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds/selected_preds', full.names=T)
-#p1<-pred_list[grep('ensemble.tif', pred_list)]
+#p1<-pred_list[grep('ensemble.tif',  pred_list)]
 p2<-pred_list[grep('MultiCol', pred_list)]
 mod_pred<-stack(p2)
 
@@ -747,7 +901,35 @@ for(i in unique (corez$md_spgr))
   print(i)
 }
 
+## Pull optimum refined radii for each sp and combine into 1 shpfile, also calc overap raster
 
+comb_layer<-rbind(
+  st_read('C:/seabirds/data/GIS/QGIS_fig_plots/BRBO_obs.shp'),
+  st_read('C:/seabirds/data/GIS/QGIS_fig_plots/MABO_obs.shp'),
+  st_read('C:/seabirds/data/GIS/QGIS_fig_plots/FRBD_obs.shp'),
+  st_read('C:/seabirds/data/GIS/QGIS_fig_plots/TRBD_obs.shp'),
+  st_read('C:/seabirds/data/GIS/QGIS_fig_plots/WTLG_obs.sh p'),
+  st_read('C:/seabirds/data/GIS/QGIS_fig_plots/TERN_obs.shp'),
+  st_read('C:/seabirds/data/GIS/QGIS_fig_plots/NODD_obs.shp'),
+  st_read('C:/seabirds/data/GIS/QGIS_fig_plots/SOTE_obs.shp'))
+
+rfbo1<-st_read('C:/seabirds/data/GIS/QGIS_fig_plots/RFBO_conf.shp')
+rfbo1$md_spgr<-'RFBO'
+rfbo1$are_km2<-999
+rfbo1$FID<-NULL
+
+wtst1<-st_read('C:/seabirds/data/GIS/QGIS_fig_plots/WTST_obs_conf_combined.shp')
+wtst1$md_spgr<-'WTST'; wtst1$path<-NULL;wtst1$layer<-NULL;wtst1$FID<-NULL
+               
+comb_layer<-rbind(comb_layer, rfbo1, wtst1)
+
+#st_write(comb_layer, 'C:/seabirds/data/GIS/QGIS_fig_plots/all_sp_optimal_refined.shp')
+
+#count overlap in raster
+r1<-raster('C:/seabirds/data/modelling/GBR_preds/selected_preds/TRBD_MultiCol.tif')
+r_sp<-rasterize(as(comb_layer, 'Spatial'), r1, field=1, fun='count')
+writeRaster(r_sp, 'C:/seabirds/data/GIS/QGIS_fig_plots/all_sp_optimal_refined_overlap.tif') 
+              
 ## Mosaic global predictions with local predictions (within obs for rad) for tracked site ##
 
 for_rad<-read_sf('C:/seabirds/data/GIS/foraging_radii.shp')
