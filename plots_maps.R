@@ -860,11 +860,11 @@ ggplot(data=corez_sum, aes(x=auc, y=log(mn_area)))+
 
 corez_sum$md_spgr<-factor(corez_sum$md_spgr, levels=c("BRBO", 'MABO', 'RFBO', 'WTST',"WTLG",'FRBD', 'TRBD', "SOTE" , 'NODD', 'TERN'))
 
-p1<-ggplot(data=corez_sum, aes(x=auc, y=mn_area/1000))+geom_line(aes(colour=substr(mod, 1, 3), group=mod))+
+p1<-ggplot(data=corez_sum, aes(x=auc, y=mn_area/1000))+geom_line(aes(group=mod), colour='darkgrey')+
   
-  geom_rect(data=corez_sum%>%filter(auc==0.5), aes(xmin=0.4, xmax=0.5, ymin=0, ymax=mn_area/1000), fill='gray80')+
   geom_segment(data=corez_sum%>%filter(conf_pts=='Y'), aes(x=0.4, xend=1, y=100, yend=100), colour='purple')+
-  geom_segment(data=corez_sum%>%filter(auc==0.5), aes(x=0.4, xend=0.5, y=mn_area/1000, yend=mn_area/1000), colour='gray90')+
+  geom_segment(data=corez_sum%>%filter(auc==0.5 & mod=='global'), aes(x=0.4, xend=0.5, y=mn_area/1000, yend=mn_area/1000), colour='#2c56fd')+
+  geom_segment(data=corez_sum%>%filter(auc==0.5 & mod!='global'), aes(x=0.4, xend=0.5, y=mn_area/1000, yend=mn_area/1000), colour='#ff830f')+
   
   geom_segment(data=corez_sum%>%filter(auc_typ=='obs'), aes(x=auc, xend=auc, y=0, yend=mn_area/1000, group=mod), linetype='dotted', colour='#00b159')+
   geom_segment(data=corez_sum%>%filter(auc_typ=='obs'), aes(x=0.4, xend=auc, y=mn_area/1000, yend=mn_area/1000,group=mod), linetype='dotted',colour='#00b159')+
@@ -875,15 +875,18 @@ p1<-ggplot(data=corez_sum, aes(x=auc, y=mn_area/1000))+geom_line(aes(colour=subs
   
   geom_pointrange(data=corez_sum%>%filter(point_col=='sim'), 
                   aes(colour=point_col, ymin=mn_area/1000-sd_area/1000, ymax=mn_area/1000+sd_area/1000), size=0.1, colour='black')+
+  geom_pointrange(data=corez_sum%>%filter(auc==0.5), 
+                  aes(colour=substr(mod, 1, 3), ymin=mn_area/1000-sd_area/1000, ymax=mn_area/1000+sd_area/1000), size=0.3)+
   geom_pointrange(data=corez_sum%>%filter(point_col!='sim'), 
                   aes(colour=point_col, ymin=mn_area/1000-sd_area/1000, ymax=mn_area/1000+sd_area/1000), size=0.3, colour='#00b159')+
   geom_pointrange(data=corez_sum%>%filter(conf_pts=='Y'), 
                   aes(colour=point_col, ymin=mn_area/1000-sd_area/1000, ymax=mn_area/1000+sd_area/1000), size=0.3, colour='#d11141')+
   scale_colour_manual(values = c('#2c56fd','#ff830f'))+
-  facet_wrap(~md_spgr, scales='free_y', ncol=2)+scale_x_continuous(limits=c(0.4, 1), breaks=seq(0.4,1, 0.1))+
-  theme(legend.position = "none", panel.grid.minor = element_blank())+xlab('AUC')+ylab('Foraging area (thousands of km2)')
+  facet_wrap(~md_spgr, scales='free', ncol=2)+
+  scale_x_continuous(limits=c(0.4, 1), breaks=seq(0.4,1, 0.1))+theme_bw()+
+  theme(legend.position = "none", panel.grid.minor = element_blank())+xlab('Model transferability (AUC)')+ylab('Foraging area (thousands of km2)')
 
-#ggsave(p1,  width =4 , height =11.2, units='in',
+#ggsave(p1,  width =4 , height =11.4, units='in',
 #       filename='C:/seabirds/data/modelling/plots/core_cost_confidence.png')
 
 ## split corez shapefile in many for export for QGIS ##
