@@ -44,7 +44,7 @@ normalized<-function(x){(x-min(x))/(max(x)-min(x))} # normalise (0-1) function
 #}
 ####~~~ * ~~~####
 
-####~~~ Loop above creates data that are handed to modelling_kernUD.R for tuning on HPC ~~~####
+## Loop above creates data that are handed to modelling_kernUD.R for tuning on HPC
 
 ####~~~ Visualise RF tuning results to manually select optimum hyperparameters ~~~####
 #lsf<-list.files('C:/seabirds/data/modelling/rf_tuning')
@@ -80,6 +80,7 @@ normalized<-function(x){(x-min(x))/(max(x)-min(x))} # normalise (0-1) function
 #}
 ####~~~ * ~~~####
 
+####~~~ Main model fitting and validation loop ~~~####
 # Read in optimal hyperparameters
 my_hyp<-read.csv('C:/seabirds/data/rf_optimal_hyp.csv')
 
@@ -304,8 +305,7 @@ write.csv(aucz_out, 'C:/seabirds/data/mod_validation_vals.csv', quote=F, row.nam
 write.csv(matx_out, 'C:/seabirds/data/mod_clustering_vals.csv', quote=F, row.names=F)
 
 }# close sp loop
-
-
+####~~~*~~~####
 
 ####~~ Individual colony model overlap ~~####
 pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds', full.names=T)
@@ -683,8 +683,8 @@ radz<-read.csv('global_col_mean_rad_env_5km.csv')
 
 
 # read in data
-sp_groups <- c('BRBO', 'MABO', 'RFBO', 'SOTE','WTST','NODD', 'TERN',
-               'FRBD', 'TRBD', 'WTLG')
+sp_groups <- c('NODD', 'TERN','TRBD','FRBD', 'BRBO',
+               'MABO', 'RFBO', 'SOTE','WTST','WTLG')
                
 radz$pred<-NA
 for(k in sp_groups)
@@ -715,7 +715,16 @@ for(k in sp_groups)
     for( i in unique(dat$spcol))
     {
       #pred_data around col
-     pdat<-radz[radz$ID==paste(k, i),]
+      i_temp<-paste(k, i)
+      if(k=='TRBD'){i_temp<-paste('RBTB', i)}
+      if(k=='TRBD' & i=='West Ashmore'){i_temp<-'RTTB West Ashmore'}
+      if(k=='NODD'){i_temp<-paste('BRNO', i)}
+      if(k=='NODD' & i=='Heron'){i_temp<-'BLNO Heron'}
+      if(k=='NODD' & i=='Pelsaert'){i_temp<-'LENO Pelsaert'}
+      if(k=='TERN'){i_temp<-i}
+      if(k=='FRBD'){i_temp<-i}
+      
+     pdat<-radz[radz$ID==i_temp,]
       
       # make leave-one-out multicolony model on dat
       rf2<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
@@ -769,9 +778,9 @@ for(k in sp_groups)
       #get mean
       rmeanz<-rowMeans(pdat[c('p1', 'p2','p3','p4','p5')], na.rm=T)
       
-      radz[radz$ID==paste(k, i),]$pred<-rmeanz
+      radz[radz$ID==i_temp,]$pred<-rmeanz
     
-    print(paste(k, i))
+    print(paste(k, i, i_temp))
     }
   write.csv(radz, 'radius_LGOCV_predictions.csv', row.names=F, quote=F)  
 }
