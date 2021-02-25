@@ -527,7 +527,7 @@ for(i in unique(rad_pred$ID))
   # radius dist raster
   dist1<-rasterize(for_rad[for_rad$spcol==i,], sp_templ, field=NA,background=0)
   dist1<-distance(dist1)
-  dist1<-mask(dist1, rad_ras, mask_value=0) # mask out land
+  dist1<-mask(dist1, sp_templ) # mask out land
   
   # no calc refined rad raster
   r1<-rasterize(spdf, sp_templ, field='pred') # set background to NA
@@ -576,17 +576,16 @@ for(i in unique(rad_pred$ID))
     ref_ras<-rasterize(as(s3, 'Spatial'), sp_templ, field=1,background=0)
     
     ## refining dist mod
-    q2 <- quantile(dist1, auc_cut)
-    hots<-reclassify(dist1, c(-Inf, q2, NA, q2, Inf, 1), right=F)
-    s1<-st_as_sf(rasterToPolygons(hots, dissolve = T)) 
+    t1<-as.data.frame(table(values(dist1)))
+    t1<-t1[order(t1$Var1, decreasing = T),]
+    t1$cum_freq<-cumsum(t1$Freq)
+    t1$diff=abs(t1$cum_freq-table(values(ref_ras))['1'])
+    
+    qval<-as.numeric(as.character(t1[which.min(t1$diff),]$Var1)) 
+ 
+    hots<-reclassify(dist1, c(-Inf, qval, NA, qval, Inf, 1), right=F)
+    s3<-st_as_sf(rasterToPolygons(hots, dissolve = T)) # no need to smooth or drop holes in radius
     rm(hots)
-    names(s1)[1]<-'mod' 
-    s2<-drop_crumbs(s1, threshold=16000000)
-    rm(s1)
-    s3<-fill_holes(s2, threshold=54000000)
-    rm(s2)
-    s3 <- smoothr::smooth(s3, method = "ksmooth", smoothness = 4, n=1) # n=1 stops over-densifying
-    s3<-drop_crumbs(s3, threshold=16000000)
     dist_ras<-rasterize(as(s3, 'Spatial'), sp_templ, field=1,background=0)
     }
   
