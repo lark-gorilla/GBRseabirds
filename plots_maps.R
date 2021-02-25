@@ -492,6 +492,10 @@ aucz_out$spcol<-as.character(aucz_out$spcol)
 aucz_out[aucz_out$spcol=='Lord Howe',]$spcol<-'LHI'
 aucz_out[aucz_out$sp=='TRBD' & aucz_out$spcol=='Pena Blanca',]$spcol<-'Peña blanca'
 
+# read for rads
+for_rad<-read_sf('C:/seabirds/data/GIS/global_mean_foraging_radii.shp')
+for_rad$spcol<-paste(for_rad$sp, for_rad$coly) # wedgies
+
 cover_tab<-NULL
 for(i in unique(rad_pred$ID))
 {
@@ -516,15 +520,21 @@ for(i in unique(rad_pred$ID))
   
   kern_ras<-rasterize(for_kern, sp_templ, field=1,background=0)
   
+  
   # radius raster
   rad_ras<-rasterize(spdf, sp_templ, field=1,background=0)
+  
+  # radius dist raster
+  dist1<-rasterize(for_rad[for_rad$spcol==i,], sp_templ, field=NA,background=0)
+  dist1<-distance(dist1)
+  dist1<-mask(dist1, rad_ras, mask_value=0) # mask out land
   
   # no calc refined rad raster
   r1<-rasterize(spdf, sp_templ, field='pred') # set background to NA
   
   plot(r1, main=i)
   plot(for_kern, add=T)
-  # filter acuc by sp first then to spcol
+  # filter auc by sp first then to spcol
   sp_filt<-substr(paste(i), 1, 4)
   if(sp_filt %in% c('RTTB', 'RBTB')){sp_filt<-'TRBD'}
   if(sp_filt %in% c('CRTE', 'CATE', 'ROTE')){sp_filt<-'TERN'}
@@ -536,14 +546,19 @@ for(i in unique(rad_pred$ID))
   if(sp_filt=='TERN'|sp_filt=='FRBD'){i_lkup<-i}
   
   auc_lookup<-sp_auc[sp_auc$Resample=='MultiCol' & sp_auc$spcol==i_lkup,]$auc
+  
+  seq1<-c(auc_lookup, 0.5,0.51, 0.61, 0.71, 0.81, 0.91)# add 0.05 intervals for full run
+  # remember first val in output table is mod supported
+  for(k in seq1)
+  {
 
-    auc_cut<-((auc_lookup-0.5)/(0.9-0.5))*(0.9-0)+0
+    auc_cut<-((k-0.5)/(0.9-0.5))*(0.9-0)+0
     if(auc_cut>0.9){auc_cut<-0.9} # anything above 0.9AUC gets 10% core also
     if(auc_cut<0){auc_cut=0} # catch <0.5AUC species and set to radius
     
-    if (auc_lookup<0.51){ref_ras=rad_ras}else
+    if (k<0.51){ref_ras=rad_ras; dist_ras=rad_ras}else
     { 
-    
+    #refining model pred
     q2 <- quantile(r1, auc_cut)
     hots<-reclassify(r1, c(-Inf, q2, NA, q2, Inf, 1), right=F)
     
@@ -559,30 +574,49 @@ for(i in unique(rad_pred$ID))
     s3<-drop_crumbs(s3, threshold=16000000)
     # and rasterize
     ref_ras<-rasterize(as(s3, 'Spatial'), sp_templ, field=1,background=0)
+    
+    ## refining dist mod
+    q2 <- quantile(dist1, auc_cut)
+    hots<-reclassify(dist1, c(-Inf, q2, NA, q2, Inf, 1), right=F)
+    s1<-st_as_sf(rasterToPolygons(hots, dissolve = T)) 
+    rm(hots)
+    names(s1)[1]<-'mod' 
+    s2<-drop_crumbs(s1, threshold=16000000)
+    rm(s1)
+    s3<-fill_holes(s2, threshold=54000000)
+    rm(s2)
+    s3 <- smoothr::smooth(s3, method = "ksmooth", smoothness = 4, n=1) # n=1 stops over-densifying
+    s3<-drop_crumbs(s3, threshold=16000000)
+    dist_ras<-rasterize(as(s3, 'Spatial'), sp_templ, field=1,background=0)
     }
   
   #mask out land
   kern_ras<-mask(kern_ras, sp_templ)
   rad_ras<-mask(rad_ras, sp_templ)
   ref_ras<-mask(ref_ras, sp_templ)
+  dist_ras<-mask(dist_ras, sp_templ)
+  
   #calc percentage overlap
   npix_kern<-table(values(kern_ras))['1']
   npix_kern_inrad<-table(values(kern_ras+rad_ras))['2']
   npix_kern_inref<-table(values(kern_ras+ref_ras))['2']
+  npix_kern_indist<-table(values(kern_ras+dist_ras))['2']
   
-  plot(stack(kern_ras+rad_ras, kern_ras+ref_ras), main=i)
+  plot(stack(kern_ras+rad_ras, kern_ras+ref_ras, kern_ras+dist_ras), main=i)
   
-  d1<-data.frame(sp=sp_filt, spcol=i, auc=auc_lookup, perc_cut=auc_cut,
+  d1<-data.frame(sp=sp_filt, spcol=i, auc=k, perc_cut=auc_cut,
                  percfor_inrad=round(npix_kern_inrad/npix_kern*100),
                  percfor_inref=round(npix_kern_inref/npix_kern*100),
+                 percfor_indist=round(npix_kern_indist/npix_kern*100),
                  npixkern=npix_kern, npixrad=table(values(rad_ras))['1'],
-                 npixref=table(values(rad_ras))['1'])
+                 npixref=table(values(ref_ras))['1'], npixdist=table(values(dist_ras))['1'])
   
   cover_tab<-rbind(cover_tab, d1)
+  } #close k loop 
   print(i)
 }
 
-write.csv(cover_tab, 'C:/seabirds/data/refined_radii_core_inclusion.csv', quote=F, row.names=F)
+#write.csv(cover_tab, 'C:/seabirds/data/refined_radii_core_inclusion.csv', quote=F, row.names=F)
 
 #summary and plots
 inclu<-read.csv('C:/seabirds/data/refined_radii_core_inclusion.csv')
@@ -622,6 +656,33 @@ p2<-p1 / gridExtra::tableGrob(all_sp_summr[,c(1,4)])+ plot_layout(heights = c(3,
 
 #ggsave(p2,  width =8 , height =11, units='in',
 #       filename='C:/seabirds/plots/for_refine_rad_inc_table.png')
+
+#plots with sim refined data
+cover_tab$ref_loss=cover_tab$percfor_inrad-cover_tab$percfor_inref
+cover_tab<-cover_tab%>%group_by(spcol)%>%mutate(min_auc=min(auc), auc_bin=cut(min_auc, breaks=c(-Inf, 0.5, 0.6, 0.7, 0.8, 0.9, Inf),
+                                    labels=c('radius', 'v poor', 'poor', 'moderate', 'good', 'excellent')))
+
+ggplot(data=cover_tab, aes(x=auc, y=percfor_inref))+geom_line(aes(group=spcol))+geom_smooth()+facet_wrap(~auc_bin)
+
+ggplot(data=cover_tab%>%filter(auc_bin%in%c('v poor', 'poor', 'moderate')),
+       aes(x=auc, y=ref_loss/100))+geom_line(aes(group=spcol))+
+  geom_smooth(method = "glm", method.args = list(family = "binomial"),se=F)+facet_grid(sp~auc_bin)
+
+ggplot(data=cover_tab%>%filter(auc_bin%in%c('v poor', 'poor', 'moderate')),
+       aes(x=auc, y=ref_loss/100))+geom_line(aes(group=spcol), colour='black')+
+  geom_smooth(method = "glm", method.args = list(family = "binomial"),se=F)+facet_grid(sp~auc_bin)
+
+ggplot(data=cover_tab%>%filter(auc_bin%in%c('v poor', 'poor', 'moderate')),
+       aes(x=auc, y=ref_loss/100, colour=auc_bin))+geom_line(aes(group=spcol), colour='black')+
+  geom_smooth(method = "glm", method.args = list(family = "binomial"),se=F)+facet_wrap(~sp)
+
+ggplot(data=cover_tab,
+       aes(x=auc, y=ref_loss/100, colour=auc_bin))+geom_line(aes(group=spcol), col='black')+
+  geom_smooth(method = "glm", method.args = list(family = "binomial"))
+
+ggplot(data=cover_tab,
+       aes(x=perc_cut, y=ref_loss/100, colour=auc_bin))+geom_line(aes(group=spcol), col='black')+
+  geom_smooth(method = "glm", method.args = list(family = "binomial"))
 
 #### ~~~~ **** ~~~~ ####
 
