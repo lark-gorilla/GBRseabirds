@@ -447,25 +447,11 @@ write_sf(all_kerns, paste0('C:/seabirds/temp/', names(sp_groups[m]), '50ud.shp')
 #write_sf(kerns95, paste0('C:/seabirds/temp/', names(sp_groups[m]), 'kern95.shp'), delete_dsn=T)
 
 }
-##### OLD #####
 
-# Create colony max range buffers and extract
-# Pull in trip quality table
-t_qual<-read.csv('C:/seabirds/data/tracking_trip_decisions.csv')
-t_qual$auto_keep<-'Y'
+##### Creation of prediction rasters #####
 
-# Booby trial
-t_qual<-t_qual[grep('BRBO', t_qual$ID),]
-t_qual[which(t_qual$duration>72),]$auto_keep<-'N'
-t_qual$ID<-do.call(c, lapply(strsplit(as.character(t_qual$ID), '_'), function(x)x[3]))
-
-# REMOVE DURATION == NA (NON RETURNS)
-
-aggregate(max_dist~ID, t_qual, summary)
-aggregate(max_dist~ID, t_qual[t_qual$auto_keep=='Y',], summary)
-
-qplot(data=t_qual, x=max_dist, geom='histogram')+facet_wrap(~ID, scales='free')
-
+# One for GBR @ 2 km
+# Another, globally @ 5 km
 
 # extract pred area
 tmpl2km<-raster('C:/seabirds/sourced_data/oceano_modelready/extraction_template_2km.tif')
@@ -539,3 +525,66 @@ write.csv(out5, 'C:/seabirds/data/pred_area_large_modelready_2km_WTSHsummer.csv'
 
 # clip 2km pred_ras to pred area extent as template for rasterize later on
 #crop(pred_ras, pred_a, filename='C:/seabirds/data/GIS/pred_area_large_ras_template.tif', overwrite=T)
+
+#### Extract dynamic ocean varibs for each spcol within mean-maximum foraing rad @ 2km ####
+# assumes env data is loaded and stacked as per kernel psuedo-abs extraction and month lookup is loaded
+
+#degrade 1km ex_templ previously used to 2km resolution (save computation time)
+r2<-raster(extent(ex_templ), resolution=0.02, crs=projection(ex_templ))
+
+mo_look[mo_look$spcol=='SOTE chick',]$spcol<-'SOTE Rat'
+
+# read in for global mean for rad data to get mean rad
+for_rad<-read_sf('C:/seabirds/data/GIS/global_mean_foraging_radii.shp')
+for_rad$spcol<-paste(for_rad$sp, for_rad$coly) # wedgies
+
+# make dset for each sp-col combo inside radius
+for( i in 1:nrow(for_rad))
+{
+my_rad<-for_rad[i,]
+r1<-crop(r2, extent(my_rad))
+rad_ras<-rasterize(as(my_rad, 'Spatial'), r1)
+ext_pts<-st_as_sf(rasterToPoints(rad_ras, spatial=T))
+###~~ Ocean data extract ~~###
+# lookup months
+spcol_lkup<-my_rad$spcol
+if(substr(spcol_lkup, 1, 4)%in%c('WTST', 'WTLG')){
+spcol_lkup<-paste('WTSH', substr(spcol_lkup,6, nchar(spcol_lkup)))}
+moz<-which(mo_look[mo_look$spcol==spcol_lkup,2:13]=='Y')
+# extract, 4 varibs use dynamic month lookup
+if(length(moz)>1){
+ext_pts$chl<-rowMeans(extract(subset(chl_stack, moz), ext_pts), na.rm=T)
+ext_pts$sst<-rowMeans(extract(subset(sst_stack, moz), ext_pts), na.rm=T)
+ext_pts$mfr<-rowMeans(extract(subset(mfront_stack, moz), ext_pts), na.rm=T)
+ext_pts$pfr<-rowMeans(extract(subset(pfront_stack, moz), ext_pts), na.rm=T)
+}else{
+ext_pts$chl<-extract(subset(chl_stack, moz), ext_pts)
+ext_pts$sst<-extract(subset(sst_stack, moz), ext_pts)
+ext_pts$mfr<-extract(subset(mfront_stack, moz), ext_pts)
+ext_pts$pfr<-extract(subset(pfront_stack, moz), ext_pts)}
+ext_pts$chl_sd<-extract(subset(chl_stack, 13), ext_pts)
+ext_pts$sst_sd<-extract(subset(sst_stack, 13), ext_pts)
+ext_pts$mfr_sd<-extract(subset(mfront_stack, 13), ext_pts)
+ext_pts$pfr_sd<-extract(subset(pfront_stack, 13), ext_pts)
+ext_pts$bth<-extract(bathy, ext_pts)
+ext_pts$slp<-extract(slope, ext_pts)
+# bind up for export as csv
+# export points to csv
+ext_pts$Longitude<-st_coordinates(ext_pts)[,1]
+ext_pts$Latitude<-st_coordinates(ext_pts)[,2]
+st_geometry(ext_pts)<-NULL
+ext_pts$layer<-my_rad$spcol
+if(i==1){all_pts<-ext_pts}else{all_pts<-rbind(all_pts, ext_pts)}
+print(i)
+}
+
+ 
+all_pts<-na.omit(all_pts)
+all_pts[all_pts$bth>0,]$bth<-0 
+all_pts$bth<-sqrt(all_pts$bth^2)# Remember nearshore front values which ==0 should be NA
+
+names(all_pts)[12]<-'x'
+names(all_pts)[13]<-'y'
+
+write.csv(all_pts, 'C:/seabirds/data/global_col_mean_rad_env_2km_dynamic.csv', quote=F, row.names=F)
+#write.csv(all_pts[,1:11], 'C:/seabirds/data/global_col_mean_rad_env_2km_dynamic_nocoord.csv', quote=F, row.names=F)
