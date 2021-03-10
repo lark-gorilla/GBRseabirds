@@ -461,10 +461,14 @@ print(i)
 
 #### ~~~~ Radius refinement approach validation ~~~~ ####
 # rad prediction data
-rad_pred<-read.csv('C:/seabirds/data/radius_LGOCV_predictions.csv')
+rad_pred<-read.csv('C:/seabirds/data/radius_LGOCV_predictions_2km_dynamic.csv')
+names(rad_pred)[1]<-'ID'
 
-#5 km template
-templ<-raster('C:/seabirds/data/modelling/global_preds/BRBO_global.grd')
+#templ<-raster('C:/seabirds/data/modelling/global_preds/BRBO_global.grd') #5 km template
+# 2 km template
+templ<-raster('C:/seabirds/sourced_data/oceano_modelready/extraction_template_1km.tif')
+templ<-raster(extent(templ), resolution=0.02, crs=projection(templ))
+
 
 # kernels
 kernz<-rbind(st_read('C:/seabirds/data/GIS/NODDkernhull.shp'),
@@ -525,9 +529,12 @@ for(i in unique(rad_pred$ID))
   rad_ras<-rasterize(spdf, sp_templ, field=1,background=0)
   
   # radius dist raster
-  dist1<-rasterize(for_rad[for_rad$spcol==i,], sp_templ, field=NA,background=0)
+  dist1<-rasterize(as(st_centroid(for_rad[for_rad$spcol==i,]), 'Spatial'),
+                   sp_templ, field=1,background=NA)
+  
   dist1<-distance(dist1)
-  dist1<-mask(dist1, sp_templ) # mask out land
+  dist1<-mask(dist1, rad_ras, maskvalue=0) # mask out land
+  dist1<-calc(dist1, fun=function(x){abs(x-max(values(dist1), na.rm=T))})
   
   # no calc refined rad raster
   r1<-rasterize(spdf, sp_templ, field='pred') # set background to NA
@@ -590,10 +597,10 @@ for(i in unique(rad_pred$ID))
     }
   
   #mask out land
-  kern_ras<-mask(kern_ras, sp_templ)
-  rad_ras<-mask(rad_ras, sp_templ)
-  ref_ras<-mask(ref_ras, sp_templ)
-  dist_ras<-mask(dist_ras, sp_templ)
+  #kern_ras<-mask(kern_ras, r1) not for kernels
+  rad_ras<-mask(rad_ras, r1)
+  ref_ras<-mask(ref_ras, r1)
+  dist_ras<-mask(dist_ras, r1)
   
   #calc percentage overlap
   npix_kern<-table(values(kern_ras))['1']
@@ -615,17 +622,21 @@ for(i in unique(rad_pred$ID))
   print(i)
 }
 
-#write.csv(cover_tab, 'C:/seabirds/data/refined_radii_core_inclusion.csv', quote=F, row.names=F)
+#write.csv(cover_tab, 'C:/seabirds/data/refined_radii_core_inclusion_2km_dynamic.csv', quote=F, row.names=F)
+#### ~~~~ **** ~~~~ ####
+
+#### ~~~~ Make radius refinement validation plots and tables ~~~~
 
 #summary and plots
-inclu<-read.csv('C:/seabirds/data/refined_radii_core_inclusion.csv')
+inclu<-read.csv('C:/seabirds/data/refined_radii_core_inclusion_2km_dynamic.csv')
 inclu$ref_loss=inclu$percfor_inrad-inclu$percfor_inref
 inclu$auc_bin=cut(inclu$auc, breaks=c(-Inf, 0.5, 0.6, 0.7, 0.8, 0.9, Inf),
                   labels=c('radius', 'v poor', 'poor', 'moderate', 'good', 'excellent'))
+inclu_obs<-inclu%>%group_by(spcol)%>%summarise_all(first)%>%as.data.frame()
 
-qplot(data=inclu, x=auc, y=ref_loss)+facet_wrap(~sp)
+qplot(data=inclu_obs, x=auc, y=ref_loss)+facet_wrap(~sp)
 
-p1<-ggplot(data=inclu, aes(x=auc_bin, y=ref_loss))+
+p1<-ggplot(data=inclu_obs, aes(x=auc_bin, y=ref_loss))+
   geom_boxplot()+geom_jitter(height=0, width = 0.1, shape=1, colour='red', alpha=0.6)+
 facet_wrap(~sp, scales='free')+ylab('Percentage of core foraging area excluded')+
   xlab('Radius refinement grouped by Multi-Colony model transferability (AUC)')
@@ -634,18 +645,18 @@ facet_wrap(~sp, scales='free')+ylab('Percentage of core foraging area excluded')
 #       filename='C:/seabirds/plots/for_refine_rad_inc.png')
 
 
-qplot(data=inclu[inclu$auc>0.5,], x=ref_loss, geom='histogram')+facet_wrap(~sp)
+qplot(data=inclu_obs[inclu_obs$auc>0.5,], x=ref_loss, geom='histogram')+facet_wrap(~sp)
 
 #summarise ability of mean-max radius to include foraging now in Table 3
-rad_inc<-inclu%>%group_by(sp)%>%summarize(mn_for_rad=mean(percfor_inrad), sd_for_rad=sd(percfor_inrad),
+rad_inc<-inclu_obs%>%group_by(sp)%>%summarize(mn_for_rad=mean(percfor_inrad), sd_for_rad=sd(percfor_inrad),
                                   md_for_rad=median(percfor_inrad))
 
 # summarise ability of refined radius to include foraging
-inc_sp_bin<-inclu%>%group_by(sp, auc_bin)%>%summarize(mn_ref_loss=mean(ref_loss), sd_ref_loss=sd(ref_loss),
+inc_sp_bin<-inclu_obs%>%group_by(sp, auc_bin)%>%summarize(mn_ref_loss=mean(ref_loss), sd_ref_loss=sd(ref_loss),
                                  md_ref_loss=median(ref_loss))
 #write.csv(inc_sp_bin, 'C:/seabirds/data/for_refine_rad_inc_sp_bin.csv', quote=F, row.names=F)
 
-all_sp_summr<-inclu%>%group_by(auc_bin)%>%
+all_sp_summr<-inclu_obs%>%group_by(auc_bin)%>%
   summarize(mn_ref_loss=mean(ref_loss), sd_ref_loss=sd(ref_loss))%>%as.data.frame()
 all_sp_summr$Core.foraging.area.excluded<-paste(
   round(all_sp_summr$mn_ref_loss, 1),'±', round(all_sp_summr$sd_ref_loss, 1), '%')
@@ -658,7 +669,9 @@ p2<-p1 / gridExtra::tableGrob(all_sp_summr[,c(1,4)])+ plot_layout(heights = c(3,
 
 #plots with sim refined data
 cover_tab$ref_loss=cover_tab$percfor_inrad-cover_tab$percfor_inref
-cover_tab<-cover_tab%>%group_by(spcol)%>%mutate(min_auc=min(auc), auc_bin=cut(min_auc, breaks=c(-Inf, 0.5, 0.6, 0.7, 0.8, 0.9, Inf),
+cover_tab$ref_dist_loss=cover_tab$percfor_inrad-cover_tab$percfor_indist
+
+cover_tab<-cover_tab%>%group_by(spcol)%>%mutate(min_auc=first(auc), auc_bin=cut(min_auc, breaks=c(-Inf, 0.5, 0.6, 0.7, 0.8, 0.9, Inf),
                                     labels=c('radius', 'v poor', 'poor', 'moderate', 'good', 'excellent')))
 
 ggplot(data=cover_tab, aes(x=auc, y=percfor_inref))+geom_line(aes(group=spcol))+geom_smooth()+facet_wrap(~auc_bin)
@@ -676,13 +689,21 @@ ggplot(data=cover_tab%>%filter(auc_bin%in%c('v poor', 'poor', 'moderate')),
   geom_smooth(method = "glm", method.args = list(family = "binomial"),se=F)+facet_wrap(~sp)
 
 ggplot(data=cover_tab,
-       aes(x=auc, y=ref_loss/100, colour=auc_bin))+geom_line(aes(group=spcol), col='black')+
-  geom_smooth(method = "glm", method.args = list(family = "binomial"))
+       aes(x=auc, y=ref_loss/100, colour=auc_bin))+
+  geom_smooth(method = "glm", method.args = list(family = "binomial"))+
+  geom_point(data=cover_tab%>%group_by(spcol)%>%summarise_all(first),
+             aes(x=auc, y=ref_loss/100))
 
 ggplot(data=cover_tab,
        aes(x=perc_cut, y=ref_loss/100, colour=auc_bin))+geom_line(aes(group=spcol), col='black')+
   geom_smooth(method = "glm", method.args = list(family = "binomial"))
 
+ggplot(data=cover_tab)+
+       geom_smooth(aes(x=perc_cut, y=ref_loss/100, colour=auc_bin),
+                   method = "glm", method.args = list(family = "binomial"))+
+  geom_smooth(aes(x=perc_cut, y=ref_dist_loss/100),
+              method = "glm", method.args = list(family = "binomial"))
+  
 #### ~~~~ **** ~~~~ ####
 
 #### ~~~~ Make foraging hotspot layer ~~~~ ####
