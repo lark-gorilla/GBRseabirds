@@ -678,7 +678,7 @@ set.seed(24)
 my_hyp<-read.csv('rf_optimal_hyp.csv')
 #my_hyp<-read.csv('C:/seabirds/data/rf_optimal_hyp.csv')
 # read in evv extracted radii
-radz<-read.csv('global_col_mean_rad_env_5km.csv')
+radz<-read.csv('global_col_mean_rad_env_2km_dynamic_nocoord.csv')
 #radz<-read.csv('C:/seabirds/data/global_col_mean_rad_env_5km.csv')
 
 
@@ -724,7 +724,7 @@ for(k in sp_groups)
       if(k=='TERN'){i_temp<-i}
       if(k=='FRBD'){i_temp<-i}
       
-     pdat<-radz[radz$ID==i_temp,]
+     pdat<-radz[radz$layer==i_temp,]
       
       # make leave-one-out multicolony model on dat
       rf2<-ranger(forbin~sst+sst_sd+chl+chl_sd+mfr_sd+pfr_sd+pfr+mfr+bth+slp ,
@@ -778,11 +778,11 @@ for(k in sp_groups)
       #get mean
       rmeanz<-rowMeans(pdat[c('p1', 'p2','p3','p4','p5')], na.rm=T)
       
-      radz[radz$ID==i_temp,]$pred<-rmeanz
+      radz[radz$layer==i_temp,]$pred<-rmeanz
     
     print(paste(k, i, i_temp))
     }
-  write.csv(radz, 'radius_LGOCV_predictions.csv', row.names=F, quote=F)  
+  write.csv(radz[c('layer', 'pred')], 'radius_LGOCV_predictions_2km_dynamic.csv', row.names=F, quote=F)  
 }
   
 
