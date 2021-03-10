@@ -529,12 +529,12 @@ for(i in unique(rad_pred$ID))
   rad_ras<-rasterize(spdf, sp_templ, field=1,background=0)
   
   # radius dist raster
-  dist1<-rasterize(as(st_centroid(for_rad[for_rad$spcol==i,]), 'Spatial'),
-                   sp_templ, field=1,background=NA)
+  #dist1<-rasterize(as(st_centroid(for_rad[for_rad$spcol==i,]), 'Spatial'),
+  #                 sp_templ, field=1,background=NA)
   
-  dist1<-distance(dist1)
-  dist1<-mask(dist1, rad_ras, maskvalue=0) # mask out land
-  dist1<-calc(dist1, fun=function(x){abs(x-max(values(dist1), na.rm=T))})
+  #dist1<-distance(dist1)
+  #dist1<-mask(dist1, rad_ras, maskvalue=0) # mask out land
+  #dist1<-calc(dist1, fun=function(x){abs(x-max(values(dist1), na.rm=T))})
   
   # no calc refined rad raster
   r1<-rasterize(spdf, sp_templ, field='pred') # set background to NA
@@ -583,39 +583,38 @@ for(i in unique(rad_pred$ID))
     ref_ras<-rasterize(as(s3, 'Spatial'), sp_templ, field=1,background=0)
     
     ## refining dist mod
-    t1<-as.data.frame(table(values(dist1)))
-    t1<-t1[order(t1$Var1, decreasing = T),]
-    t1$cum_freq<-cumsum(t1$Freq)
-    t1$diff=abs(t1$cum_freq-table(values(ref_ras))['1'])
+    #t1<-as.data.frame(table(values(dist1)))
+    #t1<-t1[order(t1$Var1, decreasing = T),]
+    #t1$cum_freq<-cumsum(t1$Freq)
+    #t1$diff=abs(t1$cum_freq-table(values(ref_ras))['1'])
     
-    qval<-as.numeric(as.character(t1[which.min(t1$diff),]$Var1)) 
+    #qval<-as.numeric(as.character(t1[which.min(t1$diff),]$Var1)) 
  
-    hots<-reclassify(dist1, c(-Inf, qval, NA, qval, Inf, 1), right=F)
-    s3<-st_as_sf(rasterToPolygons(hots, dissolve = T)) # no need to smooth or drop holes in radius
-    rm(hots)
-    dist_ras<-rasterize(as(s3, 'Spatial'), sp_templ, field=1,background=0)
+    #hots<-reclassify(dist1, c(-Inf, qval, NA, qval, Inf, 1), right=F)
+    #s3<-st_as_sf(rasterToPolygons(hots, dissolve = T)) # no need to smooth or drop holes in radius
+    #rm(hots)
+    #dist_ras<-rasterize(as(s3, 'Spatial'), sp_templ, field=1,background=0)
     }
   
   #mask out land
   #kern_ras<-mask(kern_ras, r1) not for kernels
   rad_ras<-mask(rad_ras, r1)
   ref_ras<-mask(ref_ras, r1)
-  dist_ras<-mask(dist_ras, r1)
+  #dist_ras<-mask(dist_ras, r1)
   
   #calc percentage overlap
   npix_kern<-table(values(kern_ras))['1']
   npix_kern_inrad<-table(values(kern_ras+rad_ras))['2']
   npix_kern_inref<-table(values(kern_ras+ref_ras))['2']
-  npix_kern_indist<-table(values(kern_ras+dist_ras))['2']
+  #npix_kern_indist<-table(values(kern_ras+dist_ras))['2']
   
-  plot(stack(kern_ras+rad_ras, kern_ras+ref_ras, kern_ras+dist_ras), main=i)
+  plot(stack(kern_ras+rad_ras, kern_ras+ref_ras), main=i)
   
   d1<-data.frame(sp=sp_filt, spcol=i, auc=k, perc_cut=auc_cut,
                  percfor_inrad=round(npix_kern_inrad/npix_kern*100),
                  percfor_inref=round(npix_kern_inref/npix_kern*100),
-                 percfor_indist=round(npix_kern_indist/npix_kern*100),
                  npixkern=npix_kern, npixrad=table(values(rad_ras))['1'],
-                 npixref=table(values(ref_ras))['1'], npixdist=table(values(dist_ras))['1'])
+                 npixref=table(values(ref_ras))['1'])
   
   cover_tab<-rbind(cover_tab, d1)
   } #close k loop 
