@@ -464,10 +464,12 @@ print(i)
 rad_pred<-read.csv('C:/seabirds/data/radius_LGOCV_predictions_2km_dynamic.csv')
 names(rad_pred)[1]<-'ID'
 
-#templ<-raster('C:/seabirds/data/modelling/global_preds/BRBO_global.grd') #5 km template
-# 2 km template
-templ<-raster('C:/seabirds/sourced_data/oceano_modelready/extraction_template_1km.tif')
-templ<-raster(extent(templ), resolution=0.02, crs=projection(templ))
+#templ<-raster('C:/seabirds/sourced_data/oceano_modelready/extraction_template_1km.tif')
+#templ<-raster(extent(templ), resolution=0.02, crs=projection(templ))
+#chl<-raster('C:/seabirds/sourced_data/oceano_modelready/chl_mn.tif')
+#templ<-resample(chl, templ,method='ngb', 
+#      filename='C:/seabirds/sourced_data/oceano_modelready/extraction_template_2km_chl.tif')
+templ<-raster('C:/seabirds/sourced_data/oceano_modelready/extraction_template_2km_chl.tif')
 
 
 # kernels
@@ -554,7 +556,8 @@ for(i in unique(rad_pred$ID))
   
   auc_lookup<-sp_auc[sp_auc$Resample=='MultiCol' & sp_auc$spcol==i_lkup,]$auc
   
-  seq1<-c(auc_lookup, 0.5,0.51, 0.61, 0.71, 0.81, 0.91)# add 0.05 intervals for full run
+  seq1<-c(auc_lookup, 0.5,0.51,0.56,0.61,0.66,0.71,0.76,
+          0.81,0.86, 0.91)# add 0.05 intervals for full run
   # remember first val in output table is mod supported
   for(k in seq1)
   {
@@ -597,9 +600,9 @@ for(i in unique(rad_pred$ID))
     }
   
   #mask out land
-  #kern_ras<-mask(kern_ras, r1) not for kernels
-  rad_ras<-mask(rad_ras, r1)
-  ref_ras<-mask(ref_ras, r1)
+  kern_ras<-mask(kern_ras, sp_templ)
+  rad_ras<-mask(rad_ras, sp_templ)
+  ref_ras<-mask(ref_ras, sp_templ)
   #dist_ras<-mask(dist_ras, r1)
   
   #calc percentage overlap
@@ -629,9 +632,36 @@ for(i in unique(rad_pred$ID))
 #summary and plots
 inclu<-read.csv('C:/seabirds/data/refined_radii_core_inclusion_2km_dynamic.csv')
 inclu$ref_loss=inclu$percfor_inrad-inclu$percfor_inref
-inclu$auc_bin=cut(inclu$auc, breaks=c(-Inf, 0.5, 0.6, 0.7, 0.8, 0.9, Inf),
-                  labels=c('radius', 'v poor', 'poor', 'moderate', 'good', 'excellent'))
+inclu<-inclu%>%group_by(spcol)%>%mutate(min_auc=first(auc), auc_bin=cut(min_auc, breaks=c(-Inf, 0.5, 0.6, 0.7, 0.8, 0.9, Inf),
+                        labels=c('radius', 'v poor', 'poor', 'moderate', 'good', 'excellent')))
+
 inclu_obs<-inclu%>%group_by(spcol)%>%summarise_all(first)%>%as.data.frame()
+
+inclu_sim<-inclu%>%group_by(spcol)%>%slice(2:n())%>%as.data.frame()# get bottom 6 rows
+
+ggplot(data=inclu_sim,
+      aes(x=auc, y=percfor_inref/100, colour=auc_bin))+
+  geom_smooth(method = "glm", method.args = list(family = "binomial"))
+
+
+m_rad2<-glmer(cbind(percfor_inref, 100-percfor_inref)~auc:auc_bin+(1|spcol), 
+             data=inclu_sim, family='binomial')
+print(sum((resid( m_rad2, type="pearson")^2))/df.residual( m_rad2))
+
+new_dat<-expand.grid(auc=seq(0.5, 0.9, 0.02), 
+                     auc_bin=c('radius', 'v poor', 'poor', 'moderate', 'good', 'excellent'))
+new_dat$pred<-predict(m_rad2, new_dat, type='response', re.form=NA)
+
+ggplot(data=new_dat, aes(x=auc, y=pred, colour=auc_bin))+
+  geom_line()+
+  geom_boxplot(data=inclu_obs, aes(y=percfor_inref/100))
+  
+
+# make binomial glms to get coefficient per species
+# first all sp together
+
+
+
 
 qplot(data=inclu_obs, x=auc, y=ref_loss)+facet_wrap(~sp)
 
