@@ -631,12 +631,15 @@ for(i in unique(rad_pred$ID))
 
 #summary and plots
 inclu<-read.csv('C:/seabirds/data/refined_radii_core_inclusion_2km_dynamic.csv')
-inclu$ref_loss=inclu$percfor_inrad-inclu$percfor_inref
+inclu[is.na(inclu$percfor_inref),]$percfor_inref<-0 # replace NA with 0
+inclu$ref_loss=inclu$percfor_inrad-inclu$percfor_inref # % loss compared to radius (ignores core foraging outside radius)
+# group into AUC accuracy classes
 inclu<-inclu%>%group_by(spcol)%>%mutate(min_auc=first(auc), auc_bin=cut(min_auc, breaks=c(-Inf, 0.5, 0.6, 0.7, 0.8, 0.9, Inf),
                         labels=c('radius', 'v poor', 'poor', 'moderate', 'good', 'excellent')))
 
+#select observed data
 inclu_obs<-inclu%>%group_by(spcol)%>%summarise_all(first)%>%as.data.frame()
-
+#select simulated data
 inclu_sim<-inclu%>%group_by(spcol)%>%slice(2:n())%>%as.data.frame()# get bottom 6 rows
 
 ggplot(data=inclu_sim,
@@ -644,24 +647,112 @@ ggplot(data=inclu_sim,
   geom_smooth(method = "glm", method.args = list(family = "binomial"))
 
 
-m_rad2<-glmer(cbind(percfor_inref, 100-percfor_inref)~auc:auc_bin+(1|spcol), 
-             data=inclu_sim, family='binomial')
-print(sum((resid( m_rad2, type="pearson")^2))/df.residual( m_rad2))
+m_rad<-glmer(cbind(percfor_inref, 100-percfor_inref)~auc:auc_bin+(0+auc|spcol), 
+             data=inclu_sim, family='binomial', 
+             control = glmerControl(optimizer ="bobyqa"))
+print(sum((resid( m_rad, type="pearson")^2))/df.residual( m_rad))
+plot(m_rad)
+# rerun with few outliers removed
+m_rad2<-glmer(cbind(percfor_inref, 100-percfor_inref)~auc:auc_bin+(0+auc|spcol), 
+             data=inclu_sim[-which(resid( m_rad, type="pearson")< -10),],
+              family='binomial', 
+             control = glmerControl(optimizer ="bobyqa"))
+
 
 new_dat<-expand.grid(auc=seq(0.5, 0.9, 0.02), 
                      auc_bin=c('radius', 'v poor', 'poor', 'moderate', 'good', 'excellent'))
-new_dat$pred<-predict(m_rad2, new_dat, type='response', re.form=NA)
+new_dat$pred<-predict(m_rad, new_dat, type='response', re.form=NA)
 
-ggplot(data=new_dat, aes(x=auc, y=pred, colour=auc_bin))+
-  geom_line()+
-  geom_boxplot(data=inclu_obs, aes(y=percfor_inref/100))
+# get observed data mn+sd 
+obs_mn<-inclu_obs%>%filter(auc_bin!='radius')%>%group_by(auc_bin)%>%
+  summarise(mn_r=mean(percfor_inref),sd_r=sd(percfor_inref))
+inc_notrad<-inclu_obs[inclu_obs$auc_bin!='radius',]
+
+obs_mod<-glm(cbind(percfor_inref, 100-percfor_inref)~auc_bin, 
+             data=inc_notrad[-c(34, 45),], family='binomial')
+
+print(sum((resid( obs_mod, type="pearson")^2))/df.residual( obs_mod))
+obs_mn<-data.frame(emmeans(obs_mod, 'auc_bin', type='response'))
+obs_mn$auc=c(0.55, 0.65, 0.75, 0.8724082, 0.9)
+
+ggplot(data=new_dat, aes(x=auc, colour=auc_bin))+
+  geom_line(aes(y=pred))+
+  geom_point(data=obs_mn, aes(y=prob))+
+  geom_errorbar(data=obs_mn, aes(ymin=asymp.LCL, ymax=asymp.UCL))
+
+ggplot(data=new_dat, aes(x=auc, colour=auc_bin))+
+  geom_line(aes(y=pred))+
+  geom_point(data=inc_notrad, aes(y=percfor_inref/100), shape=1, alpha=0.5)+
+  geom_line(aes(y=pred))+
+  geom_point(data=obs_mn, aes(y=prob))+theme_bw()
+ 
+
+# make for each species seperately
+plot_dat<-NULL
+coefz<-NULL
+for(i in unique(inclu_sim$sp))
+{
+   print(i)
+  sp_inclu<-inclu_sim[inclu_sim$sp==i,]
+  sp_inclu$spcol<-factor(sp_inclu$spcol)
+  sp_inclu$auc_bin<-factor(sp_inclu$auc_bin)
   
+  # allow RE level intercept for these models
+  if(i=='NODD'){
+  m_sp<-glmer(cbind(percfor_inref, 100-percfor_inref)~auc+(auc|spcol), 
+                data=sp_inclu, family='binomial', 
+                control = glmerControl(optimizer ="bobyqa"))# NODD only has radius auc_bin 
+    
+  }else{
+  m_sp<-glmer(cbind(percfor_inref, 100-percfor_inref)~auc:auc_bin+(auc|spcol), 
+               data=sp_inclu, family='binomial', 
+               control = glmerControl(optimizer ="bobyqa"))}
+  
+  print(sum((resid( m_sp, type="pearson")^2))/df.residual( m_sp))
+  print(plot(m_sp))
+  readline('')
+  new_dat<-expand.grid(sp=i,auc=seq(0.5, 0.9, 0.02), 
+                       auc_bin=c(levels(sp_inclu$auc_bin)))
+  new_dat$pred<-predict(m_sp, new_dat, type='response', re.form=NA)
+  
+  # fit glm instead for sp wih singularity due to few REs
+  if( i=='TERN'){
+    m_sp<-glm(cbind(percfor_inref, 100-percfor_inref)~auc:auc_bin, 
+                  data=sp_inclu, family='binomial') 
+    print(sum((resid( m_sp, type="pearson")^2))/df.residual( m_sp))
+    new_dat$pred<-predict(m_sp, new_dat, type='response')}
+  if(i=='SOTE'){
+    m_sp<-glm(cbind(percfor_inref, 100-percfor_inref)~auc:auc_bin, 
+              data=sp_inclu, family='quasibinomial') 
+    new_dat$pred<-predict(m_sp, new_dat, type='response')}
+  
+  print(ggplot(data=new_dat, aes(x=auc, y=pred, colour=auc_bin))+
+    geom_line()+
+    geom_boxplot(data=sp_inclu, aes(x=auc,group=interaction(auc, auc_bin),
+                                     y=percfor_inref/100), alpha=0.5))
+  readline('')
+  plot_dat<-rbind(plot_dat, new_dat)
+  
+  if('glm' %in% class(m_sp)){
+    c1<-cbind(sp=i, data.frame(coefs=coef(m_sp), var=names(coef(m_sp))))}else{
+    c1<-  cbind(sp=i, data.frame(coefs=fixef(m_sp), var=names(fixef(m_sp))))}
+  coefz<-rbind(coefz, c1)
+}
 
-# make binomial glms to get coefficient per species
-# first all sp together
+plot_dat$auc_bin<-factor(plot_dat$auc_bin, levels=c('radius','v poor',
+        'poor','moderate', 'good', 'excellent'))
+inclu_sim$auc_bin<-factor(inclu_sim$auc_bin, levels=c('radius','v poor',
+        'poor','moderate', 'good', 'excellent'))
 
+binreg_supl<-ggplot(data=plot_dat, aes(x=auc, y=pred, colour=auc_bin))+
+        geom_line()+geom_jitter(data=inclu_sim, aes(y=percfor_inref/100),
+        shape=1, alpha=0.5)+facet_wrap(~sp)+theme_bw()+
+  ylab('Percentage of core foraging areas included in refined radius')+
+  xlab('AUC')+guides(colour=guide_legend(title='Model transferability'))
 
-
+#ggsave(binreg_supl,  width =8 , height =8, units='in',
+#       filename='C:/seabirds/plots/bin_regress_sp_suppl.png')
+write.csv(coefz, 'C:/seabirds/data/bin_regress_sp_coefs.csv', quote=F, row.names=F)
 
 qplot(data=inclu_obs, x=auc, y=ref_loss)+facet_wrap(~sp)
 
