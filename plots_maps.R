@@ -682,23 +682,7 @@ print(sum((resid( obs_mod, type="pearson")^2))/df.residual( obs_mod))
 new_dat2<-expand.grid(percfor_inref=1, perc_cut=seq(0, 0.9, 0.02))
 new_dat2<-cbind(new_dat2, predict(obs_mod, new_dat2, type='link', se.fit=T))
 
-
-p1<-ggplot(data=new_dat, aes(x=perc_cut, colour=auc_bin))+
-  geom_line(aes(y=plogis(pred)))+
-  geom_point(data=obs_mn, aes(y=prob))+
-  geom_errorbar(data=obs_mn, aes(ymin=asymp.LCL, ymax=asymp.UCL), width=0.05)+
-  scale_x_continuous(breaks=auc2perc(c(0.5, 0.6, 0.7, 0.8, 0.9)),
-                     labels=c('0th', '22.5th', '45th', '67.5th', '90th'))+
-  ylab('Probability of core foraging areas included in refined radius')+
-  xlab('Predicted habitat suitability threshold percentile')+
-  guides(colour=guide_legend(title='Model transferability'))+
-  theme_bw()
-
-#ggsave(plot=p1, width =5 , height =5, units='in',
-#       filename='C:/seabirds/plots/all_sp_rad_refine.eps')
-
-
-# for suppl 
+# for main
 p1<-ggplot(data=new_dat, aes(x=perc_cut))+
      geom_point(data=inc_notrad, aes(y=percfor_inref/100), shape=1, alpha=0.5)+
      geom_ribbon(aes(ymin=plogis(lcl), ymax=plogis(ucl), fill=factor(min_auc)),alpha=0.3, colour=NA)+
@@ -734,7 +718,7 @@ for(i in unique(inclu_sim$sp))
                 control = glmerControl(optimizer ="bobyqa"))# NODD only has radius auc_bin 
     
   }else{
-  m_sp<-glmer(cbind(percfor_inref, 100-percfor_inref)~perc_cut:auc_bin+(perc_cut|spcol), 
+  m_sp<-glmer(cbind(percfor_inref, 100-percfor_inref)~perc_cut+perc_cut:min_auc+(perc_cut|spcol), 
                data=sp_inclu, family='binomial', 
                control = glmerControl(optimizer ="bobyqa"))}
   
@@ -742,24 +726,24 @@ for(i in unique(inclu_sim$sp))
   print(plot(m_sp))
   readline('')
   new_dat<-expand.grid(sp=i,perc_cut=seq(0, 0.9, 0.02), 
-                       auc_bin=c(levels(sp_inclu$auc_bin)))
+                       min_auc=seq(min(sp_inclu$min_auc), max(sp_inclu$min_auc), 0.02))
   new_dat$pred<-predict(m_sp, new_dat, type='response', re.form=NA)
   
   # fit glm instead for sp wih singularity due to few REs
   if( i=='TERN'){
-    m_sp<-glm(cbind(percfor_inref, 100-percfor_inref)~perc_cut:auc_bin, 
+    m_sp<-glm(cbind(percfor_inref, 100-percfor_inref)~perc_cut+perc_cut:min_auc, 
                   data=sp_inclu, family='binomial') 
     print(sum((resid( m_sp, type="pearson")^2))/df.residual( m_sp))
     new_dat$pred<-predict(m_sp, new_dat, type='response')}
   if(i=='SOTE'){
-    m_sp<-glm(cbind(percfor_inref, 100-percfor_inref)~perc_cut:auc_bin, 
+    m_sp<-glm(cbind(percfor_inref, 100-percfor_inref)~perc_cut+perc_cut:min_auc, 
               data=sp_inclu, family='quasibinomial') 
     new_dat$pred<-predict(m_sp, new_dat, type='response')}
   
-  print(ggplot(data=new_dat, aes(x=perc_cut, y=pred, colour=auc_bin))+
-    geom_line()+
-    geom_boxplot(data=sp_inclu, aes(x=perc_cut,group=interaction(perc_cut, auc_bin),
-                                     y=percfor_inref/100), alpha=0.5))
+  print(ggplot(data=new_dat, aes(x=perc_cut, y=pred, group=min_auc,colour=min_auc))+
+          geom_line()+
+          geom_point(data=sp_inclu, aes(x=perc_cut, y=percfor_inref/100), alpha=0.5))
+  
   readline('')
   plot_dat<-rbind(plot_dat, new_dat)
   
@@ -769,30 +753,28 @@ for(i in unique(inclu_sim$sp))
   coefz<-rbind(coefz, c1)
 }
 
-plot_dat$auc_bin<-factor(plot_dat$auc_bin, levels=c('radius','v poor',
-        'poor','moderate', 'good', 'excellent'))
-inclu_sim$auc_bin<-factor(inclu_sim$auc_bin, levels=c('radius','v poor',
-        'poor','moderate', 'good', 'excellent'))
-
-binreg_supl<-ggplot(data=plot_dat, aes(x=perc_cut, y=pred, colour=auc_bin))+
-        geom_line()+geom_jitter(data=inclu_sim, aes(y=percfor_inref/100),
-        shape=1, alpha=0.5)+facet_wrap(~sp)+
-  scale_x_continuous(breaks=auc2perc(c(0.5, 0.6, 0.7, 0.8, 0.9)),
-                     labels=c('0th', '22.5th', '45th', '67.5th', '90th'))+
+myPalette <- colorRampPalette(rev(brewer.pal(11, "Spectral")))
+binreg_supl<-ggplot(data=plot_dat[plot_dat$min_auc>0.4,], aes(x=perc_cut, y=pred, colour=min_auc))+
+        geom_line(aes(group=min_auc))+facet_wrap(~sp)+
+  scale_colour_gradientn(colours=myPalette(10),breaks=c(0.5,0.6,0.7,0.8,0.9),
+                         limits=c(0.4,1))+
   ylab('Probability of core foraging areas included in refined radius')+
   xlab('Predicted habitat suitability threshold percentile')+
-  guides(colour=guide_legend(title='Model transferability'))+
-  theme_bw()
+  guides(colour=guide_legend(title='Model transferability (AUC)'))
 
-#ggsave(binreg_supl,  width =8 , height =8, units='in',
-#       filename='C:/seabirds/plots/bin_regress_sp_suppl.png')
+ggsave(binreg_supl,  width =8 , height =8, units='in',
+       filename='C:/seabirds/plots/bin_regress_sp_suppl.png')
 
 # format coefz
 coefz$text=paste0(round(coefz$coefs, 2), 
        '±',round(coefz$sd, 2))
 m1<-tidyr::spread(coefz[,c(1,4,5)], key=var,value=text,fill = '')
 
-#write.csv(m1, 'C:/seabirds/data/bin_regress_sp_coefs.csv', quote=F, row.names=F)
+#write.csv(m1, 'C:/seabirds/data/bin_regress_sp_coefs_cont_int.csv', quote=F, row.names=F)
+
+# range of percentiles used for training
+inclu_obs%>%group_by(sp)%>%summarise(minauc=min(min_auc), 
+maxauc=max(min_auc), minp=min(perc_cut), maxp=max(perc_cut))
 
 # get inclusion of core areas by radii
 
@@ -801,8 +783,6 @@ rad_inc<-data.frame(sp=intz$sp, pred=plogis(intz$coefs),
       uci=plogis(intz$coefs+intz$sd*1.96), lci=plogis(intz$coefs-intz$sd*1.96))
 rad_inc$text<-paste0(round(rad_inc$pred, 2), 
                      ' (',round(rad_inc$lci, 2),',',round(rad_inc$uci, 2), ')')
-
-paste0(round(rad_inc$pred, 2), ' (',round(rad_inc$lci, 2),', ',round(rad_inc$uci, 2), ')')
 
 qplot(data=inclu_obs, x=auc, y=ref_loss)+facet_wrap(~sp)
 
