@@ -654,6 +654,13 @@ print(sum((resid( m_rad, type="pearson")^2))/df.residual( m_rad))
 plot(m_rad)
 Anova(m_rad)
 
+# Interpret log odds
+#https://stats.stackexchange.com/questions/377515/computation-and-interpretation-of-odds-ratio-with-continuous-variables-with-inte
+#https://www.reddit.com/r/statistics/comments/4begf8/question_about_interpreting_negative_coefficients/d18gjog/
+summary(m_rad)$coefficients
+exp(abs(-0.14768892+(0.12598312*c(0.5, 0.6,0.7,0.8,0.9))))
+
+
 new_dat<-expand.grid(percfor_inref=1, perc_cut=seq(0, 0.9, 0.02), 
                      min_auc=c(0.5,0.6,0.7,0.8,0.9))
 new_dat$pred<-predict(m_rad, new_dat, type='link', re.form=NA)
@@ -665,7 +672,6 @@ semod <-  sqrt(diag(predmat%*%vcv%*%t(predmat))) #M: creates matrix and takes th
 # then we can get the confidence intervals @ 95% confidence level
 new_dat$ucl <- new_dat$pred + semod*1.96
 new_dat$lcl <- new_dat$pred - semod*1.96
-
 
 # get observed data mn+sd 
 obs_mn<-inclu_obs%>%filter(auc_bin!='radius')%>%group_by(auc_bin)%>%
@@ -696,7 +702,8 @@ p1<-ggplot(data=new_dat, aes(x=perc_cut))+
      guides(colour=guide_legend(title='Model transferability (AUC)'),
     fill=guide_legend(title='Model transferability (AUC)'))+theme_bw()+
      theme(legend.position = c(0.22, 0.17), legend.background = element_rect(fill=NA, 
-     size=0.5, linetype="solid"))
+     size=0.5, linetype="solid"))+
+  annotate("text", x = 0.45, y = 0.025, label = "y=4.6006+(-14.7689*x)+(12.5983*x*AUC)")
 
 #ggsave(plot=p1, width =5 , height =5, units='in',
 #       filename='C:/seabirds/plots/all_sp_rad_refine_gam.png')
@@ -762,9 +769,21 @@ binreg_supl<-ggplot(data=plot_dat[plot_dat$min_auc>0.4,], aes(x=perc_cut, y=pred
   xlab('Predicted habitat suitability threshold percentile')+
   guides(colour=guide_legend(title='Model transferability (AUC)'))
 
-ggsave(binreg_supl,  width =8 , height =8, units='in',
-       filename='C:/seabirds/plots/bin_regress_sp_suppl.png')
+#ggsave(binreg_supl,  width =8 , height =8, units='in',
+#       filename='C:/seabirds/plots/bin_regress_sp_suppl.png')
 
+
+
+# Interpret log odds
+#https://stats.stackexchange.com/questions/377515/computation-and-interpretation-of-odds-ratio-with-continuous-variables-with-inte
+#https://www.reddit.com/r/statistics/comments/4begf8/question_about_interpreting_negative_coefficients/d18gjog/
+cof1<-data.frame(sp=coefz[coefz$var=='(Intercept)',]$sp, 
+           perc_cut=coefz[coefz$var=='perc_cut',]$coefs, 
+           perc_cut_min_auc=c(0, coefz[coefz$var=='perc_cut:min_auc',]$coefs))
+
+cof1$oddsr_0.5AUC<-exp(abs((cof1$perc_cut/100)+((cof1$perc_cut_min_auc/100)*0.5)))
+cof1$oddsr_0.7AUC<-exp(abs((cof1$perc_cut/100)+((cof1$perc_cut_min_auc/100)*0.7)))
+cof1$oddsr_0.8AUC<-exp(abs((cof1$perc_cut/100)+((cof1$perc_cut_min_auc/100)*0.8))) 
 # format coefz
 coefz$text=paste0(round(coefz$coefs, 2), 
        '±',round(coefz$sd, 2))
