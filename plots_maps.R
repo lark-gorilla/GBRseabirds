@@ -1036,73 +1036,32 @@ jump_sum<-auc_jump%>%group_by(md_spgr)%>%summarise(n_coljumps=length(which(!is.n
 #write out
 # write.csv(data.frame(tab1, jump_sum), 'C:/seabirds/data/conf_area_table_diss.csv', quote=F, row.names=F)
 
-# make site level plot for supplement
+# make site level plot main fig (no longer supplement)
+corez_nosf$md_spgr<-factor(corez_nosf$md_spgr, levels=c("BRBO", 'MABO', 'RFBO', 'WTST',"WTLG",'FRBD', 'TRBD', "SOTE" , 'NODD', 'TERN'))
 
-p1<-ggplot(data=corez_nosf, aes(x=perc_cut, y=are_km2))+geom_line(aes(colour=substr(mod, 1, 3),group=site_nm), alpha=0.5)+
-  geom_point(aes(colour=st_c_ty))+facet_wrap(~md_spgr, scales='free_y')+
-  geom_hline(yintercept = 100000, linetype='dotted', colour='purple')+
-  scale_colour_manual(values = c('glo'='#2c56fd','loc'='#ff830f','obs'='#00b159', 'first'='#d11141', 'sim'=NA ))+
-  theme_bw()+theme(legend.position = "none")+
-  xlab('Predicted habitat suitability threshold percentile')+
- ylab('Foraging area (thousands of km2)')
-#ggsave(p1,  width =8 , height =8, units='in',
-#       filename='C:/seabirds/data/modelling/plots/core_cost_confidence_site.png')
 
-# make species level plots for main fig
-
-corez_sum<-corez_nosf%>%group_by(md_spgr, auc, perc_cut, auc_type, mod)%>%
-  summarise(mn_area=mean(are_km2), sd_area=sd(are_km2))
-
-corez_sum$point_col<-'sim'
-corez_sum[corez_sum$auc_type=='obs' & corez_sum$mod=='global',]$point_col<-'global'
-corez_sum[corez_sum$auc_type=='obs' & corez_sum$mod!='global',]$point_col<-'local'
-
-# manual selection of 'first' conf points
-corez_sum$conf_pts<-'N'
-corez_sum[corez_sum$md_spgr=='TRBD'&corez_sum$auc==0.86,]$conf_pts<-'Y'
-corez_sum[corez_sum$md_spgr=='FRBD'&corez_sum$auc==0.91,]$conf_pts<-'Y'
-corez_sum[corez_sum$md_spgr=='WTST'&corez_sum$auc==0.68,]$conf_pts<-'Y'
-corez_sum[corez_sum$md_spgr=='SOTE'&corez_sum$auc==0.88,]$conf_pts<-'Y'
-corez_sum[corez_sum$md_spgr=='WTLG'&corez_sum$auc==0.94,]$conf_pts<-'Y'
-corez_sum[corez_sum$md_spgr=='RFBO'&corez_sum$auc==0.74,]$conf_pts<-'Y'
-
-ggplot(data=corez_sum, aes(x=auc, y=log(mn_area)))+
-  geom_line(aes(colour=md_spgr, group=interaction(md_spgr,mod)))+
-  geom_pointrange(data=filter(corez_sum, auc_typ=='obs'), aes(colour=point_col, ymin=log(mn_area-sd_area), ymax=log(mn_area+sd_area)))+
-  geom_hline(yintercept = log(100000))+
-  theme(legend.position = "none")+theme_bw() 
-
-corez_sum$md_spgr<-factor(corez_sum$md_spgr, levels=c("BRBO", 'MABO', 'RFBO', 'WTST',"WTLG",'FRBD', 'TRBD', "SOTE" , 'NODD', 'TERN'))
-
-p1<-ggplot(data=corez_sum, aes(x=perc_cut, y=mn_area/1000))+geom_line(aes(group=mod), colour='darkgrey')+
+p1<-ggplot(data=corez_nosf, aes(x=perc_cut, y=are_km2/1000))+
+  geom_segment(data=corez_nosf%>%filter(st_c_ty=='first'), aes(x=0, xend=0.9, y=100, yend=100), colour='purple', linetype='dotted')+
+  geom_line(aes(colour=substr(mod, 1, 3),group=site_nm), alpha=0.5)+
   
-  geom_segment(data=corez_sum%>%filter(conf_pts=='Y'), aes(x=0, xend=0.9, y=100, yend=100), colour='purple')+
-  geom_segment(data=corez_sum%>%filter(auc==0.5 & mod=='global'), aes(x=0, xend=0, y=mn_area/1000, yend=mn_area/1000), colour='#2c56fd')+
-  geom_segment(data=corez_sum%>%filter(auc==0.5 & mod!='global'), aes(x=0, xend=0, y=mn_area/1000, yend=mn_area/1000), colour='#ff830f')+
+  geom_segment(data=corez_nosf%>%filter(auc_type=='obs'& auc>0.5), aes(x=perc_cut, xend=perc_cut, y=0, yend=are_km2/1000, group=mod), alpha=0.2, colour='#00b159')+
+  geom_segment(data=corez_nosf%>%filter(auc_type=='obs' & auc>0.5), aes(x=0, xend=perc_cut, y=are_km2/1000, yend=are_km2/1000,group=mod), alpha=0.2,colour='#00b159')+
   
-  geom_segment(data=corez_sum%>%filter(auc_type=='obs'), aes(x=perc_cut, xend=perc_cut, y=0, yend=mn_area/1000, group=mod), linetype='dotted', colour='#00b159')+
-  geom_segment(data=corez_sum%>%filter(auc_type=='obs'), aes(x=0, xend=perc_cut, y=mn_area/1000, yend=mn_area/1000,group=mod), linetype='dotted',colour='#00b159')+
+  geom_segment(data=corez_nosf%>%filter(st_c_ty=='first'), aes(x=perc_cut, xend=perc_cut, y=0, yend=are_km2/1000, group=mod), alpha=0.2, colour='#d11141')+
+  geom_segment(data=corez_nosf%>%filter(st_c_ty=='first'), aes(x=0, xend=perc_cut, y=are_km2/1000, yend=are_km2/1000,group=mod), alpha=0.2, colour='#d11141')+
   
-  geom_segment(data=corez_sum%>%filter(conf_pts=='Y'), aes(x=perc_cut, xend=perc_cut, y=0, yend=mn_area/1000, group=mod), linetype='dotted', colour='#d11141')+
-  geom_segment(data=corez_sum%>%filter(conf_pts=='Y'), aes(x=0, xend=perc_cut, y=mn_area/1000, yend=mn_area/1000,group=mod), linetype='dotted',colour='#d11141')+
-  
-  
-  geom_pointrange(data=corez_sum%>%filter(point_col=='sim'), 
-                  aes(colour=point_col, ymin=mn_area/1000-sd_area/1000, ymax=mn_area/1000+sd_area/1000), size=0.1, colour='black')+
-  geom_pointrange(data=corez_sum%>%filter(auc==0.5), 
-                  aes(colour=substr(mod, 1, 3), ymin=mn_area/1000-sd_area/1000, ymax=mn_area/1000+sd_area/1000), size=0.3)+
-  geom_pointrange(data=corez_sum%>%filter(point_col!='sim'), 
-                  aes(colour=point_col, ymin=mn_area/1000-sd_area/1000, ymax=mn_area/1000+sd_area/1000), size=0.3, colour='#00b159')+
-  geom_pointrange(data=corez_sum%>%filter(conf_pts=='Y'), 
-                  aes(colour=point_col, ymin=mn_area/1000-sd_area/1000, ymax=mn_area/1000+sd_area/1000), size=0.3, colour='#d11141')+
-  scale_colour_manual(values = c('#2c56fd','#ff830f'))+
+  geom_point(data=filter(corez_nosf, auc==0.5), aes(colour=substr(mod, 1, 3)))+
+  geom_point(aes(colour=st_c_ty))+
+  geom_point(data=filter(corez_nosf, auc==0.5), aes(colour=substr(mod, 1, 3)), shape=1)+
   facet_wrap(~md_spgr, scales='free', ncol=2)+
-  scale_x_continuous(limits=c(0, 0.9), breaks=seq(0,0.1, 0.1))+theme_bw()+
+  scale_colour_manual(values = c('glo'='#2c56fd','loc'='#ff830f','obs'='#00b159', 'first'='#d11141', 'sim'=NA ))+
+  scale_x_continuous(limits=c(0, 0.9), breaks=c(0, 0.25, 0.5, 0.75, 0.9),
+                     labels=c('0', '0.25', '0.5', '0.75', '0.9'))+theme_bw()+
   theme(legend.position = "none", panel.grid.minor = element_blank())+
-  xlab('Predicted habitat suitability threshold percentile')+ylab('Foraging area (thousands of km2)')
-
+  xlab('Predicted habitat suitability threshold percentile')+
+  ylab('Foraging area (thousands of km2)')
 #ggsave(p1,  width =4 , height =11.4, units='in',
-#       filename='C:/seabirds/data/modelling/plots/core_cost_confidence.png')
+#       filename='C:/seabirds/data/modelling/plots/core_cost_confidence_perc_cut_indiv.png')
 
 ## split corez shapefile in many for export for QGIS ##
 
