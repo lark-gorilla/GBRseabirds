@@ -408,11 +408,11 @@ for( i in r_sp)
     if(col_sp$md_spgr=='WTLG' & col_sp$dsgntn_n=='Capricornia Cays KBA'){auc_val<-0.64}
     if(col_sp$md_spgr=='NODD' & col_sp$dsgntn_n=='Capricornia Cays KBA'){auc_val<-0.66}
     
-    seq1<-seq(auc_val, 0.5+auc_val, 0.1)
-    seq1<-seq1[seq1< 1 & seq1>=0.51] 
-    seq1<-seq1[seq1!=auc_val]
+    #seq1<-seq(auc_val, 0.5+auc_val, 0.1)
+    #seq1<-seq1[seq1< 1 & seq1>=0.51] 
+    #seq1<-seq1[seq1!=auc_val]
     
-    auc_trials<-c(auc_val, 0.5, seq1, 1)
+    auc_trials<-c(auc_val, seq(0.5, 0.9, 0.02))
     for(k in auc_trials)
     {
       #scale auc to quantile cutoff: 0.5=0 (ie radius), 0.9=0.9 ('Excellent' prediction gives 10% core)
@@ -456,7 +456,7 @@ print(i)
 }
 
 # write polys
-#st_write(collect_polys, 'C:/seabirds/data/GIS/col_radii_auc_core_smooth.shp', delete_dsn=T)
+#st_write(collect_polys, 'C:/seabirds/data/GIS/col_radii_auc_core_smooth_sim0.2auc.shp', delete_dsn=T)
 #### ~~~~ **** ~~~~ ####
 
 #### ~~~~ Radius refinement approach validation ~~~~ ####
@@ -627,7 +627,7 @@ for(i in unique(rad_pred$ID))
 #write.csv(cover_tab, 'C:/seabirds/data/refined_radii_core_inclusion_2km_dynamic.csv', quote=F, row.names=F)
 #### ~~~~ **** ~~~~ ####
 
-#### ~~~~ Make radius refinement validation plots and tables ~~~~
+#### ~~~~ Make radius refinement validation plots and tables ~~~~ ####
 
 #summary and plots
 inclu<-read.csv('C:/seabirds/data/refined_radii_core_inclusion_2km_dynamic.csv')
@@ -771,8 +771,6 @@ binreg_supl<-ggplot(data=plot_dat[plot_dat$min_auc>0.4,], aes(x=perc_cut, y=pred
 
 #ggsave(binreg_supl,  width =8 , height =8, units='in',
 #       filename='C:/seabirds/plots/bin_regress_sp_suppl.png')
-
-
 
 # Interpret log odds
 #https://stats.stackexchange.com/questions/377515/computation-and-interpretation-of-odds-ratio-with-continuous-variables-with-inte
@@ -952,13 +950,18 @@ dev.off()
 #### ~~~~ AUC-core areas plot (paper fig) ~~~~ ####
 
 # read in SIMPLIFIED auc-calced core areas
-corez<-st_read('C:/seabirds/data/GIS/col_radii_auc_core_smooth_simp.shp')
-#remove Wedgie Mudjimba colony
+corez<-st_read('C:/seabirds/data/GIS/col_radii_auc_core_smooth_sim0.2auc_simp.shp')
+
+#! REMEBER to RUN !#
+#! remove Wedgie Mudjimba colony
 #corez<-corez[corez$dsgntn_!='Mudjimba Island',]
-# And simplify polys, recalc area and write out
+#! add perc_cut used
+#corez$perc_cut<-((corez$auc-0.5)/(0.9-0.5))*(0.9-0)+0
+#corez[corez$perc_cut<0,]$perc_cut<-0 
+#! And simplify polys, recalc area and write out
 #c_simpl<-corez%>%st_simplify(preserveTopology=T,dTolerance=0.007)
-#c_simpl$are_km2<-as.numeric(st_area(corez_simpl)/1000000)
-#st_write(c_simpl,'C:/seabirds/data/GIS/col_radii_auc_core_smooth_simp.shp')
+#c_simpl$are_km2<-as.numeric(st_area(c_simpl)/1000000)
+#st_write(c_simpl,'C:/seabirds/data/GIS/col_radii_auc_core_smooth_sim0.2auc_simp.shp')
 
 # summarise cores
 corez_nosf<-corez%>%as.data.frame()
@@ -972,6 +975,26 @@ corez_nosf[corez_nosf$md_spgr=='MABO' & corez_nosf$dsgntn_=='Swain Reefs KBA',]$
 corez_nosf[corez_nosf$md_spgr=='WTST' & corez_nosf$dsgntn_=='Capricornia Cays KBA',]$mod<-'local'
 corez_nosf[corez_nosf$md_spgr=='NODD' & corez_nosf$dsgntn_=='Capricornia Cays KBA',]$mod<-'local'
 corez_nosf[corez_nosf$md_spgr=='WTLG' & corez_nosf$dsgntn_=='Capricornia Cays KBA',]$mod<-'local'
+
+# add site-level point colours
+corez_nosf$site_auc_type<-as.character(corez_nosf$auc_type)
+# first auc val below 100000 for some sp
+lookup1<-corez_nosf%>%filter(md_spgr%in%unique(corez[corez$area_km2>100000,]$md_spgr))%>%
+filter(area_km2<100000)%>%group_by(md_spgr, site_nm)%>%summarise_all(first)
+# manually add wtlg cap cays that are above 100k km2 eve at 10% core
+lookup1<-bind_rows(lookup1, filter(corez_nosf, md_spgr=='WTLG' & dsgntn_n=='Capricornia Cays KBA' & auc==0.94))
+corez_nosf[paste(corez_nosf$md_spgr, corez_nosf$site_nm, corez_nosf$auc) %in%
+           paste(lookup1$md_spgr, lookup1$site_nm, lookup1$auc),]$site_auc_type<-'first'
+corez_nosf$site_auc_type<-ifelse(corez_nosf$auc_type=='obs', 'obs', corez_nosf$site_auc_type)
+
+# create sp-col linear models and predict area from auc over all vals
+# NOT USED (non-linear)
+#corez_nosf_interp<-corez_nosf%>%filter(auc>0.5 & auc < 0.91) %>%
+#  group_by(md_spgr, site_nm)%>%
+#  do(lm( are_km2 ~ auc , data = .) %>% 
+#       predict(., data.frame(auc=seq(0.51, 0.9, 0.02))) %>%
+#       data_frame(auc=seq(0.51, 0.9, 0.02), value = .)) %>%
+#  bind_rows()
 
 #! make main text summary table !#
 # using md_spgr dissolved polys
