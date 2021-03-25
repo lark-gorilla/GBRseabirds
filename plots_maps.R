@@ -347,7 +347,7 @@ for(i in 1:nrow(colz))
 #write_sf(buf_out, 'C:/seabirds/data/GIS/global_mean_foraging_radii.shp', delete_layer=T)
 #### ~~~~ **** ~~~~ ####
 
-#### ~~~~ AUC-core areas parameterization ~~~~ ####
+#### ~~~~ Refinement of foraging radii on the GBR ~~~~ ####
 glob_auc<-data.frame(md_spgr=c('BRBO','MABO','RFBO','FRBD','TRBD','WTST','WTLG','SOTE','NODD','TERN'),
                      auc=c(0.55,0.53, 0.54, 0.61, 0.56, 0.58, 0.54, 0.48, 0.40, 0.82))
 
@@ -459,7 +459,7 @@ print(i)
 #st_write(collect_polys, 'C:/seabirds/data/GIS/col_radii_auc_core_smooth_sim0.2auc.shp', delete_dsn=T)
 #### ~~~~ **** ~~~~ ####
 
-#### ~~~~ Radius refinement approach validation ~~~~ ####
+#### ~~~~ Radius refinement validation core foraging area inclusion (Multicolony) ~~~~ ####
 # rad prediction data
 rad_pred<-read.csv('C:/seabirds/data/radius_LGOCV_predictions_2km_dynamic.csv')
 names(rad_pred)[1]<-'ID'
@@ -625,6 +625,101 @@ for(i in unique(rad_pred$ID))
 }
 
 #write.csv(cover_tab, 'C:/seabirds/data/refined_radii_core_inclusion_2km_dynamic.csv', quote=F, row.names=F)
+#### ~~~~ **** ~~~~ ####
+
+#### ~~~~ Core foraging area inclusion (GBR-local) ~~~~ ####
+for_rad<-read_sf('C:/seabirds/data/GIS/foraging_radii.shp')
+for_rad<-filter(for_rad, rd_clss=='obs')
+for_rad<-rbind(
+  filter(for_rad, md_spgr=='BRBO' & site_nm=='Raine Island'),
+  filter(for_rad, md_spgr=='BRBO' & site_nm=='Price Cay'),
+  filter(for_rad, md_spgr=='MABO' & site_nm=='Price Cay'),
+  filter(for_rad, md_spgr=='NODD' & site_nm=='Heron Island'),
+  filter(for_rad, md_spgr=='WTST' & site_nm=='Heron Island'),
+  filter(for_rad, md_spgr=='WTLG' & site_nm=='Heron Island'))
+  
+
+pred_list<-list.files('C:/seabirds/data/modelling/GBR_preds/selected_preds', full.names=T)
+mod_pred<-stack(pred_list)
+
+cover_tab<-NULL
+for( i in 1:nrow(for_rad))
+{
+  col<-for_rad[i,]
+  spkey<-col$md_spgr
+  
+      if(spkey=='BRBO' & col$site_nm=='Raine Island'){
+        sp_ras1<-subset(mod_pred, 'BRBO_Raine');auc_val<-0.66;spc<-'BRBO Raine'}
+      if(spkey=='BRBO' & col$site_nm=='Price Cay'){
+        sp_ras1<-subset(mod_pred, 'BRBO_Swains'); auc_val<-0.65;spc<-'BRBO Swains'}
+      if(spkey=='MABO'){
+        sp_ras1<-subset(mod_pred, 'MABO_Swains');auc_val<-0.64;spc<-'MABO Swains'}
+      if(spkey=='WTST'){
+        sp_ras1<-subset(mod_pred, 'WTST_Heron');auc_val<-0.74;spc<-'WTST Heron'}
+      if(spkey=='WTLG'){
+        sp_ras1<-subset(mod_pred, 'WTLG_Heron');auc_val<-c(0.64, 0.9);spc<-'WTLG Heron'}
+      if(spkey=='NODD'){
+        sp_ras1<-subset(mod_pred, 'NODD_Heron');auc_val<-0.66;spc<-'BLNO Heron'}
+    
+    #clip pred inside radius  
+    sp_ras<-crop(sp_ras1, extent(col)) # drop size
+    sum_rad<-mask(sp_ras, as(col, 'Spatial'), updatevalue=999, updateNA=T)
+    sr2<-sum_rad
+    sr2[sr2==999]<-NA
+    rm(sum_rad)
+    rm(sp_ras1)
+    
+    #lookup up kern
+    for_kern<-filter(kernz, spcol==spc & PA==1)
+    for_kern<-as(for_kern, 'Spatial')
+    kern_ras<-rasterize(for_kern, sp_ras, field=1,background=0)
+    
+    for(k in auc_val)
+      {
+        
+        auc_cut<-((k-0.5)/(0.9-0.5))*(0.9-0)+0
+        if(auc_cut>0.9){auc_cut<-0.9} # anything above 0.9AUC gets 10% core also
+        if(auc_cut<0){auc_cut=0} # catch <0.5AUC species and set to radius
+        
+          #refining model pred
+          q2 <- quantile(sr2, auc_cut)
+          hots<-reclassify(sr2, c(-Inf, q2, NA, q2, Inf, 1), right=F)
+          
+          # same refinement process in smoothing and dropping crumbs
+          s1<-st_as_sf(rasterToPolygons(hots, dissolve = T)) 
+          rm(hots)
+          names(s1)[1]<-'mod'
+          s2<-drop_crumbs(s1, threshold=16000000)
+          rm(s1)
+          s3<-fill_holes(s2, threshold=54000000)
+          rm(s2)
+          s3 <- smoothr::smooth(s3, method = "ksmooth", smoothness = 4, n=1) # n=1 stops over-densifying
+          s3<-drop_crumbs(s3, threshold=16000000)
+          # and rasterize
+          ref_ras<-rasterize(as(s3, 'Spatial'), sp_ras, field=1,background=0)
+
+        #mask out land
+        kern_ras<-mask(kern_ras, sp_ras)
+        ref_ras<-mask(ref_ras, sp_ras)
+        #dist_ras<-mask(dist_ras, r1)
+        
+        #calc percentage overlap
+        npix_kern<-table(values(kern_ras))['1']
+        npix_kern_inref<-table(values(kern_ras+ref_ras))['2']
+
+        plot(kern_ras+ref_ras, main=i)
+        
+        d1<-data.frame(spcol=spc, auc=k, perc_cut=auc_cut,
+                       percfor_inref=round(npix_kern_inref/npix_kern*100),
+                       npixkern=npix_kern,
+                       npixref=table(values(ref_ras))['1'])
+        
+        cover_tab<-rbind(cover_tab, d1)
+    }
+  print(i)
+}
+#write.csv(cover_tab, 'C:/seabirds/data/gbr_local_core_foraging_area_inclusion.csv', quote=F, row.names=F)
+
 #### ~~~~ **** ~~~~ ####
 
 #### ~~~~ Make radius refinement validation plots and tables ~~~~ ####
@@ -947,7 +1042,7 @@ p_nodd+ggtitle('I) Noddies')+p_tern+ggtitle('J) Terns')+
 dev.off()
 #### ~~~~ **** ~~~~ #####
 
-#### ~~~~ AUC-core areas plot (paper fig) ~~~~ ####
+#### ~~~~ GBR refined radii plot (paper fig) and table ~~~~ ####
 
 # read in SIMPLIFIED auc-calced core areas
 corez<-st_read('C:/seabirds/data/GIS/col_radii_auc_core_smooth_sim0.2auc_simp.shp')
@@ -1009,15 +1104,34 @@ tab1<-data.frame(filter(corez_nosf, auc==0.5 )%>%group_by(md_spgr)%>%
 
 # print all sp-dissolved colum totals
 (as.numeric(rad_diss%>%st_union%>%st_area)/1000000)/1000 #2941
-(as.numeric(obs_diss%>%st_union%>%st_area)/1000000)/1000 #2744
-(as.numeric(conf_diss%>%st_union%>%st_area)/1000000)/1000 #1052
+(as.numeric(obs_diss%>%st_buffer(0)%>%st_union%>%st_area)/1000000)/1000 #2737
+(as.numeric(conf_diss%>%st_buffer(0)%>%st_union%>%st_area)/1000000)/1000 #1115
 
 # read in coefs to look up
 coefz<-read.csv('C:/seabirds/data/bin_regress_sp_coefs_cont_int.csv')
-coefz$int<-unlist(lapply(strsplit(as.character(coefz$`X.Intercept.`), '±'), function(x){x[1]}))
-coefz$pc<-unlist(lapply(strsplit(as.character(coefz$perc_cut), '±'), function(x){x[1]}))
-coefz$pc_auc<-unlist(lapply(strsplit(as.character(coefz$perc_cut.min_auc), '±'), function(x){x[1]}))
+coefz$int<-as.numeric(unlist(lapply(strsplit(as.character(coefz$`X.Intercept.`), '±'), function(x){x[1]})))
+coefz$pc<-as.numeric(unlist(lapply(strsplit(as.character(coefz$perc_cut), '±'), function(x){x[1]})))
+coefz$pc_auc<-as.numeric(unlist(lapply(strsplit(as.character(coefz$perc_cut.min_auc), '±'), function(x){x[1]})))
 coefz$pc_auc[1]<-0
+
+# confidence of observed vs observed + area_target (some)
+nosf_obs<-corez_nosf%>%filter(auc_type=='obs')
+nosf_conf<-corez_nosf%>%filter(st_c_ty!='sim')%>%group_by(md_spgr, site_nm)%>%
+  filter(st_c_ty==last(st_c_ty))%>%ungroup()
+
+# obs % core foraging areas predicted in radii refined using auc-perc specified refinement
+nosf_obs<-left_join(nosf_obs, coefz[,c(1,5,6,7)], by=c('md_spgr'='sp'))
+nosf_obs$prob_cfor_inc<-plogis(nosf_obs$int+ (nosf_obs$pc*nosf_obs$perc_cut)+
+                             (nosf_obs$pc_auc*nosf_obs$perc_cut*nosf_obs$auc)) 
+
+# obs + confidence % core foraging areas predicted in radii refined using auc-perc specified refinement
+# first we look up percentiles used from confidence 
+nosf_conf<-left_join(nosf_conf, coefz[,c(1,5,6,7)], by=c('md_spgr'='sp')) 
+# then we get observed model auc to show the original model transferability
+nosf_conf<-left_join(nosf_conf, nosf_obs[,c(3,6)], by='md_spgr')
+nosf_conf<-rename(nosf_conf, 'auc_conf'=auc.x, 'auc_obs'=auc.y )
+nosf_conf$prob_cfor_inc<-plogis(nosf_conf$int+ (nosf_conf$pc*nosf_conf$perc_cut)+
+                                 (nosf_conf$pc_auc*nosf_conf$perc_cut*nosf_conf$auc_obs)) 
 
 # n auc jumps CAN CUT
 auc_jump<-corez_nosf%>%group_by(md_spgr, site_nm)%>%arrange(md_spgr, site_nm, auc)%>%
