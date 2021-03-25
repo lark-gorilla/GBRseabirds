@@ -961,7 +961,8 @@ corez<-st_read('C:/seabirds/data/GIS/col_radii_auc_core_smooth_sim0.2auc_simp.sh
 #! And simplify polys, recalc area and write out
 #c_simpl<-corez%>%st_simplify(preserveTopology=T,dTolerance=0.007)
 #c_simpl$are_km2<-as.numeric(st_area(c_simpl)/1000000)
-#st_write(c_simpl,'C:/seabirds/data/GIS/col_radii_auc_core_smooth_sim0.2auc_simp.shp')
+#c_simpl$area_km2<-NULL
+#st_write(c_simpl,'C:/seabirds/data/GIS/col_radii_auc_core_smooth_sim0.2auc_simp.shp', delete_dsn=T)
 
 # summarise cores
 corez_nosf<-corez%>%as.data.frame()
@@ -969,40 +970,31 @@ corez_nosf$geometry<-NULL
 
 # add mod type
 corez_nosf$mod<-'global'
-corez_nosf[corez_nosf$md_spgr=='BRBO' & corez_nosf$dsgntn_=='Raine Island, Moulter and MacLennan cays KBA',]$mod<-'local'
-corez_nosf[corez_nosf$md_spgr=='BRBO' & corez_nosf$dsgntn_=='Swain Reefs KBA',]$mod<-'local2'
-corez_nosf[corez_nosf$md_spgr=='MABO' & corez_nosf$dsgntn_=='Swain Reefs KBA',]$mod<-'local'
-corez_nosf[corez_nosf$md_spgr=='WTST' & corez_nosf$dsgntn_=='Capricornia Cays KBA',]$mod<-'local'
-corez_nosf[corez_nosf$md_spgr=='NODD' & corez_nosf$dsgntn_=='Capricornia Cays KBA',]$mod<-'local'
-corez_nosf[corez_nosf$md_spgr=='WTLG' & corez_nosf$dsgntn_=='Capricornia Cays KBA',]$mod<-'local'
+corez_nosf[corez_nosf$md_spgr=='BRBO' & corez_nosf$dsgntn_n=='Raine Island, Moulter and MacLennan cays KBA',]$mod<-'local'
+corez_nosf[corez_nosf$md_spgr=='BRBO' & corez_nosf$dsgntn_n=='Swain Reefs KBA',]$mod<-'local2'
+corez_nosf[corez_nosf$md_spgr=='MABO' & corez_nosf$dsgntn_n=='Swain Reefs KBA',]$mod<-'local'
+corez_nosf[corez_nosf$md_spgr=='WTST' & corez_nosf$dsgntn_n=='Capricornia Cays KBA',]$mod<-'local'
+corez_nosf[corez_nosf$md_spgr=='NODD' & corez_nosf$dsgntn_n=='Capricornia Cays KBA',]$mod<-'local'
+corez_nosf[corez_nosf$md_spgr=='WTLG' & corez_nosf$dsgntn_n=='Capricornia Cays KBA',]$mod<-'local'
 
 # add site-level point colours
 corez_nosf$st_c_ty<-as.character(corez_nosf$auc_type)
 # first auc val below 100000 for some sp
-lookup1<-corez_nosf%>%filter(md_spgr%in%unique(corez[corez$area_km2>100000,]$md_spgr))%>%
-filter(area_km2<100000)%>%group_by(md_spgr, site_nm)%>%summarise_all(first)
+lookup1<-corez_nosf%>%filter(md_spgr%in%unique(corez[corez$are_km2>100000,]$md_spgr))%>%
+filter(are_km2<100000)%>%group_by(md_spgr, site_nm)%>%summarise_all(first)
 # manually add wtlg cap cays that are above 100k km2 eve at 10% core
 lookup1<-bind_rows(lookup1, filter(corez_nosf, md_spgr=='WTLG' & dsgntn_n=='Capricornia Cays KBA' & auc==0.9))
 corez_nosf[paste(corez_nosf$md_spgr, corez_nosf$site_nm, corez_nosf$auc) %in%
            paste(lookup1$md_spgr, lookup1$site_nm, lookup1$auc),]$st_c_ty<-'first'
 corez_nosf$st_c_ty<-ifelse(corez_nosf$auc_type=='obs', 'obs', corez_nosf$st_c_ty)
 
-# create sp-col linear models and predict area from auc over all vals
-# NOT USED (non-linear)
-#corez_nosf_interp<-corez_nosf%>%filter(auc>0.5 & auc < 0.91) %>%
-#  group_by(md_spgr, site_nm)%>%
-#  do(lm( are_km2 ~ auc , data = .) %>% 
-#       predict(., data.frame(auc=seq(0.51, 0.9, 0.02))) %>%
-#       data_frame(auc=seq(0.51, 0.9, 0.02), value = .)) %>%
-#  bind_rows()
-
 #! make main text summary table !#
 # using md_spgr dissolved polys
 
 ## dissolve
- 
+corez$st_c_ty<-corez_nosf$st_c_ty #attrib 
 rad_diss<-corez%>%filter(auc==0.5)%>%group_by(md_spgr)%>%summarise(geometry=st_union(geometry))
-obs_diss<-corez%>%filter(auc_typ=='obs')%>%group_by(md_spgr)%>%summarise(geometry=st_union(geometry))
+obs_diss<-corez%>%filter(auc_type=='obs')%>%group_by(md_spgr)%>%summarise(geometry=st_union(geometry))
 conf_diss<-corez%>%filter(st_c_ty!='sim')%>%group_by(md_spgr, site_nm)%>%
   filter(st_c_ty==last(st_c_ty))%>%ungroup()%>%group_by(md_spgr)%>%summarise(geometry=st_union(geometry))
 
@@ -1011,7 +1003,7 @@ obs_diss$are_km2<-as.numeric(st_area(obs_diss)/1000000)
 conf_diss$are_km2<-as.numeric(st_area(conf_diss)/1000000)
 
 tab1<-data.frame(filter(corez_nosf, auc==0.5 )%>%group_by(md_spgr)%>%
-  summarise(n_site=length(unique(dsgntn_)), n_col= length(unique(site_nm))), 
+  summarise(n_site=length(unique(dsgntn_n)), n_col= length(unique(site_nm))), 
             rad_area=rad_diss$are_km2/1000,obs_area=obs_diss$are_km2/1000,
             conf_area=conf_diss$are_km2/1000)
 
@@ -1020,7 +1012,14 @@ tab1<-data.frame(filter(corez_nosf, auc==0.5 )%>%group_by(md_spgr)%>%
 (as.numeric(obs_diss%>%st_union%>%st_area)/1000000)/1000 #2744
 (as.numeric(conf_diss%>%st_union%>%st_area)/1000000)/1000 #1052
 
-# n auc jumps 
+# read in coefs to look up
+coefz<-read.csv('C:/seabirds/data/bin_regress_sp_coefs_cont_int.csv')
+coefz$int<-unlist(lapply(strsplit(as.character(coefz$`X.Intercept.`), '±'), function(x){x[1]}))
+coefz$pc<-unlist(lapply(strsplit(as.character(coefz$perc_cut), '±'), function(x){x[1]}))
+coefz$pc_auc<-unlist(lapply(strsplit(as.character(coefz$perc_cut.min_auc), '±'), function(x){x[1]}))
+coefz$pc_auc[1]<-0
+
+# n auc jumps CAN CUT
 auc_jump<-corez_nosf%>%group_by(md_spgr, site_nm)%>%arrange(md_spgr, site_nm, auc)%>%
   summarize(pos_first=if('first'%in%st_c_ty){which(st_c_ty=='first')}else{0},
             pos_obs=which(st_c_ty=='obs'))%>%ungroup()
