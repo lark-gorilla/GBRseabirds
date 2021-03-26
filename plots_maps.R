@@ -1046,6 +1046,7 @@ dev.off()
 
 # read in SIMPLIFIED auc-calced core areas
 corez<-st_read('C:/seabirds/data/GIS/col_radii_auc_core_smooth_sim0.2auc_simp.shp')
+corez<-corez%>%filter(!duplicated(.)) #remove 'obs' rows that are also sim 'rows'
 
 #! REMEBER to RUN !#
 #! remove Wedgie Mudjimba colony
@@ -1104,8 +1105,10 @@ tab1<-data.frame(filter(corez_nosf, auc==0.5 )%>%group_by(md_spgr)%>%
 
 # print all sp-dissolved colum totals
 (as.numeric(rad_diss%>%st_union%>%st_area)/1000000)/1000 #2941
-(as.numeric(obs_diss%>%st_buffer(0)%>%st_union%>%st_area)/1000000)/1000 #2737
+(as.numeric(obs_diss%>%st_buffer(0)%>%st_union%>%st_area)/1000000)/1000 #2744
 (as.numeric(conf_diss%>%st_buffer(0)%>%st_union%>%st_area)/1000000)/1000 #1115
+
+# Attribute confidence to GBR predictions: 1) make suppl table per colony; 2) summarise for tab1
 
 # read in coefs to look up
 coefz<-read.csv('C:/seabirds/data/bin_regress_sp_coefs_cont_int.csv')
@@ -1128,26 +1131,34 @@ nosf_obs$prob_cfor_inc<-plogis(nosf_obs$int+ (nosf_obs$pc*nosf_obs$perc_cut)+
 # first we look up percentiles used from confidence 
 nosf_conf<-left_join(nosf_conf, coefz[,c(1,5,6,7)], by=c('md_spgr'='sp')) 
 # then we get observed model auc to show the original model transferability
-nosf_conf<-left_join(nosf_conf, nosf_obs[,c(3,6)], by='md_spgr')
-nosf_conf<-rename(nosf_conf, 'auc_conf'=auc.x, 'auc_obs'=auc.y )
+nosf_conf$auc_obs<-nosf_obs$auc
 nosf_conf$prob_cfor_inc<-plogis(nosf_conf$int+ (nosf_conf$pc*nosf_conf$perc_cut)+
                                  (nosf_conf$pc_auc*nosf_conf$perc_cut*nosf_conf$auc_obs)) 
 
-# n auc jumps CAN CUT
-auc_jump<-corez_nosf%>%group_by(md_spgr, site_nm)%>%arrange(md_spgr, site_nm, auc)%>%
-  summarize(pos_first=if('first'%in%st_c_ty){which(st_c_ty=='first')}else{0},
-            pos_obs=which(st_c_ty=='obs'))%>%ungroup()
+# make supplement table of all colonies
+supl_inc<-nosf_obs
+supl_inc$perc_cut_areaT<-nosf_conf$perc_cut
+supl_inc$prob_cfor_inc_areaT<-nosf_conf$prob_cfor_inc
+supl_inc$are_km2_areaT<-nosf_conf$are_km2
+# ammend local tracked colonies
+read.csv('C:/seabirds/data/gbr_local_core_foraging_area_inclusion.csv')
+supl_inc[supl_inc$mod!='global',]$int<-NA
+supl_inc[supl_inc$mod!='global',]$pc<-NA
+supl_inc[supl_inc$mod!='global',]$pc_auc<-NA
+supl_inc[supl_inc$mod!='global',c(14,16)]<-1 # set all to 100% apart form wtlg heron conf
+supl_inc[supl_inc$mod!='global' & supl_inc$md_spgr=='WTLG',16]<-0.87
 
-auc_jump$jumps<-auc_jump$pos_first-auc_jump$pos_obs
-auc_jump$jumps<-ifelse(auc_jump$jumps<0, NA, auc_jump$jumps)
+# summarise and add to tab1
+tab1<-cbind(tab1, supl_inc%>%group_by(md_spgr)%>%summarise(mn_incO=min(prob_cfor_inc),me_incO=mean(prob_cfor_inc),mx_incO=max(prob_cfor_inc),
+                                         mn_incC=min(prob_cfor_inc_areaT),me_incC=mean(prob_cfor_inc_areaT),mx_incC=max(prob_cfor_inc_areaT)))
+#write out tab1
+# write.csv(tab1, 'C:/seabirds/data/conf_area_table_diss2.csv', quote=F, row.names=F)
 
-jump_sum<-auc_jump%>%group_by(md_spgr)%>%summarise(n_coljumps=length(which(!is.na(jumps))),
-                                         n_jumps=sum(jumps, na.rm=T),
-                                         mean_jumps=mean(jumps, na.rm=T),
-                                         med_jumps=median(jumps, na.rm=T))
 
-#write out
-# write.csv(data.frame(tab1, jump_sum), 'C:/seabirds/data/conf_area_table_diss.csv', quote=F, row.names=F)
+#write out supl
+supl_inc$dsgntn_n<-gsub(',', '@', supl_inc$dsgntn_n)
+supl_inc$site_nm<-gsub(',', '@', supl_inc$site_nm)
+# write.csv(supl_inc, 'C:/seabirds/data/gbr_col_corefor_inc_breakdown.csv', quote=F, row.names=F)
 
 # make site level plot main fig (no longer supplement)
 corez_nosf$md_spgr<-factor(corez_nosf$md_spgr, levels=c("BRBO", 'MABO', 'RFBO', 'WTST',"WTLG",'FRBD', 'TRBD', "SOTE" , 'NODD', 'TERN'))
@@ -1176,11 +1187,12 @@ p1<-ggplot(data=corez_nosf, aes(x=perc_cut, y=are_km2/1000))+
 #ggsave(p1,  width =4 , height =11.4, units='in',
 #       filename='C:/seabirds/data/modelling/plots/core_cost_confidence_perc_cut_indiv.png')
 
-## split corez shapefile in many for export for QGIS ##
+# Pieces of code to  make mapped part of main figure
+## 1)split corez shapefile in many for export for QGIS ##
 
 for(i in unique (corez$md_spgr))
 {
-  st_write(filter(corez, md_spgr==i & auc==0.5)%>%group_by(dsgntn_)%>%
+  st_write(filter(corez, md_spgr==i & auc==0.5)%>%group_by(dsgntn_n)%>%
              summarise(geometry=st_union(geometry))%>%st_cast(),
            paste0('C:/seabirds/data/GIS/QGIS_fig_plots/', i, '_rad.shp'), delete_dsn=T)
   st_write(filter(obs_diss, md_spgr==i ),
@@ -1191,36 +1203,7 @@ for(i in unique (corez$md_spgr))
   print(i)
 }
 
-## Pull optimum refined radii for each sp and combine into 1 shpfile, also calc overap raster
-
-comb_layer<-rbind(
-  st_read('C:/seabirds/data/GIS/QGIS_fig_plots/BRBO_obs.shp'),
-  st_read('C:/seabirds/data/GIS/QGIS_fig_plots/MABO_obs.shp'),
-  st_read('C:/seabirds/data/GIS/QGIS_fig_plots/FRBD_obs.shp'),
-  st_read('C:/seabirds/data/GIS/QGIS_fig_plots/TRBD_obs.shp'),
-  st_read('C:/seabirds/data/GIS/QGIS_fig_plots/WTLG_obs.sh p'),
-  st_read('C:/seabirds/data/GIS/QGIS_fig_plots/TERN_obs.shp'),
-  st_read('C:/seabirds/data/GIS/QGIS_fig_plots/NODD_obs.shp'),
-  st_read('C:/seabirds/data/GIS/QGIS_fig_plots/SOTE_obs.shp'))
-
-rfbo1<-st_read('C:/seabirds/data/GIS/QGIS_fig_plots/RFBO_conf.shp')
-rfbo1$md_spgr<-'RFBO'
-rfbo1$are_km2<-999
-rfbo1$FID<-NULL
-
-wtst1<-st_read('C:/seabirds/data/GIS/QGIS_fig_plots/WTST_obs_conf_combined.shp')
-wtst1$md_spgr<-'WTST'; wtst1$path<-NULL;wtst1$layer<-NULL;wtst1$FID<-NULL
-               
-comb_layer<-rbind(comb_layer, rfbo1, wtst1)
-
-#st_write(comb_layer, 'C:/seabirds/data/GIS/QGIS_fig_plots/all_sp_optimal_refined.shp')
-
-#count overlap in raster
-r1<-raster('C:/seabirds/data/modelling/GBR_preds/selected_preds/TRBD_MultiCol.tif')
-r_sp<-rasterize(as(comb_layer, 'Spatial'), r1, field=1, fun='count')
-writeRaster(r_sp, 'C:/seabirds/data/GIS/QGIS_fig_plots/all_sp_optimal_refined_overlap.tif') 
-              
-## Mosaic global predictions with local predictions (within obs for rad) for tracked site ##
+## 2) Mosaic global predictions with local predictions (within obs for rad) for tracked site ##
 
 for_rad<-read_sf('C:/seabirds/data/GIS/foraging_radii.shp')
 
@@ -1241,33 +1224,65 @@ for( i in unique(for_rad$md_spgr))
     col_sp<-filter(col, dsgntn_n==j)
     rm(sp_ras1)
     
-      if(i=='BRBO' & col_sp$dsgntn_n=='Raine Island, Moulter and MacLennan cays KBA'){
-        sp_ras1<-subset(mod_pred, 'BRBO_Raine')}
-      if(i=='BRBO' & col_sp$dsgntn_n=='Swain Reefs KBA'){
-        sp_ras1<-subset(mod_pred, 'BRBO_Swains')}
-      if(i=='MABO' & col_sp$dsgntn_n=='Swain Reefs KBA'){
-        sp_ras1<-subset(mod_pred, 'MABO_Swains')}
-      if(i=='WTST' & col_sp$dsgntn_n=='Capricornia Cays KBA'){
-        sp_ras1<-subset(mod_pred, 'WTST_Heron')}
-      if(i=='WTLG' & col_sp$dsgntn_n=='Capricornia Cays KBA'){
-        sp_ras1<-subset(mod_pred, 'WTLG_Heron')}
-      if(i=='NODD' & col_sp$dsgntn_n=='Capricornia Cays KBA'){
-        sp_ras1<-subset(mod_pred, 'NODD_Heron')}
+    if(i=='BRBO' & col_sp$dsgntn_n=='Raine Island, Moulter and MacLennan cays KBA'){
+      sp_ras1<-subset(mod_pred, 'BRBO_Raine')}
+    if(i=='BRBO' & col_sp$dsgntn_n=='Swain Reefs KBA'){
+      sp_ras1<-subset(mod_pred, 'BRBO_Swains')}
+    if(i=='MABO' & col_sp$dsgntn_n=='Swain Reefs KBA'){
+      sp_ras1<-subset(mod_pred, 'MABO_Swains')}
+    if(i=='WTST' & col_sp$dsgntn_n=='Capricornia Cays KBA'){
+      sp_ras1<-subset(mod_pred, 'WTST_Heron')}
+    if(i=='WTLG' & col_sp$dsgntn_n=='Capricornia Cays KBA'){
+      sp_ras1<-subset(mod_pred, 'WTLG_Heron')}
+    if(i=='NODD' & col_sp$dsgntn_n=='Capricornia Cays KBA'){
+      sp_ras1<-subset(mod_pred, 'NODD_Heron')}
     
-sp_ras2<-crop(sp_ras1, extent(col_sp)) # drop size
-
-sum_rad<-mask(sp_ras2, as(col_sp, 'Spatial')) # mask set to NA
-
-if(which(j==unique(col$dsgntn_n))==1){
-mos_ras <- merge(sum_rad, glob_ras)}else # merge instead of mosaic, first arguement goes over second
-{mos_ras <- merge(sum_rad, mos_ras)}
+    sp_ras2<-crop(sp_ras1, extent(col_sp)) # drop size
+    
+    sum_rad<-mask(sp_ras2, as(col_sp, 'Spatial')) # mask set to NA
+    
+    if(which(j==unique(col$dsgntn_n))==1){
+      mos_ras <- merge(sum_rad, glob_ras)}else # merge instead of mosaic, first arguement goes over second
+      {mos_ras <- merge(sum_rad, mos_ras)}
   }
   print(i)
-
-writeRaster(mos_ras, paste0('C:/seabirds/data/modelling/GBR_preds/glob_local_merge/glob_loc_',i,'.tif'))    
-rm(mos_ras)
+  
+  writeRaster(mos_ras, paste0('C:/seabirds/data/modelling/GBR_preds/glob_local_merge/glob_loc_',i,'.tif'))    
+  rm(mos_ras)
 }
 
+## combine layers for second map figure2 
+## Pull optimum refined radii for each sp and combine into 1 shpfile, also calc overap raster
+
+comb_layer<-rbind(
+  st_read('C:/seabirds/data/GIS/QGIS_fig_plots/BRBO_obs.shp'),
+  st_read('C:/seabirds/data/GIS/QGIS_fig_plots/MABO_obs.shp'),
+  st_read('C:/seabirds/data/GIS/QGIS_fig_plots/FRBD_obs.shp'),
+  st_read('C:/seabirds/data/GIS/QGIS_fig_plots/TRBD_obs.shp'),
+  st_read('C:/seabirds/data/GIS/QGIS_fig_plots/TERN_obs.shp'),
+  st_read('C:/seabirds/data/GIS/QGIS_fig_plots/NODD_obs.shp'),
+  st_read('C:/seabirds/data/GIS/QGIS_fig_plots/SOTE_obs.shp'))
+
+rfbo1<-st_read('C:/seabirds/data/GIS/QGIS_fig_plots/RFBO_conf.shp')
+rfbo1$md_spgr<-'RFBO'
+rfbo1$are_km2<-999
+rfbo1$FID<-NULL
+
+wtst1<-st_read('C:/seabirds/data/GIS/QGIS_fig_plots/WTST_obs_conf_combined.shp')
+wtst1$md_spgr<-'WTST'; wtst1$path<-NULL;wtst1$layer<-NULL;wtst1$FID<-NULL
+
+wtlg1<-st_read('C:/seabirds/data/GIS/QGIS_fig_plots/WTLG_obs_conf_combined.shp')
+          
+     
+comb_layer<-rbind(comb_layer, rfbo1, wtst1, wtlg1)
+
+#st_write(comb_layer, 'C:/seabirds/data/GIS/QGIS_fig_plots/all_sp_optimal_refined2.shp')
+
+#count overlap in raster
+r1<-raster('C:/seabirds/data/modelling/GBR_preds/selected_preds/TRBD_MultiCol.tif')
+r_sp<-rasterize(as(comb_layer, 'Spatial'), r1, field=1, fun='count')
+writeRaster(r_sp, 'C:/seabirds/data/GIS/QGIS_fig_plots/all_sp_optimal_refined_overlap2.tif') 
+              
 
 #### ~~~~ **** ~~~~ ####
 
