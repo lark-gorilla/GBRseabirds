@@ -1,4 +1,4 @@
-# Plotting and mapping
+# Plotting and mapping.
 library(raster)
 library(ggplot2)
 library(ggspatial)
