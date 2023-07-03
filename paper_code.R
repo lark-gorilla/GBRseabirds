@@ -78,6 +78,13 @@ t_qual[t_qual$sp %in% c('RBTB', 'RTTB'),]$sp_group<-'TRBD'
 t_qual[t_qual$sp %in% c('BRNO', 'LENO', 'BLNO'),]$sp_group<-'NODD'
 t_qual[t_qual$sp %in% c('CRTE', 'ROTE', 'CATE'),]$sp_group<-'TERN'
 
+## breedstage fix
+master<-read.csv('sourced_data/tracking_data/tracking_master.csv')
+master$ID_tr<-paste(master$dataID, master$sp, master$colony, master$trackID, sep='_')
+t_qual$ID_tr<-paste(t_qual$ID, t_qual$trackID, sep='_')
+
+t_qual<-left_join(t_qual, master%>%group_by(ID_tr)%>%summarise_all(first)%>%dplyr::select(ID_tr,breedstage), by='ID_tr')
+##
 t_qual_unfilt<-t_qual
 
 spcol_tab<-t_qual_unfilt%>%group_by(sp_group, sp, coly)%>%
@@ -91,13 +98,14 @@ spcol_tab<-data.frame(spcol_tab, n_usedtracks=t_nused$n_usedtracks)
 # Returning trips as classified track2kba package
 t_qual_ret<-t_qual[t_qual$complete=='complete trip',]
 t_tripmetric<-t_qual_ret%>%filter(duration<296.1)%>%group_by(sp_group, sp, coly)%>%
-  summarise(max_for=max(max_dist), med_for=median(max_dist), breedstage=paste(unique(breedstage), collapse=' '))%>%as.data.frame()
-spcol_tab<-data.frame(spcol_tab, t_tripmetric[,c(4,5,6)])
+  summarise(max_for=max(max_dist), mean_for=mean(max_dist), sd_for=sd(max_dist), breedstage.x=paste(unique(breedstage.x), collapse=' '),
+            breedstage.y=paste(unique(breedstage.y), collapse=' '))%>%as.data.frame()
+spcol_tab<-data.frame(spcol_tab, t_tripmetric[,c(4:8)])
 
 # Returning trips are implicit as all GPS data recovered from colony, either from device on bird or near-colony download.
 t_tripmetric2<-t_qual%>%filter(duration<296.1)%>%group_by(sp_group, sp, coly)%>%
-  summarise(max_for_allret=max(max_dist), med_for_allret=median(max_dist))%>%as.data.frame()
-spcol_tab<-data.frame(spcol_tab, t_tripmetric2[,c(4,5)])
+  summarise(max_for_allret=max(max_dist), mean_for_allret=mean(max_dist), sd_for_allret=sd(max_dist))%>%as.data.frame()
+spcol_tab<-data.frame(spcol_tab, t_tripmetric2[,c(4:6)])
 # tidy
 spcol_tab[spcol_tab$coly=='chick',]$coly<-'Rat' # edit to name
 spcol_tab[spcol_tab$sp_group=='WTST' | spcol_tab$sp_group=='WTLG',]$sp<-'WTSH'
@@ -106,7 +114,7 @@ spcol_tab[spcol_tab$coly=='Adele' & spcol_tab$sp=='BRBO',]$max_for_allret<-139.6
 spcol_tab[spcol_tab$coly=='Heron' & spcol_tab$sp_group=='WTLG',]$max_for_allret<-1150  # manual edit
 
 
-#write.csv(spcol_tab, 'C:/seabirds/data/sp_col_summary.csv', quote=F, row.names=F)
+#write.csv(spcol_tab, 'data/sp_col_summary_updatedJul23.csv', quote=F, row.names=F)
 
 # check max for ranges are not erroroneus
 #tq_check<-t_qual_ret %>%filter(duration<296.1)%>% 
