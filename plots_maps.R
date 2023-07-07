@@ -792,7 +792,7 @@ p1<-ggplot(data=new_dat, aes(x=perc_cut))+
       alpha=0.3, fill=NA, colour='black', linetype='dashed')+
       geom_line(data=new_dat2, aes(y=plogis(fit)))+
      scale_x_continuous(breaks=c(0, 0.1, 0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9))+
-     ylab('Probability of core foraging areas included in refined radius')+
+     ylab('Probability of known foraging areas included in refined foraging circle')+
      xlab('Predicted habitat suitability threshold percentile')+
      guides(colour=guide_legend(title='Model transferability (AUC)'),
     fill=guide_legend(title='Model transferability (AUC)'))+theme_bw()+
